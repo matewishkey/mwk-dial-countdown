@@ -1,0 +1,204 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<title>Dial Timer</title>
+		<!--
+			sdpi-components is vendored rather than loaded from https://sdpi-components.dev (as the
+			official template does) so the inspector works offline and the shipped plugin has no
+			runtime dependency on a third-party host.
+		-->
+		<script src="sdpi-components.js"></script>
+		<style>
+			body {
+				font-family: system-ui, sans-serif;
+				font-size: 12px;
+				color: #d8d8d8;
+				margin: 0;
+				padding: 8px;
+			}
+
+			p.hint {
+				color: #969696;
+				line-height: 1.5;
+				margin: 4px 0 12px;
+			}
+
+			table {
+				width: 100%;
+				border-collapse: collapse;
+			}
+
+			th {
+				text-align: left;
+				font-weight: 500;
+				color: #969696;
+				padding-bottom: 4px;
+			}
+
+			td {
+				padding: 2px 4px 2px 0;
+			}
+
+			input {
+				width: 100%;
+				box-sizing: border-box;
+				background: #2d2d2d;
+				border: 1px solid #3d3d3d;
+				border-radius: 3px;
+				color: #d8d8d8;
+				padding: 4px 6px;
+			}
+
+			input.seconds {
+				text-align: right;
+			}
+
+			button {
+				background: #3d3d3d;
+				border: none;
+				border-radius: 3px;
+				color: #d8d8d8;
+				padding: 4px 10px;
+				cursor: pointer;
+			}
+
+			button:hover {
+				background: #4d4d4d;
+			}
+
+			button.remove {
+				padding: 4px 8px;
+				color: #969696;
+			}
+
+			.actions {
+				margin-top: 8px;
+				display: flex;
+				gap: 6px;
+				align-items: center;
+			}
+
+			.duration {
+				color: #969696;
+				margin-left: auto;
+			}
+		</style>
+	</head>
+	<body>
+		<p class="hint">
+			Tap the touchscreen to cycle presets, press the dial to start or pause, hold it to reset. Turn to adjust in
+			10&nbsp;second steps, or hold and turn for whole minutes.
+		</p>
+
+		<table>
+			<thead>
+				<tr>
+					<th style="width: 60%">Label</th>
+					<th style="width: 30%">Seconds</th>
+					<th></th>
+				</tr>
+			</thead>
+			<tbody id="rows"></tbody>
+		</table>
+
+		<div class="actions">
+			<button id="add" type="button">Add preset</button>
+			<span class="duration" id="summary"></span>
+		</div>
+
+		<script>
+			const DEFAULTS = [
+				{ label: "Focus", seconds: 1500 },
+				{ label: "Break", seconds: 300 },
+				{ label: "Coffee", seconds: 240 },
+				{ label: "Egg", seconds: 420 }
+			];
+
+			let presets = [];
+			let presetIndex = 0;
+
+			/**
+			 * Settings are written on every edit rather than behind a Save button — Marketplace
+			 * guidelines explicitly prohibit one in a property inspector.
+			 */
+			function save() {
+				SDPIComponents.streamDeckClient.setSettings({ presets, presetIndex: Math.min(presetIndex, presets.length - 1) });
+				render();
+			}
+
+			function render() {
+				const rows = document.getElementById("rows");
+				rows.replaceChildren();
+
+				presets.forEach((preset, index) => {
+					const row = document.createElement("tr");
+
+					const labelCell = document.createElement("td");
+					const label = document.createElement("input");
+					label.type = "text";
+					label.value = preset.label;
+					label.addEventListener("change", () => {
+						presets[index].label = label.value.trim() || "Timer";
+						save();
+					});
+					labelCell.append(label);
+
+					const secondsCell = document.createElement("td");
+					const seconds = document.createElement("input");
+					seconds.type = "number";
+					seconds.min = "1";
+					seconds.className = "seconds";
+					seconds.value = String(preset.seconds);
+					seconds.addEventListener("change", () => {
+						presets[index].seconds = Math.max(1, Math.round(Number(seconds.value) || 1));
+						save();
+					});
+					secondsCell.append(seconds);
+
+					const removeCell = document.createElement("td");
+					if (presets.length > 1) {
+						const remove = document.createElement("button");
+						remove.type = "button";
+						remove.className = "remove";
+						remove.textContent = "✕";
+						remove.title = "Remove preset";
+						remove.addEventListener("click", () => {
+							presets.splice(index, 1);
+							if (presetIndex >= presets.length) {
+								presetIndex = 0;
+							}
+							save();
+						});
+						removeCell.append(remove);
+					}
+					row.append(labelCell, secondsCell, removeCell);
+					rows.append(row);
+				});
+
+				const total = presets.reduce((sum, preset) => sum + preset.seconds, 0);
+				document.getElementById("summary").textContent = `${presets.length} presets · ${Math.round(total / 60)} min total`;
+			}
+
+			document.getElementById("add").addEventListener("click", () => {
+				presets.push({ label: "Timer", seconds: 60 });
+				save();
+			});
+
+			SDPIComponents.streamDeckClient.getSettings().then(({ settings }) => {
+				presets = Array.isArray(settings.presets) && settings.presets.length > 0 ? settings.presets : DEFAULTS.map((p) => ({ ...p }));
+				presetIndex = Number.isInteger(settings.presetIndex) ? settings.presetIndex : 0;
+				render();
+			});
+
+			SDPIComponents.streamDeckClient.didReceiveSettings.subscribe(({ payload }) => {
+				const settings = payload.settings ?? {};
+				if (Array.isArray(settings.presets) && settings.presets.length > 0) {
+					presets = settings.presets;
+					presetIndex = Number.isInteger(settings.presetIndex) ? settings.presetIndex : 0;
+					render();
+				}
+			});
+		</script>
+	</body>
+</html>

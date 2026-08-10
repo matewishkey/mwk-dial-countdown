@@ -1,0 +1,58 @@
+{
+	"Name": "Dial Timer",
+	"Version": "0.1.0.0",
+	"Author": "mergodon",
+	"Actions": [
+		{
+			"Name": "Timer",
+			"UUID": "com.mergodon.dial-timer.timer",
+			"Icon": "imgs/actions/timer/icon",
+			"Tooltip": "A countdown timer on a dial. Tap the screen to cycle presets, press to start or pause, hold to reset.",
+			"PropertyInspectorPath": "ui/dial-timer.html",
+			"Controllers": [
+				"Encoder"
+			],
+			"Encoder": {
+				"Icon": "imgs/actions/timer/encoder-icon",
+				"layout": "$B1",
+				"StackColor": "#2D9CDB",
+				"TriggerDescription": {
+					"Rotate": "Adjust time",
+					"Push": "Start / pause",
+					"LongTouch": "Reset",
+					"Touch": "Next preset"
+				}
+			},
+			"States": [
+				{
+					"Image": "imgs/actions/timer/key",
+					"TitleAlignment": "middle"
+				}
+			]
+		}
+	],
+	"Category": "Dial Timer",
+	"CategoryIcon": "imgs/plugin/category-icon",
+	"CodePath": "bin/plugin.js",
+	"Description": "Countdown timers for the Stream Deck + dials. Cycle presets from the touchscreen, press the dial to start or pause, hold to reset, and turn to adjust on the fly.",
+	"Icon": "imgs/plugin/marketplace",
+	"SDKVersion": 3,
+	"Software": {
+		"MinimumVersion": "7.1"
+	},
+	"OS": [
+		{
+			"Platform": "mac",
+			"MinimumVersion": "12"
+		},
+		{
+			"Platform": "windows",
+			"MinimumVersion": "10"
+		}
+	],
+	"Nodejs": {
+		"Version": "24",
+		"Debug": "enabled"
+	},
+	"UUID": "com.mergodon.dial-timer"
+}
