@@ -1,0 +1,34 @@
+{
+	"$schema": "https://schemas.elgato.com/streamdeck/plugins/layout.json",
+	"id": "ring",
+	"items": [
+		{
+			"key": "ring",
+			"type": "pixmap",
+			"rect": [6, 6, 88, 88],
+			"zOrder": 1
+		},
+		{
+			"key": "value",
+			"type": "text",
+			"rect": [100, 18, 96, 42],
+			"alignment": "center",
+			"color": "#FFFFFF",
+			"font": { "size": 30, "weight": 600 },
+			"text-overflow": "clip",
+			"value": "",
+			"zOrder": 2
+		},
+		{
+			"key": "label",
+			"type": "text",
+			"rect": [100, 60, 96, 24],
+			"alignment": "center",
+			"color": "#9A9AA0",
+			"font": { "size": 14, "weight": 400 },
+			"text-overflow": "ellipsis",
+			"value": "",
+			"zOrder": 2
+		}
+	]
+}

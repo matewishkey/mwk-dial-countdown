@@ -1,4 +1,5 @@
 node_modules/
 *.streamDeckPlugin
 com.mergodon.dial-timer.sdPlugin/bin/
+logs/
 *.log

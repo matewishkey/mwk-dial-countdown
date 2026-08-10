@@ -68,7 +68,7 @@ const INFO = {
 };
 
 /** Latest touchscreen state, as reported by the plugin's setFeedback calls. */
-const screen = { title: "—", value: "—", indicator: 0, colour: "" };
+const screen = { title: "—", value: "—", label: "", indicator: 0, ring: 0, colour: "", layout: "(default)" };
 let settings = {};
 let socket = null;
 
@@ -130,20 +130,28 @@ function handlePluginMessage(message) {
 			const payload = message.payload ?? {};
 			if (payload.title !== undefined) screen.title = payload.title;
 			if (payload.value !== undefined) screen.value = payload.value;
+			if (payload.label !== undefined) screen.label = payload.label;
 			if (payload.indicator !== undefined) {
 				screen.indicator = typeof payload.indicator === "object" ? payload.indicator.value : payload.indicator;
 				screen.colour = payload.indicator?.bar_fill_c ?? screen.colour;
 			}
+			if (typeof payload.ring === "string") {
+				readRing(payload.ring);
+			}
 			draw();
 			break;
 		}
+
+		case "setFeedbackLayout":
+			screen.layout = message.payload?.layout ?? "(unknown)";
+			draw();
+			break;
 
 		case "setSettings":
 			settings = message.payload ?? {};
 			draw();
 			break;
 
-		case "setFeedbackLayout":
 		case "setImage":
 		case "setTitle":
 			break;
@@ -155,6 +163,50 @@ function handlePluginMessage(message) {
 
 function send(message) {
 	socket?.send(JSON.stringify(message));
+}
+
+/**
+ * Reads back what the plugin drew.
+ *
+ * The ring arrives as an SVG data URI, so rather than trusting the plugin's own arithmetic the
+ * harness recovers the fraction from the geometry: the arc's end point, converted back to an angle
+ * about the centre. A ring that renders wrong therefore shows up here as a wrong number.
+ */
+function readRing(dataUri) {
+	const [, encoded] = dataUri.split(",");
+	if (encoded === undefined) {
+		return;
+	}
+	const svg = Buffer.from(encoded, "base64").toString("utf8");
+
+	const colour = svg.match(/stroke="(#[0-9A-Fa-f]{6})" stroke-width="\d+" stroke-linecap/);
+	if (colour !== null) {
+		screen.colour = colour[1];
+	}
+
+	// Two arcs is the full-circle special case; no path at all means nothing is drawn.
+	const arcs = svg.match(/A /g)?.length ?? 0;
+	if (arcs === 0) {
+		screen.ring = 0;
+		return;
+	}
+	if (arcs >= 2) {
+		screen.ring = 100;
+		return;
+	}
+
+	const end = svg.match(/A 36 36 0 [01] 1 ([\d.]+) ([\d.]+)/);
+	if (end === null) {
+		return;
+	}
+
+	const [x, y] = [Number(end[1]), Number(end[2])];
+	const centre = 44;
+	let angle = Math.atan2(x - centre, centre - y);
+	if (angle < 0) {
+		angle += 2 * Math.PI;
+	}
+	screen.ring = Math.round((angle / (2 * Math.PI)) * 100);
 }
 
 /** Sends an event as though the user had touched the hardware. */
@@ -192,6 +244,26 @@ const gestures = {
 			payload: { controller: "Encoder", coordinates: { column: 0, row: 0 }, settings, hold, tapPos: [100, 50] }
 		})
 };
+
+/** Pushes a settings change, as the property inspector would. */
+function applySettings(patch) {
+	settings = { ...settings, ...patch };
+	send({
+		event: "didReceiveSettings",
+		action: ACTION_UUID,
+		context: CONTEXT,
+		device: DEVICE_ID,
+		payload: { controller: "Encoder", coordinates: { column: 0, row: 0 }, isInMultiAction: false, settings }
+	});
+}
+
+/** Spins the dial repeatedly, the way a wrist does — this is what builds acceleration. */
+async function spin(events, ticks, gapMs) {
+	for (let i = 0; i < events; i++) {
+		gestures.rotate(ticks);
+		await wait(gapMs);
+	}
+}
 
 /**
  * A press is down-then-up; how long you hold decides what the plugin makes of it. Resolves only
@@ -233,9 +305,41 @@ async function runDemo() {
 			gestures.touch(false);
 		}],
 		["settled — persisted settings catch up", async () => wait(600)],
+
+		// Acceleration: the same wrist movement, done slowly and then quickly.
+		["8 slow ticks (400ms apart) → stays at 10s each, +1m20s", async () => spin(8, 1, 400)],
+		["reset before the fast run", async () => press(900)],
+		["8 fast ticks (60ms apart) → accelerates into minutes", async () => spin(8, 1, 60)],
+		["a hard spin → reaches hours in one gesture", async () => spin(10, 3, 50)],
+
+		// The warning window, driven from the property inspector's settings. A 10 minute preset with a
+		// 15 minute warning threshold is inside the window the moment it starts.
+		["blink on: 10m preset, warn under 15m", async () => {
+			applySettings({ presets: [600], presetIndex: 0, warnEnabled: true, warnSeconds: 900, warnColor: "#F97316" });
+			await wait(300);
+		}],
+		[
+			"start → ring blinks (one frame cannot prove this, so the colour is sampled 8×)",
+			async () => {
+				await press(80);
+				const seen = [];
+				for (let i = 0; i < 8; i++) {
+					await wait(260);
+					seen.push(screen.colour);
+				}
+				const distinct = new Set(seen);
+				console.log(`\n   sampled: ${seen.join(" ")}`);
+				console.log(`   ${distinct.size > 1 ? "✓ alternating — it is blinking" : "✗ static — not blinking"}`);
+			}
+		],
+
 		// Wind the duration down to the 1s floor so the elapsed path can be shown without waiting.
-		["turn left ×30 → clamped to the 1s minimum", async () => gestures.rotate(-30)],
-		["short press, then let it run out → done (red)", async () => {
+		["reset, then turn left ×60 → clamped to the 1s minimum", async () => {
+			await press(900);
+			await wait(500);
+			gestures.rotate(-60);
+		}],
+		["short press, then let it run out → done (red), alert fires", async () => {
 			await press(80);
 			await wait(1500);
 		}]
@@ -303,7 +407,10 @@ const BAR_WIDTH = 34;
 
 /** The touchscreen as the plugin last described it, drawn as a 200 × 100 stand-in. */
 function screenLines() {
-	const filled = Math.round((Math.max(0, Math.min(100, screen.indicator)) / 100) * BAR_WIDTH);
+	// The ring layout reports how much of the ring is drawn; the bar layout reports elapsed percent.
+	const isRing = screen.layout.includes("ring");
+	const percent = isRing ? screen.ring : screen.indicator;
+	const filled = Math.round((Math.max(0, Math.min(100, percent)) / 100) * BAR_WIDTH);
 	const bar = "█".repeat(filled) + "░".repeat(BAR_WIDTH - filled);
 	const presets = (settings.presets ?? [])
 		.map((seconds, i) => {
@@ -312,13 +419,15 @@ function screenLines() {
 		})
 		.join(" ");
 
+	const heading = screen.layout.includes("ring") ? screen.label : screen.title;
+
 	return [
 		"  ┌────────────────────────────────────┐",
-		`  │ ${pad(screen.title, 34)} │`,
+		`  │ ${pad(heading, 34)} │`,
 		`  │ ${pad(screen.value.padStart(18), 34)} │`,
 		`  │ ${bar} │`,
 		"  └────────────────────────────────────┘",
-		dim(`   indicator ${String(screen.indicator).padStart(3)}%   fill ${screen.colour || "—"}`),
+		dim(`   ${isRing ? "ring" : "bar "} ${String(percent).padStart(3)}%   colour ${screen.colour || "—"}   layout ${screen.layout}`),
 		dim(`   presets: ${presets || "(not yet saved)"}`)
 	];
 }

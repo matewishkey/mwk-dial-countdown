@@ -24,6 +24,17 @@
 				margin: 4px 0 12px;
 			}
 
+			h2 {
+				font-size: 11px;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				color: #808080;
+				font-weight: 600;
+				margin: 16px 0 6px;
+				border-top: 1px solid #333;
+				padding-top: 10px;
+			}
+
 			ul {
 				list-style: none;
 				margin: 0;
@@ -41,15 +52,49 @@
 				border-color: #2d9cdb;
 			}
 
-			input {
-				width: 70px;
+			.row {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+				padding: 3px 0;
+			}
+
+			.row label {
+				flex: 1;
+				color: #b8b8b8;
+			}
+
+			input[type="number"],
+			select {
+				width: 88px;
 				box-sizing: border-box;
 				background: #2d2d2d;
 				border: 1px solid #3d3d3d;
 				border-radius: 3px;
 				color: #d8d8d8;
 				padding: 4px 6px;
+			}
+
+			li input[type="number"] {
+				width: 70px;
 				text-align: right;
+			}
+
+			select {
+				width: 150px;
+			}
+
+			input[type="color"] {
+				width: 34px;
+				height: 24px;
+				padding: 1px;
+				background: #2d2d2d;
+				border: 1px solid #3d3d3d;
+				border-radius: 3px;
+			}
+
+			input[type="range"] {
+				width: 110px;
 			}
 
 			.unit {
@@ -84,43 +129,95 @@
 			.actions {
 				margin-top: 10px;
 			}
+
+			.muted {
+				color: #808080;
+			}
 		</style>
 	</head>
 	<body>
 		<p class="hint">
-			Tap the touchscreen to cycle presets, press the dial to start or pause, hold it to reset. Turn to adjust in
-			10&nbsp;second steps, or hold and turn for whole minutes — adjusting a stopped timer edits the preset here too.
+			Tap the touchscreen to cycle presets, press the dial to start or pause, hold it to reset. Turn to adjust — the
+			step grows from 10&nbsp;seconds to a minute, then five, the longer you keep turning. Hold and turn for a flat
+			minute a tick.
 		</p>
 
+		<h2>Presets</h2>
 		<ul id="rows"></ul>
-
 		<div class="actions">
 			<button id="add" type="button">Add preset</button>
+		</div>
+
+		<h2>Appearance</h2>
+		<div class="row">
+			<label for="layout">Display</label>
+			<select id="layout">
+				<option value="ring">Countdown ring</option>
+				<option value="bar">Progress bar</option>
+			</select>
+		</div>
+		<div class="row">
+			<label for="warnEnabled">Blink near the end</label>
+			<input type="checkbox" id="warnEnabled" />
+		</div>
+		<div class="row">
+			<label for="warnSeconds">Start blinking at</label>
+			<input type="number" id="warnSeconds" min="1" step="1" />
+			<span class="muted">min left</span>
+		</div>
+		<div class="row">
+			<label for="warnColor">Blink colour</label>
+			<input type="color" id="warnColor" />
+		</div>
+
+		<h2>Sound</h2>
+		<div class="row">
+			<label for="soundEnabled">Play a sound when done</label>
+			<input type="checkbox" id="soundEnabled" />
+		</div>
+		<div class="row">
+			<label for="soundId">Sound</label>
+			<select id="soundId"></select>
+		</div>
+		<div class="row">
+			<label for="volume">Volume</label>
+			<input type="range" id="volume" min="0" max="100" step="5" />
+			<button id="preview" type="button">Test</button>
 		</div>
 
 		<script>
 			const DEFAULTS = [5 * 60, 20 * 60, 30 * 60, 40 * 60];
 
-			let presets = [];
-			let presetIndex = 0;
+			const state = {
+				presets: [],
+				presetIndex: 0,
+				layout: "ring",
+				warnEnabled: false,
+				warnSeconds: 300,
+				warnColor: "#F97316",
+				soundEnabled: true,
+				soundId: "none",
+				volume: 100
+			};
+
+			const el = (id) => document.getElementById(id);
 
 			/**
 			 * Settings are written on every edit rather than behind a Save button — Marketplace
 			 * guidelines explicitly prohibit one in a property inspector.
 			 */
 			function save() {
-				presetIndex = Math.min(presetIndex, presets.length - 1);
-				SDPIComponents.streamDeckClient.setSettings({ presets, presetIndex });
-				render();
+				state.presetIndex = Math.min(state.presetIndex, state.presets.length - 1);
+				SDPIComponents.streamDeckClient.setSettings({ ...state });
 			}
 
-			function render() {
-				const rows = document.getElementById("rows");
+			function renderPresets() {
+				const rows = el("rows");
 				rows.replaceChildren();
 
-				presets.forEach((seconds, index) => {
+				state.presets.forEach((seconds, index) => {
 					const row = document.createElement("li");
-					if (index === presetIndex) {
+					if (index === state.presetIndex) {
 						row.className = "active";
 					}
 
@@ -131,29 +228,30 @@
 					// Stored in seconds, edited in minutes — the fraction only shows when there is one.
 					minutes.value = String(Math.round((seconds / 60) * 100) / 100);
 					minutes.addEventListener("change", () => {
-						const value = Math.max(1, Math.round((Number(minutes.value) || 0) * 60));
-						presets[index] = value;
+						state.presets[index] = Math.max(1, Math.round((Number(minutes.value) || 0) * 60));
 						save();
+						renderPresets();
 					});
 
 					const unit = document.createElement("span");
 					unit.className = "unit";
-					unit.textContent = "minutes";
+					unit.textContent = minutes.value >= 60 ? `minutes (${(minutes.value / 60).toFixed(1)}h)` : "minutes";
 
 					row.append(minutes, unit);
 
-					if (presets.length > 1) {
+					if (state.presets.length > 1) {
 						const remove = document.createElement("button");
 						remove.type = "button";
 						remove.className = "remove";
 						remove.textContent = "✕";
 						remove.title = "Remove preset";
 						remove.addEventListener("click", () => {
-							presets.splice(index, 1);
-							if (presetIndex >= presets.length) {
-								presetIndex = 0;
+							state.presets.splice(index, 1);
+							if (state.presetIndex >= state.presets.length) {
+								state.presetIndex = 0;
 							}
 							save();
+							renderPresets();
 						});
 						row.append(remove);
 					}
@@ -162,10 +260,94 @@
 				});
 			}
 
-			document.getElementById("add").addEventListener("click", () => {
-				presets.push(5 * 60);
+			function renderControls() {
+				el("layout").value = state.layout;
+				el("warnEnabled").checked = state.warnEnabled;
+				el("warnSeconds").value = String(Math.round(state.warnSeconds / 60));
+				el("warnColor").value = state.warnColor;
+				el("soundEnabled").checked = state.soundEnabled;
+				el("volume").value = String(state.volume);
+			}
+
+			el("add").addEventListener("click", () => {
+				state.presets.push(5 * 60);
+				save();
+				renderPresets();
+			});
+
+			el("layout").addEventListener("change", () => {
+				state.layout = el("layout").value;
 				save();
 			});
+
+			el("warnEnabled").addEventListener("change", () => {
+				state.warnEnabled = el("warnEnabled").checked;
+				save();
+			});
+
+			el("warnSeconds").addEventListener("change", () => {
+				state.warnSeconds = Math.max(1, Math.round(Number(el("warnSeconds").value) || 5)) * 60;
+				save();
+			});
+
+			el("warnColor").addEventListener("change", () => {
+				state.warnColor = el("warnColor").value;
+				save();
+			});
+
+			el("soundEnabled").addEventListener("change", () => {
+				state.soundEnabled = el("soundEnabled").checked;
+				save();
+			});
+
+			el("soundId").addEventListener("change", () => {
+				state.soundId = el("soundId").value;
+				save();
+			});
+
+			el("volume").addEventListener("change", () => {
+				state.volume = Number(el("volume").value);
+				save();
+			});
+
+			// The plugin plays the preview: only it can reach the filesystem and the audio player.
+			el("preview").addEventListener("click", () => {
+				SDPIComponents.streamDeckClient.send("sendToPlugin", {
+					event: "preview",
+					soundId: state.soundId,
+					volume: state.volume
+				});
+			});
+
+			/**
+			 * The sound list is built by the plugin from what is actually on disk, so nothing here
+			 * assumes a file exists. It arrives after the inspector opens.
+			 */
+			function renderSounds(sounds) {
+				const select = el("soundId");
+				select.replaceChildren();
+
+				const groups = new Map();
+				for (const sound of sounds) {
+					if (!groups.has(sound.group)) {
+						const group = document.createElement("optgroup");
+						group.label = sound.group;
+						groups.set(sound.group, group);
+						select.append(group);
+					}
+					const option = document.createElement("option");
+					option.value = sound.id;
+					option.textContent = sound.label;
+					groups.get(sound.group).append(option);
+				}
+
+				// Keep the saved choice if it is still available; otherwise fall back to the first entry.
+				select.value = state.soundId;
+				if (select.selectedIndex < 0) {
+					select.selectedIndex = 0;
+					state.soundId = select.value;
+				}
+			}
 
 			/** Accepts both the current `number[]` shape and the older `{ label, seconds }[]` one. */
 			function readPresets(value) {
@@ -179,17 +361,29 @@
 				return seconds.length > 0 ? seconds : [...DEFAULTS];
 			}
 
-			SDPIComponents.streamDeckClient.getSettings().then(({ settings }) => {
-				presets = readPresets(settings.presets);
-				presetIndex = Number.isInteger(settings.presetIndex) ? settings.presetIndex : 0;
-				render();
-			});
+			function load(settings) {
+				state.presets = readPresets(settings.presets);
+				state.presetIndex = Number.isInteger(settings.presetIndex) ? settings.presetIndex : 0;
+				state.layout = settings.layout === "bar" ? "bar" : "ring";
+				state.warnEnabled = settings.warnEnabled === true;
+				state.warnSeconds = Number.isFinite(settings.warnSeconds) ? settings.warnSeconds : 300;
+				state.warnColor = settings.warnColor || "#F97316";
+				state.soundEnabled = settings.soundEnabled !== false;
+				state.soundId = settings.soundId || "none";
+				state.volume = Number.isFinite(settings.volume) ? settings.volume : 100;
+				renderPresets();
+				renderControls();
+			}
 
-			SDPIComponents.streamDeckClient.didReceiveSettings.subscribe(({ payload }) => {
-				const settings = payload.settings ?? {};
-				presets = readPresets(settings.presets);
-				presetIndex = Number.isInteger(settings.presetIndex) ? settings.presetIndex : 0;
-				render();
+			SDPIComponents.streamDeckClient.getSettings().then(({ settings }) => load(settings ?? {}));
+
+			SDPIComponents.streamDeckClient.didReceiveSettings.subscribe(({ payload }) => load(payload?.settings ?? {}));
+
+			SDPIComponents.streamDeckClient.sendToPropertyInspector.subscribe((message) => {
+				const payload = message?.payload ?? message;
+				if (payload?.event === "sounds") {
+					renderSounds(payload.sounds ?? []);
+				}
 			});
 		</script>
 	</body>

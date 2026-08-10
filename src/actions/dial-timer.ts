@@ -1,4 +1,5 @@
 import streamDeck, {
+	type FeedbackPayload,
 	action,
 	SingletonAction,
 	type DialAction,
@@ -6,19 +7,19 @@ import streamDeck, {
 	type DialRotateEvent,
 	type DialUpEvent,
 	type DidReceiveSettingsEvent,
+	type PropertyInspectorDidAppearEvent,
 	type TouchTapEvent,
 	type WillAppearEvent,
 	type WillDisappearEvent
 } from "@elgato/streamdeck";
 
+import { Accelerator } from "../acceleration";
+import { asDataUri, DEFAULT_PALETTE, renderRing, ringColour } from "../render";
+import { listSounds, NO_SOUND, playSound } from "../sound";
 import { DEFAULT_PRESETS, formatDuration, formatPresetLabel, Timer, type Preset } from "../timer";
 
 /** How long the dial must be held before it counts as a reset rather than a start/pause. */
 const LONG_PRESS_MS = 600;
-
-/** Seconds added per rotation tick, plain and with the dial held down. */
-const FINE_STEP_SECONDS = 10;
-const COARSE_STEP_SECONDS = 60;
 
 /**
  * Render cadence. Marketplace guidelines cap touchscreen updates at 10 per second; 4 is plenty to
@@ -26,25 +27,43 @@ const COARSE_STEP_SECONDS = 60;
  */
 const RENDER_INTERVAL_MS = 250;
 
+/** Blink period while inside the warning window — two render frames on, two off. */
+const BLINK_MS = 500;
+
 /** Settings changes are batched, so spinning the dial does not write to disk on every tick. */
 const SETTINGS_DEBOUNCE_MS = 400;
+
+const DEFAULT_WARN_SECONDS = 300;
 
 export type DialTimerSettings = {
 	presets?: Preset[];
 	presetIndex?: number;
+	/** `"ring"` is the countdown ring; `"bar"` falls back to Stream Deck's built-in bar layout. */
+	layout?: "ring" | "bar";
+	warnEnabled?: boolean;
+	warnSeconds?: number;
+	warnColor?: string;
+	soundEnabled?: boolean;
+	soundId?: string;
+	volume?: number;
 };
 
 /** Everything that lives only for as long as the action is on screen. */
 type Instance = {
 	action: DialAction<DialTimerSettings>;
 	timer: Timer;
+	accelerator: Accelerator;
 	presets: Preset[];
 	presetIndex: number;
+	settings: DialTimerSettings;
 	renderHandle: NodeJS.Timeout | null;
 	longPressHandle: NodeJS.Timeout | null;
 	saveHandle: NodeJS.Timeout | null;
 	longPressFired: boolean;
+	/** Guards against re-playing the alert on every frame once the timer has elapsed. */
+	alerted: boolean;
 	lastFeedback: string;
+	lastLayout: string | null;
 };
 
 @action({ UUID: "com.mergodon.dial-timer.timer" })
@@ -60,23 +79,29 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 			return;
 		}
 
-		const presets = normalisePresets(ev.payload.settings.presets);
-		const presetIndex = clampIndex(ev.payload.settings.presetIndex, presets.length);
+		const settings = ev.payload.settings ?? {};
+		const presets = normalisePresets(settings.presets);
+		const presetIndex = clampIndex(settings.presetIndex, presets.length);
 
 		const instance: Instance = {
 			action: ev.action,
 			timer: new Timer(presets[presetIndex] * 1000),
+			accelerator: new Accelerator(),
 			presets,
 			presetIndex,
+			settings,
 			renderHandle: null,
 			longPressHandle: null,
 			saveHandle: null,
 			longPressFired: false,
-			lastFeedback: ""
+			alerted: false,
+			lastFeedback: "",
+			lastLayout: null
 		};
 
 		this.#instances.set(ev.action.id, instance);
 		instance.renderHandle = setInterval(() => this.#render(instance), RENDER_INTERVAL_MS);
+		this.#applyLayout(instance);
 		this.#render(instance, true);
 	}
 
@@ -95,20 +120,54 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 		this.#instances.delete(ev.action.id);
 	}
 
-	/** Picks up preset edits made in the property inspector. */
+	/** Picks up preset and appearance edits made in the property inspector. */
 	override onDidReceiveSettings(ev: DidReceiveSettingsEvent<DialTimerSettings>): void {
 		const instance = this.#instances.get(ev.action.id);
 		if (instance === undefined) {
 			return;
 		}
 
-		instance.presets = normalisePresets(ev.payload.settings.presets);
-		instance.presetIndex = clampIndex(ev.payload.settings.presetIndex, instance.presets.length);
-		instance.timer.setDuration(instance.presets[instance.presetIndex] * 1000);
+		const settings = ev.payload.settings ?? {};
+		const presets = normalisePresets(settings.presets);
+		const presetIndex = clampIndex(settings.presetIndex, presets.length);
+
+		// Only reload the clock when the selected duration actually changed — otherwise adjusting the
+		// volume slider would reset a running timer.
+		const durationChanged = presets[presetIndex] * 1000 !== instance.timer.durationMs;
+
+		instance.settings = settings;
+		instance.presets = presets;
+		instance.presetIndex = presetIndex;
+		if (durationChanged) {
+			instance.timer.setDuration(presets[presetIndex] * 1000);
+			instance.alerted = false;
+		}
+
+		this.#applyLayout(instance);
 		this.#render(instance, true);
 	}
 
-	/** Turning adjusts time; holding the dial while turning switches to coarse, whole-minute steps. */
+	/** The property inspector cannot read the filesystem, so the plugin hands it the sound list. */
+	override onPropertyInspectorDidAppear(ev: PropertyInspectorDidAppearEvent<DialTimerSettings>): void {
+		void ev;
+		streamDeck.ui
+			.sendToPropertyInspector({ event: "sounds", sounds: listSounds() })
+			.catch((err) => streamDeck.logger.error("Failed to send sound list", err));
+	}
+
+	/** Lets the property inspector audition a sound at the volume it is about to save. */
+	override onSendToPlugin(ev: { payload: unknown }): void {
+		const payload = ev.payload as { event?: string; soundId?: string; volume?: number } | undefined;
+		if (payload?.event === "preview") {
+			playSound(payload.soundId, payload.volume ?? 100);
+		}
+	}
+
+	/**
+	 * Turning adjusts time. The step accelerates the longer the dial is spun — ten seconds for a
+	 * nudge, a minute once it is being wound, five once it is being wound hard — so setting an
+	 * hour-long timer does not mean six turns of the wrist.
+	 */
 	override onDialRotate(ev: DialRotateEvent<DialTimerSettings>): void {
 		const instance = this.#instances.get(ev.action.id);
 		if (instance === undefined) {
@@ -119,8 +178,9 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 		// press-and-turn does not wipe the value the user is in the middle of setting.
 		this.#cancelLongPress(instance);
 
-		const step = ev.payload.pressed ? COARSE_STEP_SECONDS : FINE_STEP_SECONDS;
-		instance.timer.adjust(ev.payload.ticks * step * 1000);
+		const deltaSeconds = instance.accelerator.rotate(ev.payload.ticks, Date.now(), ev.payload.pressed);
+		instance.timer.adjust(deltaSeconds * 1000);
+		instance.alerted = false;
 
 		// Only an idle timer writes back: while running the dial nudges the clock, not the preset.
 		if (instance.timer.status !== "running") {
@@ -143,6 +203,8 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 			instance.longPressFired = true;
 			instance.longPressHandle = null;
 			instance.timer.reset();
+			instance.alerted = false;
+			instance.accelerator.reset();
 			this.#render(instance, true);
 		}, LONG_PRESS_MS);
 	}
@@ -162,6 +224,7 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 		}
 
 		instance.timer.toggle();
+		instance.alerted = false;
 		this.#render(instance, true);
 	}
 
@@ -176,9 +239,23 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 		const count = instance.presets.length;
 		instance.presetIndex = (instance.presetIndex + step + count) % count;
 		instance.timer.setDuration(instance.presets[instance.presetIndex] * 1000);
+		instance.alerted = false;
+		instance.accelerator.reset();
 
 		this.#scheduleSave(instance);
 		this.#render(instance, true);
+	}
+
+	/** Switches the touchscreen between the ring layout and the built-in bar, when the choice changes. */
+	#applyLayout(instance: Instance): void {
+		const layout = instance.settings.layout === "bar" ? "$B1" : "layouts/ring.json";
+		if (layout === instance.lastLayout) {
+			return;
+		}
+
+		instance.lastLayout = layout;
+		instance.lastFeedback = "";
+		instance.action.setFeedbackLayout(layout).catch((err) => streamDeck.logger.error("Failed to set layout", err));
 	}
 
 	/**
@@ -186,32 +263,67 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 	 * costs nothing, which is what keeps the 4 Hz render loop comfortably inside Elgato's limit.
 	 */
 	#render(instance: Instance, force = false): void {
-		const { timer } = instance;
+		const { timer, settings } = instance;
 		const status = timer.status;
+		const remainingMs = timer.remainingMs;
 
-		// The preset's length is its name, so the title tracks the duration rather than a stored label.
+		if (status === "elapsed" && !instance.alerted) {
+			instance.alerted = true;
+			if (settings.soundEnabled !== false) {
+				playSound(settings.soundId ?? NO_SOUND, settings.volume ?? 100);
+			}
+		}
+
+		// The preset's length is its name, so the label tracks the duration rather than a stored one.
 		const label = formatPresetLabel(timer.durationMs);
-		const title = status === "elapsed" ? `${label} · done` : label;
-		const value = formatDuration(timer.remainingMs);
-		const indicator = Math.round(timer.progress * 100);
+		const value = formatDuration(remainingMs);
+		const warning = this.#isWarning(instance, remainingMs, status);
 
-		const signature = `${title}|${value}|${indicator}|${status}`;
+		const signature = `${instance.lastLayout}|${label}|${value}|${status}|${warning}`;
 		if (!force && signature === instance.lastFeedback) {
 			return;
 		}
 		instance.lastFeedback = signature;
 
-		instance.action
-			.setFeedback({
-				title,
-				value,
-				indicator: {
-					value: indicator,
-					// Amber while paused, red once elapsed — status readable without reading the words.
-					bar_fill_c: status === "elapsed" ? "#EB5757" : status === "paused" ? "#F2C94C" : "#2D9CDB"
-				}
-			})
-			.catch((err) => streamDeck.logger.error("Failed to set feedback", err));
+		const palette = { ...DEFAULT_PALETTE, warn: settings.warnColor || DEFAULT_PALETTE.warn };
+		const remainingFraction = remainingMs / Math.max(1, timer.durationMs);
+		const colour = ringColour({ remainingFraction, status, warning, palette });
+
+		const feedback: FeedbackPayload =
+			instance.lastLayout === "$B1"
+				? {
+						title: status === "elapsed" ? `${label} · done` : label,
+						value,
+						indicator: {
+							value: Math.round((1 - remainingFraction) * 100),
+							bar_fill_c: colour,
+							bar_bg_c: palette.track
+						}
+					}
+				: {
+						ring: asDataUri(renderRing({ remainingFraction, status, warning, palette })),
+						value,
+						label: status === "elapsed" ? "done" : label
+					};
+
+		instance.action.setFeedback(feedback).catch((err) => streamDeck.logger.error("Failed to set feedback", err));
+	}
+
+	/**
+	 * True while the timer is inside its warning window *and* the blink is in its visible half. The
+	 * phase comes from the wall clock rather than a counter, so it stays even when frames are dropped.
+	 */
+	#isWarning(instance: Instance, remainingMs: number, status: string): boolean {
+		if (instance.settings.warnEnabled !== true || status !== "running") {
+			return false;
+		}
+
+		const windowMs = (instance.settings.warnSeconds ?? DEFAULT_WARN_SECONDS) * 1000;
+		if (remainingMs > windowMs) {
+			return false;
+		}
+
+		return Math.floor(Date.now() / BLINK_MS) % 2 === 0;
 	}
 
 	#cancelLongPress(instance: Instance): void {
@@ -228,22 +340,22 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 		instance.saveHandle = setTimeout(() => {
 			instance.saveHandle = null;
 			instance.action
-				.setSettings({ presets: instance.presets, presetIndex: instance.presetIndex })
+				.setSettings({ ...instance.settings, presets: instance.presets, presetIndex: instance.presetIndex })
 				.catch((err) => streamDeck.logger.error("Failed to save settings", err));
 		}, SETTINGS_DEBOUNCE_MS);
 	}
 }
 
 function clearTimers(instance: Instance): void {
-	for (const handle of [instance.renderHandle, instance.longPressHandle, instance.saveHandle]) {
-		if (handle !== null) {
-			clearTimeout(handle as NodeJS.Timeout);
-		}
-	}
 	if (instance.renderHandle !== null) {
 		clearInterval(instance.renderHandle);
+		instance.renderHandle = null;
 	}
-	instance.renderHandle = null;
+	for (const handle of [instance.longPressHandle, instance.saveHandle]) {
+		if (handle !== null) {
+			clearTimeout(handle);
+		}
+	}
 	instance.longPressHandle = null;
 	instance.saveHandle = null;
 }

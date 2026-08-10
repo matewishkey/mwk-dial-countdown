@@ -66,3 +66,17 @@ npx streamdeck pack com.mergodon.dial-timer.sdPlugin
 - **Sound on completion.** The SDK has no audio API, so this means shelling out to a per-OS player (`afplay` on macOS, something bundled on Windows), which is also where the volume control has to come from.
 - **Custom countdown ring.** Currently uses Elgato's built-in `$B1` layout. A custom ring needs a `pixmap` layout item, and since plugins run with `--no-addons` there is no canvas library available — so it depends on whether `pixmap` accepts an SVG data URI. Unconfirmed.
 - **Marketplace assets.** Icons are functional placeholders, not designed. `Nodejs.Debug` is still `enabled` in the manifest and should come out before release.
+
+## Acceleration
+
+Turning accelerates: 10 seconds per tick for a nudge, a minute once the dial is being wound, five minutes when it is wound hard. Momentum is built from tick count rather than event count, so a single fast flick escalates as readily as a sustained turn, and any pause longer than `IDLE_RESET_MS` drops straight back to fine control. Holding the dial is a flat minute a tick and deliberately does not compound with momentum.
+
+## Sound
+
+The SDK has no audio API, so `src/sound.ts` hands a file to the platform's own player: `afplay -v <0-1>` on macOS, and PowerShell's WPF `MediaPlayer` on Windows (chosen over `SoundPlayer`, which cannot set volume). Nothing is hard-coded — bundled sounds come from the plugin's own `sounds/` folder and system sounds are enumerated from disk, so a sound that is not installed is simply absent from the list rather than a path that fails when it matters.
+
+## The ring
+
+`src/render.ts` builds the countdown ring as an SVG string, which a `pixmap` layout item accepts directly. That matters because plugins run under `--no-addons` and cannot load native modules, so no canvas library is available. Text is left to real `text` layout items so it uses Stream Deck's own font rendering.
+
+A finished timer draws a *full* ring in the elapsed colour rather than an empty one — left to the arithmetic it would draw nothing at the exact moment the user most needs to see something.
