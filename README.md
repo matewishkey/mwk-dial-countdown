@@ -63,8 +63,9 @@ npx streamdeck pack com.mergodon.dial-timer.sdPlugin
 
 ## Not done yet
 
-- **Sound on completion.** The SDK has no audio API, so this means shelling out to a per-OS player (`afplay` on macOS, something bundled on Windows), which is also where the volume control has to come from.
-- **Custom countdown ring.** Currently uses Elgato's built-in `$B1` layout. A custom ring needs a `pixmap` layout item, and since plugins run with `--no-addons` there is no canvas library available — so it depends on whether `pixmap` accepts an SVG data URI. Unconfirmed.
+- **Sound has never run on a real machine.** The playback code is written for both platforms but this is a Linux box, so neither `afplay` nor the PowerShell path has actually executed. Everything else here is verified; this is not.
+- **Auto-repeat, interval/break cycles, and a count-up stopwatch** — the features comparable plugins have and this one does not.
+- **Showing the finish time** ("ends at 14:35"), which nothing on the Marketplace appears to do and which beats a raw remaining count for long timers.
 - **Marketplace assets.** Icons are functional placeholders, not designed. `Nodejs.Debug` is still `enabled` in the manifest and should come out before release.
 
 ## Acceleration
