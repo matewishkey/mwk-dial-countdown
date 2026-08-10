@@ -5,18 +5,14 @@
 
 export type TimerStatus = "idle" | "running" | "paused" | "elapsed";
 
-export type Preset = {
-	label: string;
-	seconds: number;
-};
+/**
+ * A preset is only a duration in seconds. There is no name: a timer's length is its own label, and
+ * asking someone to christen "20 minutes" is a chore, not a feature.
+ */
+export type Preset = number;
 
-/** Presets a fresh action instance starts with. */
-export const DEFAULT_PRESETS: Preset[] = [
-	{ label: "Focus", seconds: 1500 },
-	{ label: "Break", seconds: 300 },
-	{ label: "Coffee", seconds: 240 },
-	{ label: "Egg", seconds: 420 }
-];
+/** Presets a fresh action instance starts with, in seconds. */
+export const DEFAULT_PRESETS: Preset[] = [5 * 60, 20 * 60, 30 * 60, 40 * 60];
 
 /** Shortest and longest duration a preset can be adjusted to. */
 export const MIN_DURATION_MS = 1_000;
@@ -161,6 +157,30 @@ function clampDuration(ms: number): number {
 		return MIN_DURATION_MS;
 	}
 	return Math.min(MAX_DURATION_MS, Math.max(MIN_DURATION_MS, Math.round(ms)));
+}
+
+/**
+ * Names a preset by its length, since presets carry no name of their own. Round durations get the
+ * short form a person would say out loud — "20m" — and anything untidy keeps its parts, so a preset
+ * nudged off a round number still reads honestly rather than rounding itself away.
+ */
+export function formatPresetLabel(ms: number): string {
+	const total = Math.round(Math.max(0, ms) / 1000);
+	const hours = Math.floor(total / 3600);
+	const minutes = Math.floor((total % 3600) / 60);
+	const seconds = total % 60;
+
+	const parts: string[] = [];
+	if (hours > 0) {
+		parts.push(`${hours}h`);
+	}
+	if (minutes > 0) {
+		parts.push(`${minutes}m`);
+	}
+	if (seconds > 0 || parts.length === 0) {
+		parts.push(`${seconds}s`);
+	}
+	return parts.join(" ");
 }
 
 /** Formats milliseconds as `m:ss`, or `h:mm:ss` once past an hour. */

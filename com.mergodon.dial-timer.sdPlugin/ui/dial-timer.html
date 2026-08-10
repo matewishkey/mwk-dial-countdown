@@ -24,34 +24,37 @@
 				margin: 4px 0 12px;
 			}
 
-			table {
-				width: 100%;
-				border-collapse: collapse;
+			ul {
+				list-style: none;
+				margin: 0;
+				padding: 0;
 			}
 
-			th {
-				text-align: left;
-				font-weight: 500;
-				color: #969696;
-				padding-bottom: 4px;
+			li {
+				display: flex;
+				align-items: center;
+				gap: 6px;
+				padding: 2px 0;
 			}
 
-			td {
-				padding: 2px 4px 2px 0;
+			li.active input {
+				border-color: #2d9cdb;
 			}
 
 			input {
-				width: 100%;
+				width: 70px;
 				box-sizing: border-box;
 				background: #2d2d2d;
 				border: 1px solid #3d3d3d;
 				border-radius: 3px;
 				color: #d8d8d8;
 				padding: 4px 6px;
+				text-align: right;
 			}
 
-			input.seconds {
-				text-align: right;
+			.unit {
+				color: #969696;
+				flex: 1;
 			}
 
 			button {
@@ -68,52 +71,35 @@
 			}
 
 			button.remove {
-				padding: 4px 8px;
-				color: #969696;
+				padding: 2px 7px;
+				background: none;
+				color: #808080;
+			}
+
+			button.remove:hover {
+				background: #3d3d3d;
+				color: #d8d8d8;
 			}
 
 			.actions {
-				margin-top: 8px;
-				display: flex;
-				gap: 6px;
-				align-items: center;
-			}
-
-			.duration {
-				color: #969696;
-				margin-left: auto;
+				margin-top: 10px;
 			}
 		</style>
 	</head>
 	<body>
 		<p class="hint">
 			Tap the touchscreen to cycle presets, press the dial to start or pause, hold it to reset. Turn to adjust in
-			10&nbsp;second steps, or hold and turn for whole minutes.
+			10&nbsp;second steps, or hold and turn for whole minutes — adjusting a stopped timer edits the preset here too.
 		</p>
 
-		<table>
-			<thead>
-				<tr>
-					<th style="width: 60%">Label</th>
-					<th style="width: 30%">Seconds</th>
-					<th></th>
-				</tr>
-			</thead>
-			<tbody id="rows"></tbody>
-		</table>
+		<ul id="rows"></ul>
 
 		<div class="actions">
 			<button id="add" type="button">Add preset</button>
-			<span class="duration" id="summary"></span>
 		</div>
 
 		<script>
-			const DEFAULTS = [
-				{ label: "Focus", seconds: 1500 },
-				{ label: "Break", seconds: 300 },
-				{ label: "Coffee", seconds: 240 },
-				{ label: "Egg", seconds: 420 }
-			];
+			const DEFAULTS = [5 * 60, 20 * 60, 30 * 60, 40 * 60];
 
 			let presets = [];
 			let presetIndex = 0;
@@ -123,7 +109,8 @@
 			 * guidelines explicitly prohibit one in a property inspector.
 			 */
 			function save() {
-				SDPIComponents.streamDeckClient.setSettings({ presets, presetIndex: Math.min(presetIndex, presets.length - 1) });
+				presetIndex = Math.min(presetIndex, presets.length - 1);
+				SDPIComponents.streamDeckClient.setSettings({ presets, presetIndex });
 				render();
 			}
 
@@ -131,32 +118,30 @@
 				const rows = document.getElementById("rows");
 				rows.replaceChildren();
 
-				presets.forEach((preset, index) => {
-					const row = document.createElement("tr");
+				presets.forEach((seconds, index) => {
+					const row = document.createElement("li");
+					if (index === presetIndex) {
+						row.className = "active";
+					}
 
-					const labelCell = document.createElement("td");
-					const label = document.createElement("input");
-					label.type = "text";
-					label.value = preset.label;
-					label.addEventListener("change", () => {
-						presets[index].label = label.value.trim() || "Timer";
+					const minutes = document.createElement("input");
+					minutes.type = "number";
+					minutes.min = "0.1";
+					minutes.step = "1";
+					// Stored in seconds, edited in minutes — the fraction only shows when there is one.
+					minutes.value = String(Math.round((seconds / 60) * 100) / 100);
+					minutes.addEventListener("change", () => {
+						const value = Math.max(1, Math.round((Number(minutes.value) || 0) * 60));
+						presets[index] = value;
 						save();
 					});
-					labelCell.append(label);
 
-					const secondsCell = document.createElement("td");
-					const seconds = document.createElement("input");
-					seconds.type = "number";
-					seconds.min = "1";
-					seconds.className = "seconds";
-					seconds.value = String(preset.seconds);
-					seconds.addEventListener("change", () => {
-						presets[index].seconds = Math.max(1, Math.round(Number(seconds.value) || 1));
-						save();
-					});
-					secondsCell.append(seconds);
+					const unit = document.createElement("span");
+					unit.className = "unit";
+					unit.textContent = "minutes";
 
-					const removeCell = document.createElement("td");
+					row.append(minutes, unit);
+
 					if (presets.length > 1) {
 						const remove = document.createElement("button");
 						remove.type = "button";
@@ -170,34 +155,41 @@
 							}
 							save();
 						});
-						removeCell.append(remove);
+						row.append(remove);
 					}
-					row.append(labelCell, secondsCell, removeCell);
+
 					rows.append(row);
 				});
-
-				const total = presets.reduce((sum, preset) => sum + preset.seconds, 0);
-				document.getElementById("summary").textContent = `${presets.length} presets · ${Math.round(total / 60)} min total`;
 			}
 
 			document.getElementById("add").addEventListener("click", () => {
-				presets.push({ label: "Timer", seconds: 60 });
+				presets.push(5 * 60);
 				save();
 			});
 
+			/** Accepts both the current `number[]` shape and the older `{ label, seconds }[]` one. */
+			function readPresets(value) {
+				if (!Array.isArray(value) || value.length === 0) {
+					return [...DEFAULTS];
+				}
+				const seconds = value
+					.map((preset) => (typeof preset === "object" && preset !== null ? preset.seconds : preset))
+					.filter((value) => typeof value === "number" && value > 0)
+					.map((value) => Math.round(value));
+				return seconds.length > 0 ? seconds : [...DEFAULTS];
+			}
+
 			SDPIComponents.streamDeckClient.getSettings().then(({ settings }) => {
-				presets = Array.isArray(settings.presets) && settings.presets.length > 0 ? settings.presets : DEFAULTS.map((p) => ({ ...p }));
+				presets = readPresets(settings.presets);
 				presetIndex = Number.isInteger(settings.presetIndex) ? settings.presetIndex : 0;
 				render();
 			});
 
 			SDPIComponents.streamDeckClient.didReceiveSettings.subscribe(({ payload }) => {
 				const settings = payload.settings ?? {};
-				if (Array.isArray(settings.presets) && settings.presets.length > 0) {
-					presets = settings.presets;
-					presetIndex = Number.isInteger(settings.presetIndex) ? settings.presetIndex : 0;
-					render();
-				}
+				presets = readPresets(settings.presets);
+				presetIndex = Number.isInteger(settings.presetIndex) ? settings.presetIndex : 0;
+				render();
 			});
 		</script>
 	</body>

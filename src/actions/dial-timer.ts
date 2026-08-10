@@ -11,7 +11,7 @@ import streamDeck, {
 	type WillDisappearEvent
 } from "@elgato/streamdeck";
 
-import { DEFAULT_PRESETS, formatDuration, Timer, type Preset } from "../timer";
+import { DEFAULT_PRESETS, formatDuration, formatPresetLabel, Timer, type Preset } from "../timer";
 
 /** How long the dial must be held before it counts as a reset rather than a start/pause. */
 const LONG_PRESS_MS = 600;
@@ -65,7 +65,7 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 
 		const instance: Instance = {
 			action: ev.action,
-			timer: new Timer(presets[presetIndex].seconds * 1000),
+			timer: new Timer(presets[presetIndex] * 1000),
 			presets,
 			presetIndex,
 			renderHandle: null,
@@ -104,7 +104,7 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 
 		instance.presets = normalisePresets(ev.payload.settings.presets);
 		instance.presetIndex = clampIndex(ev.payload.settings.presetIndex, instance.presets.length);
-		instance.timer.setDuration(instance.presets[instance.presetIndex].seconds * 1000);
+		instance.timer.setDuration(instance.presets[instance.presetIndex] * 1000);
 		this.#render(instance, true);
 	}
 
@@ -124,10 +124,7 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 
 		// Only an idle timer writes back: while running the dial nudges the clock, not the preset.
 		if (instance.timer.status !== "running") {
-			instance.presets[instance.presetIndex] = {
-				...instance.presets[instance.presetIndex],
-				seconds: Math.round(instance.timer.durationMs / 1000)
-			};
+			instance.presets[instance.presetIndex] = Math.round(instance.timer.durationMs / 1000);
 			this.#scheduleSave(instance);
 		}
 
@@ -178,7 +175,7 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 		const step = ev.payload.hold ? -1 : 1;
 		const count = instance.presets.length;
 		instance.presetIndex = (instance.presetIndex + step + count) % count;
-		instance.timer.setDuration(instance.presets[instance.presetIndex].seconds * 1000);
+		instance.timer.setDuration(instance.presets[instance.presetIndex] * 1000);
 
 		this.#scheduleSave(instance);
 		this.#render(instance, true);
@@ -190,10 +187,11 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 	 */
 	#render(instance: Instance, force = false): void {
 		const { timer } = instance;
-		const preset = instance.presets[instance.presetIndex];
 		const status = timer.status;
 
-		const title = status === "elapsed" ? `${preset.label} · done` : preset.label;
+		// The preset's length is its name, so the title tracks the duration rather than a stored label.
+		const label = formatPresetLabel(timer.durationMs);
+		const title = status === "elapsed" ? `${label} · done` : label;
 		const value = formatDuration(timer.remainingMs);
 		const indicator = Math.round(timer.progress * 100);
 
@@ -250,17 +248,21 @@ function clearTimers(instance: Instance): void {
 	instance.saveHandle = null;
 }
 
-/** Guards against a hand-edited or empty preset list arriving from settings. */
-function normalisePresets(presets: Preset[] | undefined): Preset[] {
+/**
+ * Guards against a hand-edited or empty preset list arriving from settings. Also tolerates the
+ * `{ label, seconds }` shape presets used to have, so an existing dial keeps its durations.
+ */
+function normalisePresets(presets: unknown): Preset[] {
 	if (!Array.isArray(presets) || presets.length === 0) {
-		return DEFAULT_PRESETS.map((preset) => ({ ...preset }));
+		return [...DEFAULT_PRESETS];
 	}
 
 	const valid = presets
-		.filter((preset): preset is Preset => typeof preset?.seconds === "number" && preset.seconds > 0)
-		.map((preset) => ({ label: String(preset.label ?? "Timer"), seconds: Math.round(preset.seconds) }));
+		.map((preset) => (typeof preset === "object" && preset !== null ? (preset as { seconds?: unknown }).seconds : preset))
+		.filter((seconds): seconds is number => typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0)
+		.map((seconds) => Math.round(seconds));
 
-	return valid.length > 0 ? valid : DEFAULT_PRESETS.map((preset) => ({ ...preset }));
+	return valid.length > 0 ? valid : [...DEFAULT_PRESETS];
 }
 
 function clampIndex(index: number | undefined, length: number): number {

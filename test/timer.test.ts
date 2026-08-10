@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { formatDuration, MAX_DURATION_MS, MIN_DURATION_MS, Timer } from "../src/timer.ts";
+import { DEFAULT_PRESETS, formatDuration, formatPresetLabel, MAX_DURATION_MS, MIN_DURATION_MS, Timer } from "../src/timer.ts";
 
 /** Builds a timer on a clock we control, so no test has to wait for real seconds to pass. */
 function at(startMs = 0, durationSeconds = 300) {
@@ -130,6 +130,34 @@ describe("Timer", () => {
 		timer.setDuration(60_000);
 		assert.equal(timer.status, "idle");
 		assert.equal(timer.remainingMs, 60_000);
+	});
+});
+
+describe("presets", () => {
+	it("ships 5, 20, 30 and 40 minutes", () => {
+		assert.deepEqual(DEFAULT_PRESETS, [300, 1200, 1800, 2400]);
+		assert.deepEqual(DEFAULT_PRESETS.map((seconds) => formatPresetLabel(seconds * 1000)), ["5m", "20m", "30m", "40m"]);
+	});
+});
+
+describe("formatPresetLabel", () => {
+	it("names a round preset by its minutes", () => {
+		assert.equal(formatPresetLabel(300_000), "5m");
+		assert.equal(formatPresetLabel(2_400_000), "40m");
+	});
+
+	it("keeps the seconds once a preset is nudged off a round number", () => {
+		assert.equal(formatPresetLabel(330_000), "5m 30s");
+		assert.equal(formatPresetLabel(45_000), "45s");
+	});
+
+	it("adds hours when there are any", () => {
+		assert.equal(formatPresetLabel(3_600_000), "1h");
+		assert.equal(formatPresetLabel(5_400_000), "1h 30m");
+	});
+
+	it("never renders as empty", () => {
+		assert.equal(formatPresetLabel(0), "0s");
 	});
 });
 

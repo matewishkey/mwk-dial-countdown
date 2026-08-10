@@ -218,16 +218,16 @@ const wait = (ms) => new Promise((done) => setTimeout(done, ms));
 async function runDemo() {
 	const steps = [
 		["default preset on appear", async () => {}],
-		["tap → next preset (Break, 5:00)", async () => gestures.touch(false)],
+		["tap → next preset (20m)", async () => gestures.touch(false)],
 		["turn right ×3 → +30s", async () => gestures.rotate(3)],
 		["press+turn right → +60s", async () => gestures.rotate(1, true)],
 		["short press → running", async () => press(80)],
 		["…2s later", async () => wait(2000)],
 		["short press → paused (amber)", async () => press(80)],
 		["…1s later, still paused", async () => wait(1000)],
-		["hold 900ms → reset to 6:30, idle (blue)", async () => press(900)],
-		["hold-tap → previous preset (Focus)", async () => gestures.touch(true)],
-		["tap ×2 → Coffee (4:00)", async () => {
+		["hold 900ms → reset to full, idle (blue)", async () => press(900)],
+		["hold-tap → previous preset (5m)", async () => gestures.touch(true)],
+		["tap ×2 → 30m", async () => {
 			gestures.touch(false);
 			await wait(120);
 			gestures.touch(false);
@@ -305,7 +305,12 @@ const BAR_WIDTH = 34;
 function screenLines() {
 	const filled = Math.round((Math.max(0, Math.min(100, screen.indicator)) / 100) * BAR_WIDTH);
 	const bar = "█".repeat(filled) + "░".repeat(BAR_WIDTH - filled);
-	const presets = (settings.presets ?? []).map((p, i) => (i === settings.presetIndex ? `[${p.label}]` : p.label)).join(" ");
+	const presets = (settings.presets ?? [])
+		.map((seconds, i) => {
+			const label = seconds % 60 === 0 ? `${seconds / 60}m` : `${seconds}s`;
+			return i === settings.presetIndex ? `[${label}]` : label;
+		})
+		.join(" ");
 
 	return [
 		"  ┌────────────────────────────────────┐",
