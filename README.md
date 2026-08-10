@@ -17,6 +17,10 @@ Each of the four dials holds its own independent timer.
 
 Turning an idle timer edits that preset's duration and persists it. Turning a running timer nudges only the time left, leaving the preset alone.
 
+## Presets
+
+Ship as 5, 20, 30 and 40 minutes, and carry no names — a timer's length is its own label, so the touchscreen title is derived from the duration (`20m`, or `20m 30s` once it has been nudged off a round number). Durations are edited in minutes in the property inspector.
+
 ## Developing
 
 Stream Deck itself runs on macOS and Windows only, so the plugin cannot be *run* on Linux — but it can be built and driven headlessly there.
