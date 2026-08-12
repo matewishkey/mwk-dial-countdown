@@ -1,14 +1,14 @@
 {
-	"Name": "Dial Timer",
+	"Name": "MWK Dial Countdown",
 	"Version": "0.1.0.0",
 	"Author": "Mate Wish Key",
 	"Actions": [
 		{
-			"Name": "Timer",
-			"UUID": "com.matewishkey.dial-timer.timer",
+			"Name": "Countdown",
+			"UUID": "com.matewishkey.dial-countdown.countdown",
 			"Icon": "imgs/actions/timer/icon",
 			"Tooltip": "A countdown timer on a dial. Tap the screen to start or pause, hold it to reset, press the dial to change preset.",
-			"PropertyInspectorPath": "ui/dial-timer.html",
+			"PropertyInspectorPath": "ui/dial-countdown.html",
 			"Controllers": [
 				"Encoder"
 			],
@@ -31,10 +31,10 @@
 			]
 		}
 	],
-	"Category": "Dial Timer",
+	"Category": "MWK Dial Countdown",
 	"CategoryIcon": "imgs/plugin/category-icon",
 	"CodePath": "bin/plugin.js",
-	"Description": "Countdown timers for the Stream Deck + dials. Cycle presets from the touchscreen, press the dial to start or pause, hold to reset, and turn to adjust on the fly.",
+	"Description": "Countdown timers for the Stream Deck + dials. Tap the screen to start or pause, hold to reset, press the dial to change preset, and turn to adjust \u2014 the step grows the longer you keep turning.",
 	"Icon": "imgs/plugin/marketplace",
 	"SDKVersion": 3,
 	"Software": {
@@ -54,6 +54,6 @@
 		"Version": "24",
 		"Debug": "enabled"
 	},
-	"UUID": "com.matewishkey.dial-timer",
+	"UUID": "com.matewishkey.dial-countdown",
 	"URL": "https://matewishkey.com/"
 }

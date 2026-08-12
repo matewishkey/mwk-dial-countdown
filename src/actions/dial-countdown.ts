@@ -16,10 +16,10 @@ import streamDeck, {
 import { Accelerator } from "../acceleration";
 import { asDataUri, renderRing, ringColour, themeFor } from "../render";
 import { listSounds, playSound, resolveSound, soundExists } from "../sound";
-import { normaliseSettings, NO_SOUND, type DialTimerSettings, type Preset } from "../settings";
+import { normaliseSettings, NO_SOUND, type DialCountdownSettings, type Preset } from "../settings";
 import { formatClockTime, formatDuration, formatPresetLabel, Timer } from "../timer";
 
-export type { DialTimerSettings };
+export type { DialCountdownSettings };
 
 /** How long the dial must be held before it counts as a reset rather than a start/pause. */
 const LONG_PRESS_MS = 600;
@@ -45,12 +45,12 @@ const SETTINGS_DEBOUNCE_MS = 400;
 
 /** Everything that lives only for as long as the action is on screen. */
 type Instance = {
-	action: DialAction<DialTimerSettings>;
+	action: DialAction<DialCountdownSettings>;
 	timer: Timer;
 	accelerator: Accelerator;
 	presets: Preset[];
 	presetIndex: number;
-	settings: DialTimerSettings;
+	settings: DialCountdownSettings;
 	renderHandle: NodeJS.Timeout | null;
 	longPressHandle: NodeJS.Timeout | null;
 	saveHandle: NodeJS.Timeout | null;
@@ -63,15 +63,15 @@ type Instance = {
 	lastLayout: string | null;
 };
 
-@action({ UUID: "com.matewishkey.dial-timer.timer" })
-export class DialTimer extends SingletonAction<DialTimerSettings> {
+@action({ UUID: "com.matewishkey.dial-countdown.countdown" })
+export class DialCountdown extends SingletonAction<DialCountdownSettings> {
 	/**
 	 * One entry per visible dial, keyed by action id. A Stream Deck + has four dials and each can hold
 	 * its own independent timer, so none of this state can live on the action class itself.
 	 */
 	readonly #instances = new Map<string, Instance>();
 
-	override onWillAppear(ev: WillAppearEvent<DialTimerSettings>): void {
+	override onWillAppear(ev: WillAppearEvent<DialCountdownSettings>): void {
 		if (!ev.action.isDial()) {
 			return;
 		}
@@ -116,7 +116,7 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 	 * timer itself is deliberately dropped with it: a countdown the user cannot see, on a dial that no
 	 * longer exists, has nothing to count for. Persisted presets survive; the running clock does not.
 	 */
-	override onWillDisappear(ev: WillDisappearEvent<DialTimerSettings>): void {
+	override onWillDisappear(ev: WillDisappearEvent<DialCountdownSettings>): void {
 		const instance = this.#instances.get(ev.action.id);
 		if (instance === undefined) {
 			return;
@@ -127,7 +127,7 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 	}
 
 	/** Picks up preset and appearance edits made in the property inspector. */
-	override onDidReceiveSettings(ev: DidReceiveSettingsEvent<DialTimerSettings>): void {
+	override onDidReceiveSettings(ev: DidReceiveSettingsEvent<DialCountdownSettings>): void {
 		const instance = this.#instances.get(ev.action.id);
 		if (instance === undefined) {
 			return;
@@ -154,7 +154,7 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 	}
 
 	/** The property inspector cannot read the filesystem, so the plugin hands it the sound list. */
-	override onPropertyInspectorDidAppear(ev: PropertyInspectorDidAppearEvent<DialTimerSettings>): void {
+	override onPropertyInspectorDidAppear(ev: PropertyInspectorDidAppearEvent<DialCountdownSettings>): void {
 		void ev;
 		streamDeck.ui
 			.sendToPropertyInspector({ event: "sounds", sounds: listSounds() })
@@ -202,7 +202,7 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 	 * nudge, a minute once it is being wound, five once it is being wound hard — so setting an
 	 * hour-long timer does not mean six turns of the wrist.
 	 */
-	override onDialRotate(ev: DialRotateEvent<DialTimerSettings>): void {
+	override onDialRotate(ev: DialRotateEvent<DialCountdownSettings>): void {
 		const instance = this.#instances.get(ev.action.id);
 		if (instance === undefined) {
 			return;
@@ -232,7 +232,7 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 	 * two-handed movement compared with tapping the screen above it, so the screen owns the gesture
 	 * that gets used constantly and the dial owns the one that does not.
 	 */
-	override onDialDown(ev: DialDownEvent<DialTimerSettings>): void {
+	override onDialDown(ev: DialDownEvent<DialCountdownSettings>): void {
 		const instance = this.#instances.get(ev.action.id);
 		if (instance === undefined) {
 			return;
@@ -247,7 +247,7 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 	}
 
 	/** A release that beat the long-press threshold moves to the next preset. */
-	override onDialUp(ev: DialUpEvent<DialTimerSettings>): void {
+	override onDialUp(ev: DialUpEvent<DialCountdownSettings>): void {
 		const instance = this.#instances.get(ev.action.id);
 		if (instance === undefined) {
 			return;
@@ -264,7 +264,7 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 	}
 
 	/** Tapping the touchscreen starts or pauses; holding the tap resets. */
-	override onTouchTap(ev: TouchTapEvent<DialTimerSettings>): void {
+	override onTouchTap(ev: TouchTapEvent<DialCountdownSettings>): void {
 		const instance = this.#instances.get(ev.action.id);
 		if (instance === undefined) {
 			return;

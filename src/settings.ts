@@ -10,7 +10,7 @@
 
 export type Preset = number;
 
-export type DialTimerSettings = {
+export type DialCountdownSettings = {
 	presets: Preset[];
 	presetIndex: number;
 	layout: "ring" | "bar";
@@ -46,7 +46,7 @@ export const MAX_SOUND_REPEAT = 10;
 /** A repeating timer is deliberately bounded: nothing here should still be going tomorrow. */
 export const MAX_REPEAT_COUNT = 10;
 
-export const DEFAULTS: DialTimerSettings = {
+export const DEFAULTS: DialCountdownSettings = {
 	presets: DEFAULT_PRESETS,
 	presetIndex: 0,
 	layout: "ring",
@@ -66,7 +66,7 @@ export const DEFAULTS: DialTimerSettings = {
 };
 
 /** Rebuilds a complete, valid settings object from anything at all. Never throws. */
-export function normaliseSettings(raw: unknown): DialTimerSettings {
+export function normaliseSettings(raw: unknown): DialCountdownSettings {
 	const input = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
 
 	const presets = normalisePresets(input.presets);

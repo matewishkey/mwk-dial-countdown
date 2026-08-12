@@ -1,9 +1,9 @@
 import streamDeck from "@elgato/streamdeck";
 
-import { DialTimer } from "./actions/dial-timer";
+import { DialCountdown } from "./actions/dial-countdown";
 
 streamDeck.logger.setLevel("trace");
 
-streamDeck.actions.registerAction(new DialTimer());
+streamDeck.actions.registerAction(new DialCountdown());
 
 streamDeck.connect();

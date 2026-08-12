@@ -1,4 +1,4 @@
-# MWK Dial Timer
+# MWK Dial Countdown
 
 [![MIT](https://img.shields.io/badge/licence-MIT-e2342b)](LICENSE)
 [![Stream Deck +](https://img.shields.io/badge/Stream%20Deck-%2B-101317)](https://www.elgato.com/stream-deck-plus)
@@ -11,7 +11,7 @@ Each of the four dials holds its own independent timer.
 
 ## Install
 
-Download the latest `.streamDeckPlugin` from [Releases](https://github.com/matewishkey/mwk-dial-timer/releases) and double-click it. Stream Deck installs it and adds **Dial Timer** to the actions list; drag **Timer** onto a dial.
+Download the latest `.streamDeckPlugin` from [Releases](https://github.com/matewishkey/mwk-dial-countdown/releases) and double-click it. Stream Deck installs it and adds **MWK Dial Countdown** to the actions list; drag **Countdown** onto a dial.
 
 ## Gestures
 
@@ -46,7 +46,7 @@ Stream Deck runs on macOS and Windows only, so the plugin cannot be *run* on Lin
 
 ```sh
 npm install
-npm run build      # bundle into com.matewishkey.dial-timer.sdPlugin/bin
+npm run build      # bundle into com.matewishkey.dial-countdown.sdPlugin/bin
 npm test           # 64 unit tests
 npm run demo       # scripted gesture pass, prints one frame per step
 npm run mock       # the same harness, driven from the keyboard
@@ -60,15 +60,15 @@ The plugin process is launched with its `.sdPlugin` directory as the working dir
 
 ```sh
 npx streamdeck dev                                  # enable developer mode, once
-npx streamdeck link com.matewishkey.dial-timer.sdPlugin
+npx streamdeck link com.matewishkey.dial-countdown.sdPlugin
 npm run watch                                       # rebuild + restart on save
 ```
 
 ### Packaging
 
 ```sh
-npx streamdeck validate com.matewishkey.dial-timer.sdPlugin
-npx streamdeck pack com.matewishkey.dial-timer.sdPlugin
+npx streamdeck validate com.matewishkey.dial-countdown.sdPlugin
+npx streamdeck pack com.matewishkey.dial-countdown.sdPlugin
 ```
 
 ## How it fits together
@@ -80,7 +80,7 @@ npx streamdeck pack com.matewishkey.dial-timer.sdPlugin
 | `src/acceleration.ts` | Turns dial rotation into a step size. |
 | `src/render.ts` | Draws the countdown ring as SVG. |
 | `src/sound.ts` | Hands a sound file to the platform's own player. |
-| `src/actions/dial-timer.ts` | Maps dial events onto the state machine and renders. |
+| `src/actions/dial-countdown.ts` | Maps dial events onto the state machine and renders. |
 | `tools/mock-host.mjs` | A stand-in for the Stream Deck application. |
 
 A few decisions worth knowing before changing things:
