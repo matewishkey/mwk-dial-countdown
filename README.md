@@ -61,11 +61,17 @@ npx streamdeck pack com.mergodon.dial-timer.sdPlugin
 
 `sdpi-components.js` is vendored into `ui/` rather than loaded from a CDN (as Elgato's template does) so the property inspector works offline and the shipped plugin carries no third-party runtime dependency.
 
+## Themes, repeat and finish time
+
+Six palettes live in `src/render.ts`; a theme is six colours (idle, running, paused, elapsed, warn, track) and an unknown id falls back to the default rather than throwing. Auto-repeat restarts the moment the alert fires, with no pause, because a gap between cycles is exactly what an interval timer must not have; laps are counted and shown. The finish time is only rendered while running — on a stopped timer it would be a prediction that quietly goes stale.
+
+The touchscreen label shows the *preset's* length rather than the live duration, so nudging a running timer does not rewrite where it started.
+
 ## Not done yet
 
 - **Sound has never run on a real machine.** The playback code is written for both platforms but this is a Linux box, so neither `afplay` nor the PowerShell path has actually executed. Everything else here is verified; this is not.
-- **Auto-repeat, interval/break cycles, and a count-up stopwatch** — the features comparable plugins have and this one does not.
-- **Showing the finish time** ("ends at 14:35"), which nothing on the Marketplace appears to do and which beats a raw remaining count for long timers.
+- **Interval/break cycles and a count-up stopwatch** — features comparable plugins have. Both were declined for now.
+- **Persisting a running timer across restarts.** Deliberately not done: the timer is dropped when the dial goes away.
 - **Marketplace assets.** Icons are functional placeholders, not designed. `Nodejs.Debug` is still `enabled` in the manifest and should come out before release.
 
 ## Acceleration

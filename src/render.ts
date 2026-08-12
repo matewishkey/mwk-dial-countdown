@@ -25,14 +25,68 @@ export type Palette = {
 	track: string;
 };
 
-export const DEFAULT_PALETTE: Palette = {
-	running: "#22C55E",
-	paused: "#FACC15",
-	elapsed: "#EF4444",
-	idle: "#38BDF8",
-	warn: "#F97316",
-	track: "#2E2E33"
+/**
+ * Colour themes. Each has to survive being glanced at from a metre away, so the four states are
+ * kept far apart in hue rather than merely different, and the track stays dark enough that the
+ * remaining arc reads as the bright thing on the screen.
+ */
+export const THEMES: Record<string, Palette> = {
+	default: {
+		running: "#22C55E",
+		paused: "#FACC15",
+		elapsed: "#EF4444",
+		idle: "#38BDF8",
+		warn: "#F97316",
+		track: "#2E2E33"
+	},
+	ocean: {
+		running: "#2DD4BF",
+		paused: "#67E8F9",
+		elapsed: "#F43F5E",
+		idle: "#38BDF8",
+		warn: "#FBBF24",
+		track: "#16262E"
+	},
+	ember: {
+		running: "#FB923C",
+		paused: "#FCD34D",
+		elapsed: "#DC2626",
+		idle: "#F59E0B",
+		warn: "#EF4444",
+		track: "#2A211C"
+	},
+	neon: {
+		running: "#00E5FF",
+		paused: "#FFD400",
+		elapsed: "#FF2D95",
+		idle: "#7C4DFF",
+		warn: "#FF9100",
+		track: "#1E1B2E"
+	},
+	forest: {
+		running: "#4ADE80",
+		paused: "#A3E635",
+		elapsed: "#F87171",
+		idle: "#34D399",
+		warn: "#FACC15",
+		track: "#1B2A22"
+	},
+	mono: {
+		running: "#E5E5E5",
+		paused: "#8E8E93",
+		elapsed: "#FAFAFA",
+		idle: "#6B7280",
+		warn: "#C7C7CC",
+		track: "#232326"
+	}
 };
+
+export const DEFAULT_PALETTE: Palette = THEMES.default;
+
+/** Resolves a theme id from settings, falling back rather than throwing on an unknown name. */
+export function themeFor(id: string | undefined): Palette {
+	return (id !== undefined && THEMES[id]) || THEMES.default;
+}
 
 export type RingState = {
 	/** 0-1, how much of the countdown is left. */

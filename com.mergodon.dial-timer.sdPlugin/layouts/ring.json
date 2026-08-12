@@ -5,16 +5,29 @@
 		{
 			"key": "ring",
 			"type": "pixmap",
-			"rect": [6, 6, 88, 88],
+			"rect": [
+				6,
+				6,
+				88,
+				88
+			],
 			"zOrder": 1
 		},
 		{
 			"key": "value",
 			"type": "text",
-			"rect": [100, 18, 96, 42],
+			"rect": [
+				100,
+				8,
+				96,
+				39
+			],
 			"alignment": "center",
 			"color": "#FFFFFF",
-			"font": { "size": 30, "weight": 600 },
+			"font": {
+				"size": 30,
+				"weight": 600
+			},
 			"text-overflow": "clip",
 			"value": "",
 			"zOrder": 2
@@ -22,10 +35,37 @@
 		{
 			"key": "label",
 			"type": "text",
-			"rect": [100, 60, 96, 24],
+			"rect": [
+				100,
+				48,
+				96,
+				19
+			],
 			"alignment": "center",
 			"color": "#9A9AA0",
-			"font": { "size": 14, "weight": 400 },
+			"font": {
+				"size": 14,
+				"weight": 400
+			},
+			"text-overflow": "ellipsis",
+			"value": "",
+			"zOrder": 2
+		},
+		{
+			"key": "finish",
+			"type": "text",
+			"rect": [
+				100,
+				68,
+				96,
+				19
+			],
+			"alignment": "center",
+			"color": "#6E6E76",
+			"font": {
+				"size": 13,
+				"weight": 400
+			},
 			"text-overflow": "ellipsis",
 			"value": "",
 			"zOrder": 2

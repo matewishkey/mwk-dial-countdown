@@ -183,6 +183,15 @@ export function formatPresetLabel(ms: number): string {
 	return parts.join(" ");
 }
 
+/**
+ * Wall-clock time of day, 24 hour, for showing when a timer will finish. Deliberately not
+ * locale-formatted: the touchscreen has room for five characters, and `2:05 pm` is not five.
+ */
+export function formatClockTime(epochMs: number): string {
+	const date = new Date(epochMs);
+	return `${date.getHours()}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
 /** Formats milliseconds as `m:ss`, or `h:mm:ss` once past an hour. */
 export function formatDuration(ms: number): string {
 	const total = Math.ceil(Math.max(0, ms) / 1000);

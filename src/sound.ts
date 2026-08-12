@@ -20,6 +20,9 @@ export type SoundOption = {
 
 export const NO_SOUND = "none";
 
+/** Sentinel for "use the file the user picked", whose path lives separately in settings. */
+export const CUSTOM_SOUND = "custom";
+
 /** Sounds shipped inside the plugin; always present, on every platform. */
 const BUNDLED_DIR = resolve(process.cwd(), "sounds");
 
@@ -70,6 +73,14 @@ function readSoundDir(dir: string, group: SoundOption["group"]): SoundOption[] {
 
 function titleCase(name: string): string {
 	return name.charAt(0).toUpperCase() + name.slice(1);
+}
+
+/**
+ * Whether a chosen sound will actually play. The property inspector uses this to tell the user that
+ * a picked file did not resolve, rather than leaving them to discover it when the timer ends.
+ */
+export function soundExists(path: string | undefined): boolean {
+	return typeof path === "string" && path.length > 0 && path !== NO_SOUND && existsSync(path);
 }
 
 /**

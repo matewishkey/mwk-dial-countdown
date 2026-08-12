@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { asDataUri, DEFAULT_PALETTE, renderRing, ringColour } from "../src/render.ts";
+import { asDataUri, DEFAULT_PALETTE, renderRing, ringColour, themeFor, THEMES } from "../src/render.ts";
 
 const base = { status: "running" as const, warning: false, palette: DEFAULT_PALETTE };
 
@@ -73,5 +73,32 @@ describe("asDataUri", () => {
 		const uri = asDataUri(svg);
 		assert.match(uri, /^data:image\/svg\+xml;base64,/);
 		assert.equal(Buffer.from(uri.split(",")[1], "base64").toString("utf8"), svg);
+	});
+});
+
+describe("themes", () => {
+	it("provides several complete palettes", () => {
+		const ids = Object.keys(THEMES);
+		assert.ok(ids.length >= 5, `expected a handful of themes, got ${ids.length}`);
+
+		for (const [id, palette] of Object.entries(THEMES)) {
+			for (const role of ["running", "paused", "elapsed", "idle", "warn", "track"]) {
+				assert.match(palette[role], /^#[0-9A-Fa-f]{6}$/, `${id}.${role} is not a hex colour`);
+			}
+		}
+	});
+
+	it("keeps each theme's states visually distinct from one another", () => {
+		for (const [id, palette] of Object.entries(THEMES)) {
+			const states = [palette.running, palette.paused, palette.elapsed, palette.idle];
+			assert.equal(new Set(states).size, states.length, `${id} reuses a colour across states`);
+			assert.ok(!states.includes(palette.track), `${id} uses its track colour for a state`);
+		}
+	});
+
+	it("falls back to the default rather than throwing on an unknown id", () => {
+		assert.equal(themeFor(undefined), THEMES.default);
+		assert.equal(themeFor("nope"), THEMES.default);
+		assert.equal(themeFor("ocean"), THEMES.ocean);
 	});
 });

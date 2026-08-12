@@ -169,6 +169,27 @@
 			<label for="warnColor">Blink colour</label>
 			<input type="color" id="warnColor" />
 		</div>
+		<div class="row">
+			<label for="theme">Colour theme</label>
+			<select id="theme">
+				<option value="default">Default</option>
+				<option value="ocean">Ocean</option>
+				<option value="ember">Ember</option>
+				<option value="neon">Neon</option>
+				<option value="forest">Forest</option>
+				<option value="mono">Mono</option>
+			</select>
+		</div>
+
+		<h2>Behaviour</h2>
+		<div class="row">
+			<label for="repeat">Repeat when finished</label>
+			<input type="checkbox" id="repeat" />
+		</div>
+		<div class="row">
+			<label for="showFinishTime">Show finish time</label>
+			<input type="checkbox" id="showFinishTime" />
+		</div>
 
 		<h2>Sound</h2>
 		<div class="row">
@@ -178,6 +199,14 @@
 		<div class="row">
 			<label for="soundId">Sound</label>
 			<select id="soundId"></select>
+		</div>
+		<div class="row">
+			<label for="customFile">Custom sound file</label>
+			<input type="file" id="customFile" accept=".wav,.aiff,.aif,.mp3,.m4a" hidden />
+			<button id="browse" type="button">Choose…</button>
+		</div>
+		<div class="row">
+			<span class="muted" id="soundStatus"></span>
 		</div>
 		<div class="row">
 			<label for="volume">Volume</label>
@@ -195,12 +224,19 @@
 				warnEnabled: false,
 				warnSeconds: 300,
 				warnColor: "#F97316",
+				theme: "default",
+				repeat: false,
+				showFinishTime: false,
 				soundEnabled: true,
 				soundId: "none",
+				customSoundPath: "",
 				volume: 100
 			};
 
 			const el = (id) => document.getElementById(id);
+
+			/** Last sound list received from the plugin, kept so the list can be redrawn locally. */
+			let lastSounds = [];
 
 			/**
 			 * Settings are written on every edit rather than behind a Save button — Marketplace
@@ -265,6 +301,9 @@
 				el("warnEnabled").checked = state.warnEnabled;
 				el("warnSeconds").value = String(Math.round(state.warnSeconds / 60));
 				el("warnColor").value = state.warnColor;
+				el("theme").value = state.theme;
+				el("repeat").checked = state.repeat;
+				el("showFinishTime").checked = state.showFinishTime;
 				el("soundEnabled").checked = state.soundEnabled;
 				el("volume").value = String(state.volume);
 			}
@@ -295,6 +334,37 @@
 				save();
 			});
 
+			for (const [id, key] of [
+				["theme", "theme"],
+				["repeat", "repeat"],
+				["showFinishTime", "showFinishTime"]
+			]) {
+				el(id).addEventListener("change", () => {
+					const input = el(id);
+					state[key] = input.type === "checkbox" ? input.checked : input.value;
+					save();
+				});
+			}
+
+			/**
+			 * Stream Deck's property inspector exposes the real path on a file input, unlike a browser.
+			 * The plugin confirms whether it resolved, so a path that did not survive shows up here
+			 * rather than at the moment the timer ends.
+			 */
+			el("browse").addEventListener("click", () => el("customFile").click());
+
+			el("customFile").addEventListener("change", (event) => {
+				const path = event.target.value;
+				if (!path) {
+					return;
+				}
+				state.customSoundPath = path;
+				state.soundId = "custom";
+				save();
+				renderSounds(lastSounds);
+				checkSound();
+			});
+
 			el("soundEnabled").addEventListener("change", () => {
 				state.soundEnabled = el("soundEnabled").checked;
 				save();
@@ -303,7 +373,16 @@
 			el("soundId").addEventListener("change", () => {
 				state.soundId = el("soundId").value;
 				save();
+				checkSound();
 			});
+
+			function checkSound() {
+				SDPIComponents.streamDeckClient.send("sendToPlugin", {
+					event: "checkSound",
+					soundId: state.soundId,
+					customSoundPath: state.customSoundPath
+				});
+			}
 
 			el("volume").addEventListener("change", () => {
 				state.volume = Number(el("volume").value);
@@ -315,6 +394,7 @@
 				SDPIComponents.streamDeckClient.send("sendToPlugin", {
 					event: "preview",
 					soundId: state.soundId,
+					customSoundPath: state.customSoundPath,
 					volume: state.volume
 				});
 			});
@@ -324,11 +404,18 @@
 			 * assumes a file exists. It arrives after the inspector opens.
 			 */
 			function renderSounds(sounds) {
+				lastSounds = sounds;
 				const select = el("soundId");
 				select.replaceChildren();
 
+				const all = [...sounds];
+				if (state.customSoundPath) {
+					const name = state.customSoundPath.split(/[\\/]/).pop();
+					all.push({ id: "custom", label: name || "Custom file", group: "Custom" });
+				}
+
 				const groups = new Map();
-				for (const sound of sounds) {
+				for (const sound of all) {
 					if (!groups.has(sound.group)) {
 						const group = document.createElement("optgroup");
 						group.label = sound.group;
@@ -368,8 +455,12 @@
 				state.warnEnabled = settings.warnEnabled === true;
 				state.warnSeconds = Number.isFinite(settings.warnSeconds) ? settings.warnSeconds : 300;
 				state.warnColor = settings.warnColor || "#F97316";
+				state.theme = settings.theme || "default";
+				state.repeat = settings.repeat === true;
+				state.showFinishTime = settings.showFinishTime === true;
 				state.soundEnabled = settings.soundEnabled !== false;
 				state.soundId = settings.soundId || "none";
+				state.customSoundPath = settings.customSoundPath || "";
 				state.volume = Number.isFinite(settings.volume) ? settings.volume : 100;
 				renderPresets();
 				renderControls();
@@ -383,6 +474,18 @@
 				const payload = message?.payload ?? message;
 				if (payload?.event === "sounds") {
 					renderSounds(payload.sounds ?? []);
+					return;
+				}
+
+				if (payload?.event === "soundStatus") {
+					const status = el("soundStatus");
+					if (payload.path === "none") {
+						status.textContent = "";
+					} else if (!payload.exists) {
+						status.textContent = `⚠ not found: ${payload.path}`;
+					} else {
+						status.textContent = payload.played === false ? "⚠ found, but no player available" : `✓ ${payload.path}`;
+					}
 				}
 			});
 		</script>

@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { DEFAULT_PRESETS, formatDuration, formatPresetLabel, MAX_DURATION_MS, MIN_DURATION_MS, Timer } from "../src/timer.ts";
+import {
+	DEFAULT_PRESETS,
+	formatClockTime,
+	formatDuration,
+	formatPresetLabel,
+	MAX_DURATION_MS,
+	MIN_DURATION_MS,
+	Timer
+} from "../src/timer.ts";
 
 /** Builds a timer on a clock we control, so no test has to wait for real seconds to pass. */
 function at(startMs = 0, durationSeconds = 300) {
@@ -177,5 +185,15 @@ describe("formatDuration", () => {
 	it("rounds up so the display never sits on zero while time remains", () => {
 		assert.equal(formatDuration(1), "0:01");
 		assert.equal(formatDuration(-500), "0:00");
+	});
+});
+
+describe("formatClockTime", () => {
+	it("renders a 24 hour time of day", () => {
+		const at = (h: number, m: number) => formatClockTime(new Date(2026, 7, 12, h, m).getTime());
+		assert.equal(at(14, 35), "14:35");
+		assert.equal(at(9, 5), "9:05");
+		assert.equal(at(0, 0), "0:00");
+		assert.equal(at(23, 59), "23:59");
 	});
 });

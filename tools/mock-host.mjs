@@ -68,7 +68,7 @@ const INFO = {
 };
 
 /** Latest touchscreen state, as reported by the plugin's setFeedback calls. */
-const screen = { title: "—", value: "—", label: "", indicator: 0, ring: 0, colour: "", layout: "(default)" };
+const screen = { title: "—", value: "—", label: "", finish: "", indicator: 0, ring: 0, colour: "", layout: "(default)" };
 let settings = {};
 let socket = null;
 
@@ -131,6 +131,7 @@ function handlePluginMessage(message) {
 			if (payload.title !== undefined) screen.title = payload.title;
 			if (payload.value !== undefined) screen.value = payload.value;
 			if (payload.label !== undefined) screen.label = payload.label;
+			if (payload.finish !== undefined) screen.finish = payload.finish;
 			if (payload.indicator !== undefined) {
 				screen.indicator = typeof payload.indicator === "object" ? payload.indicator.value : payload.indicator;
 				screen.colour = payload.indicator?.bar_fill_c ?? screen.colour;
@@ -342,7 +343,21 @@ async function runDemo() {
 		["short press, then let it run out → done (red), alert fires", async () => {
 			await press(80);
 			await wait(1500);
-		}]
+		}],
+
+		// Finish time and auto-repeat.
+		["finish time on, 10m preset, started", async () => {
+			applySettings({ presets: [600], presetIndex: 0, warnEnabled: false, showFinishTime: true, theme: "ocean" });
+			await wait(300);
+			await press(80);
+		}],
+		["repeat on, 2s preset → runs out and restarts itself", async () => {
+			applySettings({ presets: [2], presetIndex: 0, repeat: true, showFinishTime: false });
+			await wait(300);
+			await press(80);
+			await wait(2600);
+		}],
+		["…and keeps going, counting laps", async () => wait(2200)]
 	];
 
 	for (const [label, run] of steps) {
@@ -427,6 +442,7 @@ function screenLines() {
 		`  │ ${pad(screen.value.padStart(18), 34)} │`,
 		`  │ ${bar} │`,
 		"  └────────────────────────────────────┘",
+		`  │ ${pad(screen.finish, 34)} │`,
 		dim(`   ${isRing ? "ring" : "bar "} ${String(percent).padStart(3)}%   colour ${screen.colour || "—"}   layout ${screen.layout}`),
 		dim(`   presets: ${presets || "(not yet saved)"}`)
 	];
