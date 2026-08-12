@@ -3,21 +3,21 @@
  *
  * A dial reports `ticks` per event and batches them when spun quickly, but a single tick's worth of
  * time is a poor unit for both jobs the dial has to do: trimming a timer by a second, and winding
- * one from five minutes to two hours. So the step grows while the user keeps turning — a second, then
- * ten, then a minute — and falls back the moment they stop.
+ * one from five minutes to twelve hours. So the step grows while the user keeps turning — a second,
+ * then ten, then a minute, then ten — and falls back the moment they stop.
  */
 
 /** Seconds per tick at each level of momentum. */
-export const STEPS_SECONDS = [1, 10, 60] as const;
+export const STEPS_SECONDS = [1, 10, 60, 600] as const;
 
 /** Momentum needed to reach each step, index-aligned with {@link STEPS_SECONDS}. */
-const THRESHOLDS = [0, 4, 14] as const;
+const THRESHOLDS = [0, 4, 14, 28] as const;
 
 /** A gap longer than this means the user stopped turning, so momentum is dropped. */
 export const IDLE_RESET_MS = 350;
 
 /** Momentum cannot exceed this, so the top step is reached in a predictable amount of spinning. */
-const MAX_MOMENTUM = 30;
+const MAX_MOMENTUM = 40;
 
 /** Step used when the dial is held down — an explicit request for minutes, not a earned one. */
 export const PRESSED_STEP_SECONDS = 60;

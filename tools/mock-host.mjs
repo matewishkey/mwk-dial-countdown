@@ -304,7 +304,8 @@ async function runDemo() {
 		// Cadence: a single click is now one second, and winding reaches a minute a tick.
 		["one click → +1s", async () => gestures.rotate(1)],
 		["8 slow clicks → +8s, still fine control", async () => spin(8, 1, 400)],
-		["a hard spin → minutes a tick, hours reachable", async () => spin(10, 3, 50)],
+		["a hard spin → minutes a tick", async () => spin(6, 3, 50)],
+		["keep winding → ten minutes a tick, half a day in one gesture", async () => spin(16, 3, 45)],
 
 		// The long clock has to fit its box.
 		["set 1:10:10 → font shrinks to fit", async () => {

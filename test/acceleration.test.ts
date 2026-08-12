@@ -21,16 +21,40 @@ describe("Accelerator", () => {
 		assert.equal(last, 10, "sustained turning should reach the ten second step");
 	});
 
-	it("reaches a minute per tick when wound hard, so hours stay practical", () => {
+	it("reaches a minute per tick when wound hard", () => {
 		const accelerator = new Accelerator();
 		let now = 0;
 		let last = 0;
-		for (let i = 0; i < 10; i++) {
+		for (let i = 0; i < 6; i++) {
 			now += 60;
 			last = accelerator.rotate(3, now);
 		}
 		assert.equal(accelerator.stepSeconds, 60, "a hard spin should reach a minute per tick");
 		assert.equal(last, 3 * 60, "and the delta is that step applied to every tick in the batch");
+	});
+
+	it("reaches ten minutes per tick when wound harder still, so long timers stay practical", () => {
+		const accelerator = new Accelerator();
+		let now = 0;
+		for (let i = 0; i < 20; i++) {
+			now += 50;
+			accelerator.rotate(3, now);
+		}
+		assert.equal(accelerator.stepSeconds, 600, "sustained hard winding should reach ten minutes a tick");
+	});
+
+	it("climbs through every step in order and skips none", () => {
+		const accelerator = new Accelerator();
+		const seen = [];
+		let now = 0;
+		for (let i = 0; i < 40; i++) {
+			now += 50;
+			accelerator.rotate(1, now);
+			if (seen.at(-1) !== accelerator.stepSeconds) {
+				seen.push(accelerator.stepSeconds);
+			}
+		}
+		assert.deepEqual(seen, [...STEPS_SECONDS], "every tier should be passed through on the way up");
 	});
 
 	it("falls back to the fine step as soon as the user stops", () => {

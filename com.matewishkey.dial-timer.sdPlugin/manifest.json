@@ -54,5 +54,6 @@
 		"Version": "24",
 		"Debug": "enabled"
 	},
-	"UUID": "com.matewishkey.dial-timer"
+	"UUID": "com.matewishkey.dial-timer",
+	"URL": "https://matewishkey.com/"
 }

@@ -1,5 +1,8 @@
 # MWK Dial Timer
 
+[![MIT](https://img.shields.io/badge/licence-MIT-e2342b)](LICENSE)
+[![Stream Deck +](https://img.shields.io/badge/Stream%20Deck-%2B-101317)](https://www.elgato.com/stream-deck-plus)
+
 A countdown timer for the **Stream Deck +** dials. Tap the touchscreen to start or pause, hold it to reset, press the dial to change preset, turn it to adjust.
 
 Each of the four dials holds its own independent timer.
@@ -91,6 +94,21 @@ A few decisions worth knowing before changing things:
 **There is no audio API in the SDK.** `src/sound.ts` hands a file to `afplay` on macOS, or PowerShell's WPF `MediaPlayer` on Windows — chosen over `SoundPlayer`, which cannot set volume. Nothing is hard-coded: bundled sounds come from the plugin's own folder and system sounds are enumerated from disk, so a sound that is not installed is simply absent from the list.
 
 **A finished timer fills the ring** rather than emptying it. Drawn literally, the moment that most needs to be seen would be blank.
+
+## About Mate Wish Key
+
+This plugin comes out of **[Mate Wish Key](https://matewishkey.com/)** — a show built on one question:
+
+> What can someone who has never written code build in a few hours?
+
+Someone brings a problem out of their business, points an AI agent at it on their own computer, live, and we talk while it works. Unedited, start to finish.
+
+This plugin was built the same way. Every episode's code is public, and so is this.
+
+- 📺 **YouTube** — [@matewishkey](https://www.youtube.com/@matewishkey)
+- 🟣 **Twitch** — [twitch.tv/matewishkey](https://www.twitch.tv/matewishkey)
+- 🌐 **Site** — [matewishkey.com](https://matewishkey.com/) · [RSS](https://matewishkey.com/rss.xml)
+- ✉️ **Contact** — contact@matewishkey.com
 
 ## Contributing
 
