@@ -125,6 +125,10 @@
 				text-align: right;
 			}
 
+			.row .time input {
+				width: 30px;
+			}
+
 			input[type="range"] {
 				width: 104px;
 			}
@@ -214,9 +218,12 @@
 			<input type="checkbox" id="warnEnabled" />
 		</div>
 		<div class="row sub">
-			<label for="warnSeconds">Start fading at</label>
-			<input type="number" id="warnSeconds" min="1" step="5" />
-			<span class="muted">sec left</span>
+			<label for="warnMin">Start fading at</label>
+			<div class="time">
+				<input type="number" id="warnMin" min="0" max="59" /><span>m</span>
+				<input type="number" id="warnSec" min="0" max="59" /><span>s</span>
+			</div>
+			<span class="muted" id="warnTotal"></span>
 		</div>
 
 		<h2>Behaviour</h2>
@@ -385,7 +392,9 @@
 				el("showLogo").checked = state.showLogo;
 				el("showFinishTime").checked = state.showFinishTime;
 				el("warnEnabled").checked = state.warnEnabled;
-				el("warnSeconds").value = String(state.warnSeconds);
+				el("warnMin").value = String(Math.floor(state.warnSeconds / 60));
+				el("warnSec").value = String(state.warnSeconds % 60);
+				el("warnTotal").textContent = `left · ${label(state.warnSeconds)}`;
 				el("repeat").checked = state.repeat;
 				el("soundEnabled").checked = state.soundEnabled;
 				el("soundRepeat").value = String(state.soundRepeat);
@@ -401,7 +410,6 @@
 				["showLogo", "showLogo", (i) => i.checked],
 				["showFinishTime", "showFinishTime", (i) => i.checked],
 				["warnEnabled", "warnEnabled", (i) => i.checked],
-				["warnSeconds", "warnSeconds", (i) => Math.max(1, Math.round(Number(i.value) || 1))],
 				["repeat", "repeat", (i) => i.checked],
 				["soundEnabled", "soundEnabled", (i) => i.checked],
 				["soundRepeat", "soundRepeat", (i) => clamp(Math.round(Number(i.value) || 1), 1, 10)],
@@ -410,6 +418,19 @@
 				el(id).addEventListener("change", () => {
 					state[key] = read(el(id));
 					save();
+				});
+			}
+
+			// The fade threshold is minutes *and* seconds: it is often well under a minute, and just as
+			// often a couple of minutes, and one field alone could not express both without decimals.
+			for (const id of ["warnMin", "warnSec"]) {
+				el(id).addEventListener("change", () => {
+					state.warnSeconds = Math.max(
+						1,
+						(Number(el("warnMin").value) || 0) * 60 + (Number(el("warnSec").value) || 0)
+					);
+					save();
+					renderControls();
 				});
 			}
 
