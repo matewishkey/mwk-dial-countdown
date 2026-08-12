@@ -1,11 +1,11 @@
 {
 	"Name": "Dial Timer",
 	"Version": "0.1.0.0",
-	"Author": "mergodon",
+	"Author": "Mate Wish Key",
 	"Actions": [
 		{
 			"Name": "Timer",
-			"UUID": "com.mergodon.dial-timer.timer",
+			"UUID": "com.matewishkey.dial-timer.timer",
 			"Icon": "imgs/actions/timer/icon",
 			"Tooltip": "A countdown timer on a dial. Tap the screen to start or pause, hold it to reset, press the dial to change preset.",
 			"PropertyInspectorPath": "ui/dial-timer.html",
@@ -54,5 +54,5 @@
 		"Version": "24",
 		"Debug": "enabled"
 	},
-	"UUID": "com.mergodon.dial-timer"
+	"UUID": "com.matewishkey.dial-timer"
 }

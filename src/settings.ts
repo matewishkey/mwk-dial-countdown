@@ -36,7 +36,7 @@ export const CUSTOM_SOUND = "custom";
 
 export const DEFAULT_PRESETS: Preset[] = [5 * 60, 20 * 60, 30 * 60, 40 * 60];
 
-export const MIN_PRESET_SECONDS = 1;
+const MIN_PRESET_SECONDS = 1;
 export const MAX_PRESET_SECONDS = 24 * 60 * 60;
 
 export const MAX_SOUND_REPEAT = 10;
@@ -46,7 +46,7 @@ export const DEFAULTS: DialTimerSettings = {
 	presetIndex: 0,
 	layout: "ring",
 	theme: "default",
-	showLogo: false,
+	showLogo: true,
 	showTitle: true,
 	showFinishTime: false,
 	warnEnabled: false,

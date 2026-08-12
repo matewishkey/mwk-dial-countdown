@@ -213,9 +213,9 @@
 			<input type="checkbox" id="warnEnabled" />
 		</div>
 		<div class="row sub">
-			<label for="warnMinutes">Start fading at</label>
-			<input type="number" id="warnMinutes" min="1" step="1" />
-			<span class="muted">min left</span>
+			<label for="warnSeconds">Start fading at</label>
+			<input type="number" id="warnSeconds" min="1" step="5" />
+			<span class="muted">sec left</span>
 		</div>
 
 		<h2>Behaviour</h2>
@@ -264,7 +264,7 @@
 				presetIndex: 0,
 				layout: "ring",
 				theme: "default",
-				showLogo: false,
+				showLogo: true,
 				showTitle: true,
 				showFinishTime: false,
 				warnEnabled: false,
@@ -384,7 +384,7 @@
 				el("showLogo").checked = state.showLogo;
 				el("showFinishTime").checked = state.showFinishTime;
 				el("warnEnabled").checked = state.warnEnabled;
-				el("warnMinutes").value = String(Math.max(1, Math.round(state.warnSeconds / 60)));
+				el("warnSeconds").value = String(state.warnSeconds);
 				el("repeat").checked = state.repeat;
 				el("soundEnabled").checked = state.soundEnabled;
 				el("soundRepeat").value = String(state.soundRepeat);
@@ -400,7 +400,7 @@
 				["showLogo", "showLogo", (i) => i.checked],
 				["showFinishTime", "showFinishTime", (i) => i.checked],
 				["warnEnabled", "warnEnabled", (i) => i.checked],
-				["warnMinutes", "warnSeconds", (i) => Math.max(1, Math.round(Number(i.value) || 1)) * 60],
+				["warnSeconds", "warnSeconds", (i) => Math.max(1, Math.round(Number(i.value) || 1))],
 				["repeat", "repeat", (i) => i.checked],
 				["soundEnabled", "soundEnabled", (i) => i.checked],
 				["soundRepeat", "soundRepeat", (i) => clamp(Math.round(Number(i.value) || 1), 1, 10)],
@@ -448,7 +448,8 @@
 					event: "preview",
 					soundId: state.soundId,
 					customSoundPath: state.customSoundPath,
-					volume: state.volume
+					volume: state.volume,
+					soundRepeat: state.soundRepeat
 				});
 			});
 

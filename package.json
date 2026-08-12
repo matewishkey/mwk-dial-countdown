@@ -1,12 +1,12 @@
 {
-	"name": "elgato-timer",
+	"name": "mwk-dial-timer",
 	"version": "0.1.0",
 	"private": true,
 	"description": "Stream Deck + dial timer with presets, press-to-start and tap-to-cycle.",
 	"type": "module",
 	"scripts": {
 		"build": "rollup -c",
-		"watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.mergodon.dial-timer\"",
+		"watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.matewishkey.dial-timer\"",
 		"test": "node --test \"test/*.test.ts\"",
 		"mock": "node tools/mock-host.mjs",
 		"demo": "node tools/mock-host.mjs --demo"

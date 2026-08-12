@@ -43,8 +43,6 @@ const VALUE_FONT_MIN = 18;
 /** Settings changes are batched, so spinning the dial does not write to disk on every tick. */
 const SETTINGS_DEBOUNCE_MS = 400;
 
-const DEFAULT_WARN_SECONDS = 300;
-
 /** Everything that lives only for as long as the action is on screen. */
 type Instance = {
 	action: DialAction<DialTimerSettings>;
@@ -65,7 +63,7 @@ type Instance = {
 	lastLayout: string | null;
 };
 
-@action({ UUID: "com.mergodon.dial-timer.timer" })
+@action({ UUID: "com.matewishkey.dial-timer.timer" })
 export class DialTimer extends SingletonAction<DialTimerSettings> {
 	/**
 	 * One entry per visible dial, keyed by action id. A Stream Deck + has four dials and each can hold
@@ -166,12 +164,13 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 	/** Auditions a sound, and answers whether a chosen file actually resolves. */
 	override onSendToPlugin(ev: { payload: unknown }): void {
 		const payload = ev.payload as
-			| { event?: string; soundId?: string; customSoundPath?: string; volume?: number }
+			| { event?: string; soundId?: string; customSoundPath?: string; volume?: number; soundRepeat?: number }
 			| undefined;
 
 		if (payload?.event === "preview") {
+			// The preview plays the full repeat count, so what you hear is what the timer will do.
 			const path = resolveSound(payload);
-			const played = playSound(path, payload.volume ?? 100);
+			const played = playSound(path, payload.volume ?? 100, payload.soundRepeat ?? 1);
 			void this.#reportSound(path, played);
 			return;
 		}

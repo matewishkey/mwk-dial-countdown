@@ -41,7 +41,7 @@ const SYSTEM_DIRS: Partial<Record<NodeJS.Platform, string[]>> = {
 const PLAYABLE = new Set([".wav", ".aiff", ".aif", ".mp3", ".m4a"]);
 
 /** Absolute path of the bundled default, whatever the plugin folder turns out to be. */
-export function defaultSoundPath(): string {
+function defaultSoundPath(): string {
 	return join(BUNDLED_DIR, DEFAULT_SOUND_FILE);
 }
 

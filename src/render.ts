@@ -10,7 +10,7 @@
 import type { TimerStatus } from "./timer";
 
 /** The ring occupies a square on the left of the 200 × 100 touchscreen. */
-export const RING_SIZE = 88;
+const RING_SIZE = 88;
 
 const CENTRE = RING_SIZE / 2;
 const RADIUS = 36;

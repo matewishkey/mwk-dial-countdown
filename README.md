@@ -1,99 +1,105 @@
-# Dial Timer
+# MWK Dial Timer
 
-A countdown timer for the Stream Deck + dials. Tap the touchscreen to start or pause, hold it to reset, press the dial to change preset, turn it to adjust.
-
-The screen owns start/pause and reset because pressing a dial in is a fiddly, two-handed movement next to tapping the screen directly above it; the dial owns preset cycling, which is used far less often.
+A countdown timer for the **Stream Deck +** dials. Tap the touchscreen to start or pause, hold it to reset, press the dial to change preset, turn it to adjust.
 
 Each of the four dials holds its own independent timer.
+
+> Requires a Stream Deck **+** — the dials and touchscreen are specific to that device — and the Stream Deck app 7.1 or newer, on macOS or Windows.
+
+## Install
+
+Download the latest `.streamDeckPlugin` from [Releases](https://github.com/matewishkey/mwk-dial-timer/releases) and double-click it. Stream Deck installs it and adds **Dial Timer** to the actions list; drag **Timer** onto a dial.
 
 ## Gestures
 
 | Gesture | Does |
 | --- | --- |
 | Tap touchscreen | Start / pause |
-| Hold-tap touchscreen | Reset to full |
-| Press dial (short) | Next preset |
-| Press dial (hold ~0.6s) | Previous preset |
+| Hold touchscreen | Reset to full |
+| Press dial | Next preset |
+| Hold dial | Previous preset |
 | Turn | Adjust — accelerates from 1s to 10s to 1min a tick |
 | Press + turn | A flat 1 minute a tick |
 
-Turning an idle timer edits that preset's duration and persists it. Turning a running timer nudges only the time left, leaving the preset alone.
+The screen owns start/pause and reset because pressing a dial in is a fiddly, two-handed movement next to tapping the screen directly above it; the dial owns preset cycling, which is used far less often.
 
-## Presets
+Turning an **idle** timer edits that preset's duration and saves it. Turning a **running** timer nudges only the time left, leaving the preset alone.
 
-Ship as 5, 20, 30 and 40 minutes, and carry no names — a timer's length is its own label, so the touchscreen title is derived from the duration (`20m`, or `20m 30s` once it has been nudged off a round number). Durations are edited in minutes in the property inspector.
+## Features
+
+- **Presets** — 5, 20, 30 and 40 minutes out of the box, edited as hours, minutes and seconds. They carry no names: a timer's length is its own label, so the display reads `20m`, or `20m 30s` once nudged off a round number.
+- **Countdown ring** that empties as the timer runs, with the clock beside it. A progress bar is available instead.
+- **Seven colour themes**, and an optional logo in the middle of the ring.
+- **A pause glyph** rather than a colour change, so the state is stated outright.
+- **Fade near the end** — the same colour, shaded and unshaded, from a threshold you set in seconds.
+- **Sound when finished**, repeatable up to ten times, at a volume you set. Choose a bundled sound, any sound already installed on your machine, or your own file.
+- **Auto-repeat**, counting laps on screen.
+- **Finish time** — `ends 14:35`, more useful than a raw remaining count on a long timer.
+- Anything up to **24 hours**.
 
 ## Developing
 
-Stream Deck itself runs on macOS and Windows only, so the plugin cannot be *run* on Linux — but it can be built and driven headlessly there.
+Stream Deck runs on macOS and Windows only, so the plugin cannot be *run* on Linux — but it can be built and driven headlessly there.
 
 ```sh
 npm install
-npm run build      # bundle into com.mergodon.dial-timer.sdPlugin/bin
-npm test           # countdown state machine
+npm run build      # bundle into com.matewishkey.dial-timer.sdPlugin/bin
+npm test           # 64 unit tests
 npm run demo       # scripted gesture pass, prints one frame per step
-npm run mock       # same harness, driven from the keyboard
+npm run mock       # the same harness, driven from the keyboard
 ```
 
 `tools/mock-host.mjs` impersonates the Stream Deck application. A plugin is only a Node process launched with `-port`, `-pluginUUID`, `-registerEvent` and `-info` that connects back to `ws://127.0.0.1:<port>`, so the harness plays that role: it spawns the built plugin, answers the registration handshake, sends real dial events, and draws whatever comes back on the touchscreen. That covers everything except how the screen actually looks.
 
-Note the plugin process is launched with its `.sdPlugin` directory as the working directory — the SDK resolves `manifest.json` and its log directory from `process.cwd()`, and will exit immediately if launched from anywhere else.
+The plugin process is launched with its `.sdPlugin` directory as the working directory — the SDK resolves `manifest.json` and its log directory from `process.cwd()`, and exits immediately if launched from anywhere else.
 
-### On a Mac, against real hardware
+### Against real hardware
 
 ```sh
-npx streamdeck dev                              # enable developer mode, once
-npx streamdeck link com.mergodon.dial-timer.sdPlugin
-npm run watch                                   # rebuild + restart on save
+npx streamdeck dev                                  # enable developer mode, once
+npx streamdeck link com.matewishkey.dial-timer.sdPlugin
+npm run watch                                       # rebuild + restart on save
 ```
 
 ### Packaging
 
 ```sh
-npx streamdeck validate com.mergodon.dial-timer.sdPlugin
-npx streamdeck pack com.mergodon.dial-timer.sdPlugin
+npx streamdeck validate com.matewishkey.dial-timer.sdPlugin
+npx streamdeck pack com.matewishkey.dial-timer.sdPlugin
 ```
 
-## Layout
+## How it fits together
 
-- `src/timer.ts` — the countdown state machine. No Stream Deck imports and an injectable clock, so it is tested directly.
-- `src/actions/dial-timer.ts` — maps dial events onto that state machine and renders to the touchscreen.
-- `com.mergodon.dial-timer.sdPlugin/` — the plugin bundle: manifest, icons, property inspector.
-- `tools/mock-host.mjs` — the fake Stream Deck host.
+| File | Does |
+| --- | --- |
+| `src/timer.ts` | The countdown state machine. No Stream Deck imports and an injectable clock, so it is tested directly. |
+| `src/settings.ts` | The settings shape, and the only place they are read. |
+| `src/acceleration.ts` | Turns dial rotation into a step size. |
+| `src/render.ts` | Draws the countdown ring as SVG. |
+| `src/sound.ts` | Hands a sound file to the platform's own player. |
+| `src/actions/dial-timer.ts` | Maps dial events onto the state machine and renders. |
+| `tools/mock-host.mjs` | A stand-in for the Stream Deck application. |
 
-`sdpi-components.js` is vendored into `ui/` rather than loaded from a CDN (as Elgato's template does) so the property inspector works offline and the shipped plugin carries no third-party runtime dependency.
+A few decisions worth knowing before changing things:
 
-## Branding
+**Settings are never trusted.** Stream Deck keeps an action's settings across an uninstall, so every build is handed settings written by an older one. `normaliseSettings` rebuilds a known-good object from whatever arrived — unrecognised keys discarded, numbers clamped, a broken preset index repaired, legacy shapes unwrapped — and the result is written back on first appearance.
 
-`src/render.ts` carries a `mwk` theme built from the Mate Wish Key dark-mode tokens, and can draw the brand mark inside the ring from the published `mwk-mark.svg` path data — kept as bare paths so it scales and takes the ring's colour rather than being a fixed-colour image. Plugin icons are the brand's own block and mark; the action-list icons use the white variant, as Elgato requires a monochrome white glyph on transparent.
+**The ring is SVG, not canvas.** Plugins run under `--no-addons` and cannot load native modules, so no canvas library is available. A `pixmap` layout item accepts a raw SVG string, which is the way through. Text is left to real `text` layout items so it uses Stream Deck's own font rendering.
 
-## Settings
+**The countdown works from a deadline**, not by accumulating ticks, so a slow or skipped render frame cannot make it drift.
 
-`src/settings.ts` owns the settings shape and is the only place they are read. Stream Deck keeps an action's settings across an uninstall, so every build is handed settings written by an older one; `normaliseSettings` therefore rebuilds a known-good object from whatever arrived rather than trusting it — unrecognised keys discarded, numbers clamped, a broken preset index repaired, and the legacy `{ label, seconds }` preset shape unwrapped. The result is written back on first appearance, so a fresh install has a complete valid set on disk.
+**There is no audio API in the SDK.** `src/sound.ts` hands a file to `afplay` on macOS, or PowerShell's WPF `MediaPlayer` on Windows — chosen over `SoundPlayer`, which cannot set volume. Nothing is hard-coded: bundled sounds come from the plugin's own folder and system sounds are enumerated from disk, so a sound that is not installed is simply absent from the list.
 
-## Themes, repeat and finish time
+**A finished timer fills the ring** rather than emptying it. Drawn literally, the moment that most needs to be seen would be blank.
 
-Seven palettes live in `src/render.ts`; a theme is four colours (idle, running, elapsed, track) and an unknown id falls back to the default rather than throwing. There is no paused colour: pausing draws a glyph in the middle of the ring instead, since stating the same fact twice only invites the two to disagree. The warning "blink" is the state's own colour shaded and unshaded, and its window is capped at half the preset's length so a warning can never cover a whole timer. Auto-repeat restarts the moment the alert fires, with no pause, because a gap between cycles is exactly what an interval timer must not have; laps are counted and shown. The finish time is only rendered while running — on a stopped timer it would be a prediction that quietly goes stale.
+## Contributing
 
-The touchscreen label shows the *preset's* length rather than the live duration, so nudging a running timer does not rewrite where it started.
+Issues and pull requests are welcome. Please run `npm test` and `npx streamdeck validate` before opening one.
 
-## Not done yet
+If you fork this into your own plugin, change the UUID in `manifest.json` and replace the brand assets — see LICENSE.
 
-- **Sound has never run on a real machine.** The playback code is written for both platforms but this is a Linux box, so neither `afplay` nor the PowerShell path has actually executed. Everything else here is verified; this is not.
-- **Interval/break cycles and a count-up stopwatch** — features comparable plugins have. Both were declined for now.
-- **Persisting a running timer across restarts.** Deliberately not done: the timer is dropped when the dial goes away.
-- **Marketplace listing copy and screenshots.** The icons are now the real brand assets, but the listing itself is unwritten, and `Nodejs.Debug` is still `enabled` in the manifest and should come out before release.
+## Licence
 
-## Acceleration
+[MIT](LICENSE) — free to use, modify and distribute.
 
-Turning accelerates: one second per tick for a nudge, ten once the dial is being wound, a minute when it is wound hard. Momentum is built from tick count rather than event count, so a single fast flick escalates as readily as a sustained turn, and any pause longer than `IDLE_RESET_MS` drops straight back to fine control. Holding the dial is a flat minute a tick and deliberately does not compound with momentum.
-
-## Sound
-
-The SDK has no audio API, so `src/sound.ts` hands a file to the platform's own player: `afplay -v <0-1>` on macOS, and PowerShell's WPF `MediaPlayer` on Windows (chosen over `SoundPlayer`, which cannot set volume). Nothing is hard-coded — bundled sounds come from the plugin's own `sounds/` folder and system sounds are enumerated from disk, so a sound that is not installed is simply absent from the list rather than a path that fails when it matters.
-
-## The ring
-
-`src/render.ts` builds the countdown ring as an SVG string, which a `pixmap` layout item accepts directly. That matters because plugins run under `--no-addons` and cannot load native modules, so no canvas library is available. Text is left to real `text` layout items so it uses Stream Deck's own font rendering.
-
-A finished timer draws a *full* ring in the elapsed colour rather than an empty one — left to the arithmetic it would draw nothing at the exact moment the user most needs to see something.
+The Mate Wish Key name, logo and brand colours are trademarks and are **not** covered by the MIT licence; `ui/sdpi-components.js` is Elgato's property inspector library, vendored for offline use under its own licence. Both are spelled out in [LICENSE](LICENSE).

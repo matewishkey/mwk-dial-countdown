@@ -67,6 +67,15 @@ describe("normaliseSettings", () => {
 		assert.equal(DEFAULTS.soundEnabled, true);
 		assert.equal(DEFAULTS.soundId, "default");
 	});
+
+	it("shows the logo out of the box", () => {
+		assert.equal(DEFAULTS.showLogo, true);
+	});
+
+	it("measures the fade window in seconds", () => {
+		assert.equal(normaliseSettings({ warnSeconds: 45 }).warnSeconds, 45, "a value under a minute must survive");
+		assert.equal(normaliseSettings({ warnSeconds: 0 }).warnSeconds, 1);
+	});
 });
 
 describe("normalisePresets", () => {

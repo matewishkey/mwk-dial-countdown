@@ -6,7 +6,7 @@ import path from "node:path";
 import url from "node:url";
 
 const isWatching = !!process.env.ROLLUP_WATCH;
-const sdPlugin = "com.mergodon.dial-timer.sdPlugin";
+const sdPlugin = "com.matewishkey.dial-timer.sdPlugin";
 
 /**
  * @type {import('rollup').RollupOptions}
