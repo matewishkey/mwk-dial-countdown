@@ -291,25 +291,25 @@ const wait = (ms) => new Promise((done) => setTimeout(done, ms));
 async function runDemo() {
 	const steps = [
 		["default preset on appear", async () => {}],
-		["tap → next preset (20m)", async () => gestures.touch(false)],
+		["press dial → next preset (20m)", async () => press(80)],
 		["turn right ×3 → +30s", async () => gestures.rotate(3)],
 		["press+turn right → +60s", async () => gestures.rotate(1, true)],
-		["short press → running", async () => press(80)],
+		["tap screen → running", async () => gestures.touch(false)],
 		["…2s later", async () => wait(2000)],
-		["short press → paused (amber)", async () => press(80)],
+		["tap screen → paused (amber)", async () => gestures.touch(false)],
 		["…1s later, still paused", async () => wait(1000)],
-		["hold 900ms → reset to full, idle (blue)", async () => press(900)],
-		["hold-tap → previous preset (5m)", async () => gestures.touch(true)],
-		["tap ×2 → 30m", async () => {
-			gestures.touch(false);
-			await wait(120);
-			gestures.touch(false);
+		["hold screen → reset to full, idle (blue)", async () => gestures.touch(true)],
+		["hold dial → previous preset (5m)", async () => press(900)],
+		["press dial ×2 → 30m", async () => {
+			await press(80);
+			await wait(200);
+			await press(80);
 		}],
 		["settled — persisted settings catch up", async () => wait(600)],
 
 		// Acceleration: the same wrist movement, done slowly and then quickly.
 		["8 slow ticks (400ms apart) → stays at 10s each, +1m20s", async () => spin(8, 1, 400)],
-		["reset before the fast run", async () => press(900)],
+		["reset before the fast run", async () => gestures.touch(true)],
 		["8 fast ticks (60ms apart) → accelerates into minutes", async () => spin(8, 1, 60)],
 		["a hard spin → reaches hours in one gesture", async () => spin(10, 3, 50)],
 
@@ -322,7 +322,7 @@ async function runDemo() {
 		[
 			"start → ring blinks (one frame cannot prove this, so the colour is sampled 8×)",
 			async () => {
-				await press(80);
+				gestures.touch(false);
 				const seen = [];
 				for (let i = 0; i < 8; i++) {
 					await wait(260);
@@ -336,25 +336,25 @@ async function runDemo() {
 
 		// Wind the duration down to the 1s floor so the elapsed path can be shown without waiting.
 		["reset, then turn left ×60 → clamped to the 1s minimum", async () => {
-			await press(900);
+			gestures.touch(true);
 			await wait(500);
 			gestures.rotate(-60);
 		}],
-		["short press, then let it run out → done (red), alert fires", async () => {
-			await press(80);
-			await wait(1500);
+		["tap screen, then let it run out → done (red), alert fires", async () => {
+			gestures.touch(false);
+			await wait(1900);
 		}],
 
 		// Finish time and auto-repeat.
 		["finish time on, 10m preset, started", async () => {
 			applySettings({ presets: [600], presetIndex: 0, warnEnabled: false, showFinishTime: true, theme: "ocean" });
 			await wait(300);
-			await press(80);
+			gestures.touch(false);
 		}],
 		["repeat on, 2s preset → runs out and restarts itself", async () => {
-			applySettings({ presets: [2], presetIndex: 0, repeat: true, showFinishTime: false });
+			applySettings({ presets: [2], presetIndex: 0, repeat: true, showFinishTime: false, theme: "mwk", showLogo: true });
 			await wait(300);
-			await press(80);
+			gestures.touch(false);
 			await wait(2600);
 		}],
 		["…and keeps going, counting laps", async () => wait(2200)]
@@ -457,8 +457,9 @@ function draw() {
 		"",
 		...screenLines(),
 		"",
-		dim("   ←/→ adjust 10s   shift+←/→ ×5   ↑/↓ press+turn 60s"),
-		dim("   space start/pause   r hold-to-reset   t next preset   y previous   ctrl+c quit")
+		dim("   ←/→ adjust   shift+←/→ ×5   ↑/↓ press+turn 60s"),
+		dim("   t tap screen: start/pause   y hold screen: reset"),
+		dim("   space press dial: next preset   r hold dial: previous   ctrl+c quit")
 	];
 
 	process.stdout.write("\x1b[2J\x1b[H" + lines.join("\n") + "\n");

@@ -1,6 +1,8 @@
 # Dial Timer
 
-A countdown timer for the Stream Deck + dials. Tap the touchscreen to cycle presets, press the dial to start or pause, hold it to reset, turn it to adjust.
+A countdown timer for the Stream Deck + dials. Tap the touchscreen to start or pause, hold it to reset, press the dial to change preset, turn it to adjust.
+
+The screen owns start/pause and reset because pressing a dial in is a fiddly, two-handed movement next to tapping the screen directly above it; the dial owns preset cycling, which is used far less often.
 
 Each of the four dials holds its own independent timer.
 
@@ -8,10 +10,10 @@ Each of the four dials holds its own independent timer.
 
 | Gesture | Does |
 | --- | --- |
-| Tap touchscreen | Next preset |
-| Hold-tap touchscreen | Previous preset |
-| Press dial (short) | Start / pause |
-| Press dial (hold ~0.6s) | Reset to full |
+| Tap touchscreen | Start / pause |
+| Hold-tap touchscreen | Reset to full |
+| Press dial (short) | Next preset |
+| Press dial (hold ~0.6s) | Previous preset |
 | Turn | Adjust — accelerates from 10s to 1m to 5m a tick |
 | Press + turn | A flat 1 minute a tick |
 
@@ -60,6 +62,10 @@ npx streamdeck pack com.mergodon.dial-timer.sdPlugin
 - `tools/mock-host.mjs` — the fake Stream Deck host.
 
 `sdpi-components.js` is vendored into `ui/` rather than loaded from a CDN (as Elgato's template does) so the property inspector works offline and the shipped plugin carries no third-party runtime dependency.
+
+## Branding
+
+`src/render.ts` carries a `mwk` theme built from the Mate Wish Key dark-mode tokens, and can draw the brand mark inside the ring from the published `mwk-mark.svg` path data — kept as bare paths so it scales and takes the ring's colour rather than being a fixed-colour image. Plugin icons are the brand's own block and mark; the action-list icons use the white variant, as Elgato requires a monochrome white glyph on transparent.
 
 ## Themes, repeat and finish time
 

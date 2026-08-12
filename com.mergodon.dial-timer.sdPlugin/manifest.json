@@ -7,7 +7,7 @@
 			"Name": "Timer",
 			"UUID": "com.mergodon.dial-timer.timer",
 			"Icon": "imgs/actions/timer/icon",
-			"Tooltip": "A countdown timer on a dial. Tap the screen to cycle presets, press to start or pause, hold to reset.",
+			"Tooltip": "A countdown timer on a dial. Tap the screen to start or pause, hold it to reset, press the dial to change preset.",
 			"PropertyInspectorPath": "ui/dial-timer.html",
 			"Controllers": [
 				"Encoder"
@@ -15,12 +15,12 @@
 			"Encoder": {
 				"Icon": "imgs/actions/timer/encoder-icon",
 				"layout": "layouts/ring.json",
-				"StackColor": "#2D9CDB",
+				"StackColor": "#E2342B",
 				"TriggerDescription": {
 					"Rotate": "Adjust time",
-					"Push": "Start / pause",
-					"LongTouch": "Reset",
-					"Touch": "Next preset"
+					"Push": "Next preset",
+					"Touch": "Start / pause",
+					"LongTouch": "Reset"
 				}
 			},
 			"States": [

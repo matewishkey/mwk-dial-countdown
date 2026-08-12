@@ -53,6 +53,8 @@ export type DialTimerSettings = {
 	repeat?: boolean;
 	/** Show the wall-clock time the timer will finish at. */
 	showFinishTime?: boolean;
+	/** Draw the Mate Wish Key mark inside the ring. */
+	showLogo?: boolean;
 };
 
 /** Everything that lives only for as long as the action is on screen. */
@@ -228,7 +230,13 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 		this.#render(instance, true);
 	}
 
-	/** Starts the clock that decides whether this press is a start/pause or a reset. */
+	/**
+	 * Starts the clock that decides whether this press is a short one or a long one.
+	 *
+	 * The dial press cycles presets rather than starting the timer: pressing a dial in is a fiddly,
+	 * two-handed movement compared with tapping the screen above it, so the screen owns the gesture
+	 * that gets used constantly and the dial owns the one that does not.
+	 */
 	override onDialDown(ev: DialDownEvent<DialTimerSettings>): void {
 		const instance = this.#instances.get(ev.action.id);
 		if (instance === undefined) {
@@ -239,14 +247,11 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 		instance.longPressHandle = setTimeout(() => {
 			instance.longPressFired = true;
 			instance.longPressHandle = null;
-			instance.timer.reset();
-			instance.alerted = false;
-			instance.accelerator.reset();
-			this.#render(instance, true);
+			this.#cyclePreset(instance, -1);
 		}, LONG_PRESS_MS);
 	}
 
-	/** A release that beat the long-press threshold is a short press: start or pause. */
+	/** A release that beat the long-press threshold moves to the next preset. */
 	override onDialUp(ev: DialUpEvent<DialTimerSettings>): void {
 		const instance = this.#instances.get(ev.action.id);
 		if (instance === undefined) {
@@ -260,23 +265,35 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 			return;
 		}
 
-		instance.timer.toggle();
-		instance.alerted = false;
-		this.#render(instance, true);
+		this.#cyclePreset(instance, 1);
 	}
 
-	/** Tapping the touchscreen cycles to the next preset; holding the tap cycles backwards. */
+	/** Tapping the touchscreen starts or pauses; holding the tap resets. */
 	override onTouchTap(ev: TouchTapEvent<DialTimerSettings>): void {
 		const instance = this.#instances.get(ev.action.id);
 		if (instance === undefined) {
 			return;
 		}
 
-		const step = ev.payload.hold ? -1 : 1;
+		if (ev.payload.hold) {
+			instance.timer.reset();
+			instance.cycles = 0;
+			instance.accelerator.reset();
+		} else {
+			instance.timer.toggle();
+		}
+
+		instance.alerted = false;
+		this.#render(instance, true);
+	}
+
+	/** Moves to another preset and loads its duration. */
+	#cyclePreset(instance: Instance, step: number): void {
 		const count = instance.presets.length;
 		instance.presetIndex = (instance.presetIndex + step + count) % count;
 		instance.timer.setDuration(instance.presets[instance.presetIndex] * 1000);
 		instance.alerted = false;
+		instance.cycles = 0;
 		instance.accelerator.reset();
 
 		this.#scheduleSave(instance);
@@ -330,7 +347,7 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 		const warning = this.#isWarning(instance, remainingMs, status);
 		const finish = this.#finishText(instance, remainingMs, status);
 
-		const signature = `${instance.lastLayout}|${label}|${value}|${status}|${warning}|${finish}|${instance.cycles}`;
+		const signature = `${instance.lastLayout}|${label}|${value}|${status}|${warning}|${finish}|${instance.cycles}|${settings.showLogo}|${settings.theme}`;
 		if (!force && signature === instance.lastFeedback) {
 			return;
 		}
@@ -356,7 +373,7 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 						}
 					}
 				: {
-						ring: asDataUri(renderRing({ remainingFraction, status, warning, palette })),
+						ring: asDataUri(renderRing({ remainingFraction, status, warning, palette, logo: settings.showLogo === true })),
 						value,
 						label: `${label}${suffix}`,
 						finish

@@ -137,9 +137,9 @@
 	</head>
 	<body>
 		<p class="hint">
-			Tap the touchscreen to cycle presets, press the dial to start or pause, hold it to reset. Turn to adjust — the
-			step grows from 10&nbsp;seconds to a minute, then five, the longer you keep turning. Hold and turn for a flat
-			minute a tick.
+			<strong>Tap the screen</strong> to start or pause, <strong>hold the screen</strong> to reset. <strong>Press the
+			dial</strong> for the next preset, hold it for the previous one. Turn to adjust — the step grows from
+			10&nbsp;seconds to a minute, then five, the longer you keep turning. Hold and turn for a flat minute a tick.
 		</p>
 
 		<h2>Presets</h2>
@@ -178,7 +178,13 @@
 				<option value="neon">Neon</option>
 				<option value="forest">Forest</option>
 				<option value="mono">Mono</option>
+				<option value="mwk">Mate Wish Key</option>
 			</select>
+		</div>
+
+		<div class="row">
+			<label for="showLogo">Logo in the ring</label>
+			<input type="checkbox" id="showLogo" />
 		</div>
 
 		<h2>Behaviour</h2>
@@ -227,6 +233,7 @@
 				theme: "default",
 				repeat: false,
 				showFinishTime: false,
+				showLogo: false,
 				soundEnabled: true,
 				soundId: "none",
 				customSoundPath: "",
@@ -304,6 +311,7 @@
 				el("theme").value = state.theme;
 				el("repeat").checked = state.repeat;
 				el("showFinishTime").checked = state.showFinishTime;
+				el("showLogo").checked = state.showLogo;
 				el("soundEnabled").checked = state.soundEnabled;
 				el("volume").value = String(state.volume);
 			}
@@ -337,7 +345,8 @@
 			for (const [id, key] of [
 				["theme", "theme"],
 				["repeat", "repeat"],
-				["showFinishTime", "showFinishTime"]
+				["showFinishTime", "showFinishTime"],
+				["showLogo", "showLogo"]
 			]) {
 				el(id).addEventListener("change", () => {
 					const input = el(id);
@@ -458,6 +467,7 @@
 				state.theme = settings.theme || "default";
 				state.repeat = settings.repeat === true;
 				state.showFinishTime = settings.showFinishTime === true;
+				state.showLogo = settings.showLogo === true;
 				state.soundEnabled = settings.soundEnabled !== false;
 				state.soundId = settings.soundId || "none";
 				state.customSoundPath = settings.customSoundPath || "";
