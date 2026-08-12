@@ -231,6 +231,11 @@
 			<label for="repeat">Repeat when finished</label>
 			<input type="checkbox" id="repeat" />
 		</div>
+		<div class="row sub">
+			<label for="repeatCount">Repeat at most</label>
+			<input type="number" id="repeatCount" min="1" max="10" step="1" />
+			<span class="muted">times</span>
+		</div>
 
 		<h2>Sound</h2>
 		<div class="row">
@@ -278,6 +283,7 @@
 				warnEnabled: false,
 				warnSeconds: 60,
 				repeat: false,
+				repeatCount: 3,
 				soundEnabled: true,
 				soundId: "default",
 				customSoundPath: "",
@@ -396,6 +402,7 @@
 				el("warnSec").value = String(state.warnSeconds % 60);
 				el("warnTotal").textContent = `left · ${label(state.warnSeconds)}`;
 				el("repeat").checked = state.repeat;
+				el("repeatCount").value = String(state.repeatCount);
 				el("soundEnabled").checked = state.soundEnabled;
 				el("soundRepeat").value = String(state.soundRepeat);
 				el("volume").value = String(state.volume);
@@ -411,6 +418,7 @@
 				["showFinishTime", "showFinishTime", (i) => i.checked],
 				["warnEnabled", "warnEnabled", (i) => i.checked],
 				["repeat", "repeat", (i) => i.checked],
+				["repeatCount", "repeatCount", (i) => clamp(Math.round(Number(i.value) || 1), 1, 10)],
 				["soundEnabled", "soundEnabled", (i) => i.checked],
 				["soundRepeat", "soundRepeat", (i) => clamp(Math.round(Number(i.value) || 1), 1, 10)],
 				["volume", "volume", (i) => clamp(Number(i.value) || 0, 0, 100)]

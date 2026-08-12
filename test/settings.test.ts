@@ -6,6 +6,7 @@ import {
 	DEFAULTS,
 	fromParts,
 	MAX_PRESET_SECONDS,
+	MAX_REPEAT_COUNT,
 	MAX_SOUND_REPEAT,
 	normalisePresets,
 	normaliseSettings,
@@ -111,5 +112,21 @@ describe("hours, minutes and seconds", () => {
 		assert.equal(fromParts(0, 0, 0), 1, "a zero-length timer is not a timer");
 		assert.equal(fromParts(999, 0, 0), MAX_PRESET_SECONDS);
 		assert.equal(fromParts(Number.NaN, -5, 30), 30);
+	});
+});
+
+describe("repeat count", () => {
+	it("is bounded, so a repeating timer cannot run for ever", () => {
+		assert.equal(normaliseSettings({ repeatCount: 999 }).repeatCount, MAX_REPEAT_COUNT);
+		assert.equal(normaliseSettings({ repeatCount: 0 }).repeatCount, 1);
+		assert.equal(normaliseSettings({ repeatCount: -4 }).repeatCount, 1);
+	});
+
+	it("defaults to a handful rather than the maximum", () => {
+		assert.ok(DEFAULTS.repeatCount >= 1 && DEFAULTS.repeatCount < MAX_REPEAT_COUNT);
+	});
+
+	it("keeps a sensible value untouched", () => {
+		assert.equal(normaliseSettings({ repeatCount: 5 }).repeatCount, 5);
 	});
 });

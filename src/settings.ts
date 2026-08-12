@@ -21,6 +21,8 @@ export type DialTimerSettings = {
 	warnEnabled: boolean;
 	warnSeconds: number;
 	repeat: boolean;
+	/** How many times an auto-repeating timer comes round before it stops for good. */
+	repeatCount: number;
 	soundEnabled: boolean;
 	soundId: string;
 	customSoundPath: string;
@@ -41,6 +43,9 @@ export const MAX_PRESET_SECONDS = 24 * 60 * 60;
 
 export const MAX_SOUND_REPEAT = 10;
 
+/** A repeating timer is deliberately bounded: nothing here should still be going tomorrow. */
+export const MAX_REPEAT_COUNT = 10;
+
 export const DEFAULTS: DialTimerSettings = {
 	presets: DEFAULT_PRESETS,
 	presetIndex: 0,
@@ -52,6 +57,7 @@ export const DEFAULTS: DialTimerSettings = {
 	warnEnabled: false,
 	warnSeconds: 60,
 	repeat: false,
+	repeatCount: 3,
 	soundEnabled: true,
 	soundId: DEFAULT_SOUND,
 	customSoundPath: "",
@@ -76,6 +82,7 @@ export function normaliseSettings(raw: unknown): DialTimerSettings {
 		warnEnabled: bool(input.warnEnabled, DEFAULTS.warnEnabled),
 		warnSeconds: int(input.warnSeconds, DEFAULTS.warnSeconds, 1, MAX_PRESET_SECONDS),
 		repeat: bool(input.repeat, DEFAULTS.repeat),
+		repeatCount: int(input.repeatCount, DEFAULTS.repeatCount, 1, MAX_REPEAT_COUNT),
 		soundEnabled: bool(input.soundEnabled, DEFAULTS.soundEnabled),
 		soundId: typeof input.soundId === "string" && input.soundId.length > 0 ? input.soundId : DEFAULTS.soundId,
 		customSoundPath: typeof input.customSoundPath === "string" ? input.customSoundPath : "",

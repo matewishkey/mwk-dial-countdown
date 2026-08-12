@@ -323,8 +323,9 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 			}
 
 			// Auto-repeat restarts immediately rather than after a pause: the alert has already fired,
-			// and a gap between cycles is exactly what an interval timer must not have.
-			if (settings.repeat === true) {
+			// and a gap between cycles is exactly what an interval timer must not have. It is bounded,
+			// though — an unattended timer that never stops is a nuisance, not a feature.
+			if (settings.repeat && instance.cycles < settings.repeatCount) {
 				instance.cycles += 1;
 				instance.alerted = false;
 				timer.reset();
@@ -429,7 +430,8 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 /** A repeating timer counts its laps; a finished one says so. */
 function suffixFor(instance: Instance, status: string): string {
 	if (instance.cycles > 0) {
-		return ` · ×${instance.cycles}`;
+		// The count says how far through the repeats it is, so an unattended timer is readable.
+		return ` · ×${instance.cycles}/${instance.settings.repeatCount}`;
 	}
 	return status === "elapsed" ? " · done" : "";
 }

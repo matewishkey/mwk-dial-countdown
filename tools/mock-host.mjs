@@ -361,7 +361,26 @@ async function runDemo() {
 			await wait(300);
 			gestures.touch(false);
 			await wait(2600);
-		}]
+		}],
+
+		// Auto-repeat, and the fact that it stops. A timer that loops for ever is a nuisance.
+		["repeat on, limit 2, 2s preset → first lap", async () => {
+			applySettings({ presets: [2], presetIndex: 0, repeat: true, repeatCount: 2, soundEnabled: false });
+			await wait(300);
+			gestures.touch(false);
+			await wait(2400);
+		}],
+		["…second lap", async () => wait(2200)],
+		[
+			"…and STOPS at the limit rather than looping for ever",
+			async () => {
+				await wait(3000);
+				const settled = screen.value;
+				await wait(2000);
+				console.log(`\n   clock 2s apart: ${settled} then ${screen.value}`);
+				console.log(`   ${settled === screen.value ? "\u2713 stopped" : "\u2717 still running"}`);
+			}
+		]
 	];
 
 	for (const [label, run] of steps) {
