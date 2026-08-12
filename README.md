@@ -12,8 +12,8 @@ Each of the four dials holds its own independent timer.
 | Hold-tap touchscreen | Previous preset |
 | Press dial (short) | Start / pause |
 | Press dial (hold ~0.6s) | Reset to full |
-| Turn | ±10 seconds |
-| Press + turn | ±60 seconds |
+| Turn | Adjust — accelerates from 10s to 1m to 5m a tick |
+| Press + turn | A flat 1 minute a tick |
 
 Turning an idle timer edits that preset's duration and persists it. Turning a running timer nudges only the time left, leaving the preset alone.
 
