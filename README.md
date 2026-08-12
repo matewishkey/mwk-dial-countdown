@@ -7,7 +7,7 @@ A countdown timer for the **Stream Deck +** dials. Tap the touchscreen to start 
 
 Each of the four dials holds its own independent timer.
 
-> Requires a Stream Deck **+** — the dials and touchscreen are specific to that device — and the Stream Deck app 7.1 or newer, on macOS or Windows.
+> Requires a Stream Deck **+** or **+ XL** — the dials and touchscreen are specific to those devices — and the Stream Deck app 7.1 or newer, on macOS or Windows.
 
 ## Install
 
@@ -21,16 +21,18 @@ Download the latest `.streamDeckPlugin` from [Releases](https://github.com/matew
 | Hold touchscreen | Reset to full |
 | Press dial | Next preset |
 | Hold dial | Previous preset |
-| Turn | Adjust — accelerates from 1s to 10s to 1min a tick |
+| Turn | Adjust — accelerates 1s → 10s → 1min → 10min a tick |
 | Press + turn | A flat 1 minute a tick |
 
 The screen owns start/pause and reset because pressing a dial in is a fiddly, two-handed movement next to tapping the screen directly above it; the dial owns preset cycling, which is used far less often.
 
 Turning an **idle** timer edits that preset's duration and saves it. Turning a **running** timer nudges only the time left, leaving the preset alone.
 
+**[How the dial and the presets work →](docs/how-it-works.md)** — the acceleration logic and the preset model, explained.
+
 ## Features
 
-- **Presets** — 5, 20, 30 and 40 minutes out of the box, edited as hours, minutes and seconds. They carry no names: a timer's length is its own label, so the display reads `20m`, or `20m 30s` once nudged off a round number.
+- **Presets** — 5, 20, 30 and 40 minutes out of the box, edited as hours, minutes and seconds, or with the dial itself. They carry no names: a timer's length is its own label, so the display reads `20m`, or `20m 30s` once nudged off a round number.
 - **Countdown ring** that empties as the timer runs, with the clock beside it. A progress bar is available instead.
 - **Seven colour themes**, and an optional logo in the middle of the ring.
 - **A pause glyph** rather than a colour change, so the state is stated outright.

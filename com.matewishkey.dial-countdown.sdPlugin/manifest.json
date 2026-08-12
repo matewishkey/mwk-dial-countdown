@@ -34,7 +34,7 @@
 	"Category": "MWK Dial Countdown",
 	"CategoryIcon": "imgs/plugin/category-icon",
 	"CodePath": "bin/plugin.js",
-	"Description": "Countdown timers for the Stream Deck + dials. Tap the screen to start or pause, hold to reset, press the dial to change preset, and turn to adjust \u2014 the step grows the longer you keep turning.",
+	"Description": "Countdown timers for the Stream Deck + dials. Tap the screen to start or pause, hold to reset, press the dial to change preset, and turn to adjust — the step grows the longer you keep turning.",
 	"Icon": "imgs/plugin/marketplace",
 	"SDKVersion": 3,
 	"Software": {
