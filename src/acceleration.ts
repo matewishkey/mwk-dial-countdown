@@ -2,13 +2,13 @@
  * Turns raw dial rotation into a step size.
  *
  * A dial reports `ticks` per event and batches them when spun quickly, but a single tick's worth of
- * time is a poor unit for both jobs the dial has to do: nudging a timer by a few seconds, and
- * winding one from five minutes to two hours. So the step grows while the user keeps turning, and
- * falls back the moment they stop.
+ * time is a poor unit for both jobs the dial has to do: trimming a timer by a second, and winding
+ * one from five minutes to two hours. So the step grows while the user keeps turning — a second, then
+ * ten, then a minute — and falls back the moment they stop.
  */
 
 /** Seconds per tick at each level of momentum. */
-export const STEPS_SECONDS = [10, 60, 300] as const;
+export const STEPS_SECONDS = [1, 10, 60] as const;
 
 /** Momentum needed to reach each step, index-aligned with {@link STEPS_SECONDS}. */
 const THRESHOLDS = [0, 4, 14] as const;

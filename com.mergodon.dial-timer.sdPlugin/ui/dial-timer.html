@@ -20,7 +20,7 @@
 
 			p.hint {
 				color: #969696;
-				line-height: 1.5;
+				line-height: 1.55;
 				margin: 4px 0 12px;
 			}
 
@@ -30,7 +30,7 @@
 				letter-spacing: 0.06em;
 				color: #808080;
 				font-weight: 600;
-				margin: 16px 0 6px;
+				margin: 16px 0 8px;
 				border-top: 1px solid #333;
 				padding-top: 10px;
 			}
@@ -44,12 +44,49 @@
 			li {
 				display: flex;
 				align-items: center;
-				gap: 6px;
-				padding: 2px 0;
+				gap: 4px;
+				padding: 3px 0;
 			}
 
-			li.active input {
+			li.active .time {
 				border-color: #2d9cdb;
+			}
+
+			.time {
+				display: flex;
+				align-items: center;
+				gap: 2px;
+				border: 1px solid #3d3d3d;
+				border-radius: 3px;
+				background: #2d2d2d;
+				padding: 2px 6px;
+			}
+
+			.time input {
+				width: 34px;
+				background: none;
+				border: 0;
+				color: #d8d8d8;
+				text-align: right;
+				padding: 2px 0;
+				font-variant-numeric: tabular-nums;
+			}
+
+			.time input:focus {
+				outline: none;
+				color: #fff;
+			}
+
+			.time span {
+				color: #6e6e76;
+				font-size: 10px;
+				margin-right: 3px;
+			}
+
+			.total {
+				flex: 1;
+				color: #808080;
+				padding-left: 4px;
 			}
 
 			.row {
@@ -64,9 +101,13 @@
 				color: #b8b8b8;
 			}
 
-			input[type="number"],
-			select {
-				width: 88px;
+			.row.sub label {
+				padding-left: 14px;
+				color: #969696;
+			}
+
+			select,
+			.row input[type="number"] {
 				box-sizing: border-box;
 				background: #2d2d2d;
 				border: 1px solid #3d3d3d;
@@ -75,31 +116,17 @@
 				padding: 4px 6px;
 			}
 
-			li input[type="number"] {
-				width: 70px;
+			select {
+				width: 158px;
+			}
+
+			.row input[type="number"] {
+				width: 62px;
 				text-align: right;
 			}
 
-			select {
-				width: 150px;
-			}
-
-			input[type="color"] {
-				width: 34px;
-				height: 24px;
-				padding: 1px;
-				background: #2d2d2d;
-				border: 1px solid #3d3d3d;
-				border-radius: 3px;
-			}
-
 			input[type="range"] {
-				width: 110px;
-			}
-
-			.unit {
-				color: #969696;
-				flex: 1;
+				width: 104px;
 			}
 
 			button {
@@ -132,14 +159,15 @@
 
 			.muted {
 				color: #808080;
+				word-break: break-all;
 			}
 		</style>
 	</head>
 	<body>
 		<p class="hint">
-			<strong>Tap the screen</strong> to start or pause, <strong>hold the screen</strong> to reset. <strong>Press the
-			dial</strong> for the next preset, hold it for the previous one. Turn to adjust — the step grows from
-			10&nbsp;seconds to a minute, then five, the longer you keep turning. Hold and turn for a flat minute a tick.
+			<strong>Tap the screen</strong> to start or pause, <strong>hold the screen</strong> to reset.
+			<strong>Press the dial</strong> for the next preset, hold it for the previous. Turn to adjust — the step grows
+			from 1&nbsp;second to 10, then a minute, the longer you keep turning. Hold and turn for a flat minute a tick.
 		</p>
 
 		<h2>Presets</h2>
@@ -157,19 +185,6 @@
 			</select>
 		</div>
 		<div class="row">
-			<label for="warnEnabled">Blink near the end</label>
-			<input type="checkbox" id="warnEnabled" />
-		</div>
-		<div class="row">
-			<label for="warnSeconds">Start blinking at</label>
-			<input type="number" id="warnSeconds" min="1" step="1" />
-			<span class="muted">min left</span>
-		</div>
-		<div class="row">
-			<label for="warnColor">Blink colour</label>
-			<input type="color" id="warnColor" />
-		</div>
-		<div class="row">
 			<label for="theme">Colour theme</label>
 			<select id="theme">
 				<option value="default">Default</option>
@@ -181,20 +196,32 @@
 				<option value="mwk">Mate Wish Key</option>
 			</select>
 		</div>
-
+		<div class="row">
+			<label for="showTitle">Show the title</label>
+			<input type="checkbox" id="showTitle" />
+		</div>
 		<div class="row">
 			<label for="showLogo">Logo in the ring</label>
 			<input type="checkbox" id="showLogo" />
+		</div>
+		<div class="row">
+			<label for="showFinishTime">Show finish time</label>
+			<input type="checkbox" id="showFinishTime" />
+		</div>
+		<div class="row">
+			<label for="warnEnabled">Fade near the end</label>
+			<input type="checkbox" id="warnEnabled" />
+		</div>
+		<div class="row sub">
+			<label for="warnMinutes">Start fading at</label>
+			<input type="number" id="warnMinutes" min="1" step="1" />
+			<span class="muted">min left</span>
 		</div>
 
 		<h2>Behaviour</h2>
 		<div class="row">
 			<label for="repeat">Repeat when finished</label>
 			<input type="checkbox" id="repeat" />
-		</div>
-		<div class="row">
-			<label for="showFinishTime">Show finish time</label>
-			<input type="checkbox" id="showFinishTime" />
 		</div>
 
 		<h2>Sound</h2>
@@ -207,7 +234,12 @@
 			<select id="soundId"></select>
 		</div>
 		<div class="row">
-			<label for="customFile">Custom sound file</label>
+			<label for="soundRepeat">Play it</label>
+			<input type="number" id="soundRepeat" min="1" max="10" step="1" />
+			<span class="muted">times</span>
+		</div>
+		<div class="row">
+			<label>Custom sound file</label>
 			<input type="file" id="customFile" accept=".wav,.aiff,.aif,.mp3,.m4a" hidden />
 			<button id="browse" type="button">Choose…</button>
 		</div>
@@ -221,99 +253,163 @@
 		</div>
 
 		<script>
-			const DEFAULTS = [5 * 60, 20 * 60, 30 * 60, 40 * 60];
+			const MAX_PRESET_SECONDS = 24 * 60 * 60;
 
-			const state = {
-				presets: [],
+			/**
+			 * Mirrors `src/settings.ts`. The plugin sanitises everything it is given and writes the
+			 * result back, so this only has to present what it receives — it never invents a shape.
+			 */
+			const DEFAULTS = {
+				presets: [5 * 60, 20 * 60, 30 * 60, 40 * 60],
 				presetIndex: 0,
 				layout: "ring",
-				warnEnabled: false,
-				warnSeconds: 300,
-				warnColor: "#F97316",
 				theme: "default",
-				repeat: false,
-				showFinishTime: false,
 				showLogo: false,
+				showTitle: true,
+				showFinishTime: false,
+				warnEnabled: false,
+				warnSeconds: 60,
+				repeat: false,
 				soundEnabled: true,
-				soundId: "none",
+				soundId: "default",
 				customSoundPath: "",
-				volume: 100
+				volume: 100,
+				soundRepeat: 1
 			};
 
-			const el = (id) => document.getElementById(id);
-
-			/** Last sound list received from the plugin, kept so the list can be redrawn locally. */
+			let state = { ...DEFAULTS };
 			let lastSounds = [];
+
+			const el = (id) => document.getElementById(id);
+			const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
 			/**
 			 * Settings are written on every edit rather than behind a Save button — Marketplace
 			 * guidelines explicitly prohibit one in a property inspector.
 			 */
 			function save() {
-				state.presetIndex = Math.min(state.presetIndex, state.presets.length - 1);
 				SDPIComponents.streamDeckClient.setSettings({ ...state });
 			}
 
-			function renderPresets() {
-				const rows = el("rows");
-				rows.replaceChildren();
+			function toParts(total) {
+				const t = clamp(Math.round(total), 1, MAX_PRESET_SECONDS);
+				return { hours: Math.floor(t / 3600), minutes: Math.floor((t % 3600) / 60), seconds: t % 60 };
+			}
 
-				state.presets.forEach((seconds, index) => {
-					const row = document.createElement("li");
-					if (index === state.presetIndex) {
-						row.className = "active";
-					}
+			function label(total) {
+				const { hours, minutes, seconds } = toParts(total);
+				const parts = [];
+				if (hours) parts.push(`${hours}h`);
+				if (minutes) parts.push(`${minutes}m`);
+				if (seconds || !parts.length) parts.push(`${seconds}s`);
+				return parts.join(" ");
+			}
 
-					const minutes = document.createElement("input");
-					minutes.type = "number";
-					minutes.min = "0.1";
-					minutes.step = "1";
-					// Stored in seconds, edited in minutes — the fraction only shows when there is one.
-					minutes.value = String(Math.round((seconds / 60) * 100) / 100);
-					minutes.addEventListener("change", () => {
-						state.presets[index] = Math.max(1, Math.round((Number(minutes.value) || 0) * 60));
+			/** One preset row: hours, minutes and seconds, since minutes alone express neither end well. */
+			function presetRow(total, index) {
+				const row = document.createElement("li");
+				if (index === state.presetIndex) {
+					row.className = "active";
+				}
+
+				const parts = toParts(total);
+				const box = document.createElement("div");
+				box.className = "time";
+				const fields = {};
+
+				for (const [key, max, suffix] of [
+					["hours", 24, "h"],
+					["minutes", 59, "m"],
+					["seconds", 59, "s"]
+				]) {
+					const input = document.createElement("input");
+					input.type = "number";
+					input.min = "0";
+					input.max = String(max);
+					input.value = String(parts[key]);
+					input.addEventListener("change", commit);
+					fields[key] = input;
+
+					const unit = document.createElement("span");
+					unit.textContent = suffix;
+					box.append(input, unit);
+				}
+
+				const summary = document.createElement("span");
+				summary.className = "total";
+				summary.textContent = label(total);
+
+				function commit() {
+					state.presets[index] = clamp(
+						(Number(fields.hours.value) || 0) * 3600 +
+							(Number(fields.minutes.value) || 0) * 60 +
+							(Number(fields.seconds.value) || 0),
+						1,
+						MAX_PRESET_SECONDS
+					);
+					save();
+					renderPresets();
+				}
+
+				row.append(box, summary);
+
+				if (state.presets.length > 1) {
+					const remove = document.createElement("button");
+					remove.type = "button";
+					remove.className = "remove";
+					remove.textContent = "✕";
+					remove.title = "Remove preset";
+					remove.addEventListener("click", () => {
+						state.presets.splice(index, 1);
+						if (state.presetIndex >= state.presets.length) {
+							state.presetIndex = 0;
+						}
 						save();
 						renderPresets();
 					});
+					row.append(remove);
+				}
 
-					const unit = document.createElement("span");
-					unit.className = "unit";
-					unit.textContent = minutes.value >= 60 ? `minutes (${(minutes.value / 60).toFixed(1)}h)` : "minutes";
+				return row;
+			}
 
-					row.append(minutes, unit);
-
-					if (state.presets.length > 1) {
-						const remove = document.createElement("button");
-						remove.type = "button";
-						remove.className = "remove";
-						remove.textContent = "✕";
-						remove.title = "Remove preset";
-						remove.addEventListener("click", () => {
-							state.presets.splice(index, 1);
-							if (state.presetIndex >= state.presets.length) {
-								state.presetIndex = 0;
-							}
-							save();
-							renderPresets();
-						});
-						row.append(remove);
-					}
-
-					rows.append(row);
-				});
+			function renderPresets() {
+				el("rows").replaceChildren(...state.presets.map(presetRow));
 			}
 
 			function renderControls() {
 				el("layout").value = state.layout;
-				el("warnEnabled").checked = state.warnEnabled;
-				el("warnSeconds").value = String(Math.round(state.warnSeconds / 60));
-				el("warnColor").value = state.warnColor;
 				el("theme").value = state.theme;
-				el("repeat").checked = state.repeat;
-				el("showFinishTime").checked = state.showFinishTime;
+				el("showTitle").checked = state.showTitle;
 				el("showLogo").checked = state.showLogo;
+				el("showFinishTime").checked = state.showFinishTime;
+				el("warnEnabled").checked = state.warnEnabled;
+				el("warnMinutes").value = String(Math.max(1, Math.round(state.warnSeconds / 60)));
+				el("repeat").checked = state.repeat;
 				el("soundEnabled").checked = state.soundEnabled;
+				el("soundRepeat").value = String(state.soundRepeat);
 				el("volume").value = String(state.volume);
+				el("soundId").value = state.soundId;
+			}
+
+			// Every plain control writes the one field it owns, then saves.
+			for (const [id, key, read] of [
+				["layout", "layout", (i) => i.value],
+				["theme", "theme", (i) => i.value],
+				["showTitle", "showTitle", (i) => i.checked],
+				["showLogo", "showLogo", (i) => i.checked],
+				["showFinishTime", "showFinishTime", (i) => i.checked],
+				["warnEnabled", "warnEnabled", (i) => i.checked],
+				["warnMinutes", "warnSeconds", (i) => Math.max(1, Math.round(Number(i.value) || 1)) * 60],
+				["repeat", "repeat", (i) => i.checked],
+				["soundEnabled", "soundEnabled", (i) => i.checked],
+				["soundRepeat", "soundRepeat", (i) => clamp(Math.round(Number(i.value) || 1), 1, 10)],
+				["volume", "volume", (i) => clamp(Number(i.value) || 0, 0, 100)]
+			]) {
+				el(id).addEventListener("change", () => {
+					state[key] = read(el(id));
+					save();
+				});
 			}
 
 			el("add").addEventListener("click", () => {
@@ -322,38 +418,11 @@
 				renderPresets();
 			});
 
-			el("layout").addEventListener("change", () => {
-				state.layout = el("layout").value;
+			el("soundId").addEventListener("change", () => {
+				state.soundId = el("soundId").value;
 				save();
+				checkSound();
 			});
-
-			el("warnEnabled").addEventListener("change", () => {
-				state.warnEnabled = el("warnEnabled").checked;
-				save();
-			});
-
-			el("warnSeconds").addEventListener("change", () => {
-				state.warnSeconds = Math.max(1, Math.round(Number(el("warnSeconds").value) || 5)) * 60;
-				save();
-			});
-
-			el("warnColor").addEventListener("change", () => {
-				state.warnColor = el("warnColor").value;
-				save();
-			});
-
-			for (const [id, key] of [
-				["theme", "theme"],
-				["repeat", "repeat"],
-				["showFinishTime", "showFinishTime"],
-				["showLogo", "showLogo"]
-			]) {
-				el(id).addEventListener("change", () => {
-					const input = el(id);
-					state[key] = input.type === "checkbox" ? input.checked : input.value;
-					save();
-				});
-			}
 
 			/**
 			 * Stream Deck's property inspector exposes the real path on a file input, unlike a browser.
@@ -374,15 +443,13 @@
 				checkSound();
 			});
 
-			el("soundEnabled").addEventListener("change", () => {
-				state.soundEnabled = el("soundEnabled").checked;
-				save();
-			});
-
-			el("soundId").addEventListener("change", () => {
-				state.soundId = el("soundId").value;
-				save();
-				checkSound();
+			el("preview").addEventListener("click", () => {
+				SDPIComponents.streamDeckClient.send("sendToPlugin", {
+					event: "preview",
+					soundId: state.soundId,
+					customSoundPath: state.customSoundPath,
+					volume: state.volume
+				});
 			});
 
 			function checkSound() {
@@ -393,25 +460,7 @@
 				});
 			}
 
-			el("volume").addEventListener("change", () => {
-				state.volume = Number(el("volume").value);
-				save();
-			});
-
-			// The plugin plays the preview: only it can reach the filesystem and the audio player.
-			el("preview").addEventListener("click", () => {
-				SDPIComponents.streamDeckClient.send("sendToPlugin", {
-					event: "preview",
-					soundId: state.soundId,
-					customSoundPath: state.customSoundPath,
-					volume: state.volume
-				});
-			});
-
-			/**
-			 * The sound list is built by the plugin from what is actually on disk, so nothing here
-			 * assumes a file exists. It arrives after the inspector opens.
-			 */
+			/** The sound list is built by the plugin from what is actually on disk. */
 			function renderSounds(sounds) {
 				lastSounds = sounds;
 				const select = el("soundId");
@@ -437,7 +486,6 @@
 					groups.get(sound.group).append(option);
 				}
 
-				// Keep the saved choice if it is still available; otherwise fall back to the first entry.
 				select.value = state.soundId;
 				if (select.selectedIndex < 0) {
 					select.selectedIndex = 0;
@@ -445,43 +493,23 @@
 				}
 			}
 
-			/** Accepts both the current `number[]` shape and the older `{ label, seconds }[]` one. */
-			function readPresets(value) {
-				if (!Array.isArray(value) || value.length === 0) {
-					return [...DEFAULTS];
-				}
-				const seconds = value
-					.map((preset) => (typeof preset === "object" && preset !== null ? preset.seconds : preset))
-					.filter((value) => typeof value === "number" && value > 0)
-					.map((value) => Math.round(value));
-				return seconds.length > 0 ? seconds : [...DEFAULTS];
-			}
-
 			function load(settings) {
-				state.presets = readPresets(settings.presets);
-				state.presetIndex = Number.isInteger(settings.presetIndex) ? settings.presetIndex : 0;
-				state.layout = settings.layout === "bar" ? "bar" : "ring";
-				state.warnEnabled = settings.warnEnabled === true;
-				state.warnSeconds = Number.isFinite(settings.warnSeconds) ? settings.warnSeconds : 300;
-				state.warnColor = settings.warnColor || "#F97316";
-				state.theme = settings.theme || "default";
-				state.repeat = settings.repeat === true;
-				state.showFinishTime = settings.showFinishTime === true;
-				state.showLogo = settings.showLogo === true;
-				state.soundEnabled = settings.soundEnabled !== false;
-				state.soundId = settings.soundId || "none";
-				state.customSoundPath = settings.customSoundPath || "";
-				state.volume = Number.isFinite(settings.volume) ? settings.volume : 100;
+				state = { ...DEFAULTS, ...(settings ?? {}) };
 				renderPresets();
 				renderControls();
 			}
 
-			SDPIComponents.streamDeckClient.getSettings().then(({ settings }) => load(settings ?? {}));
+			SDPIComponents.streamDeckClient.getSettings().then(({ settings }) => {
+				load(settings);
+				checkSound();
+			});
 
-			SDPIComponents.streamDeckClient.didReceiveSettings.subscribe(({ payload }) => load(payload?.settings ?? {}));
+			// The plugin saves settings itself when the dial is turned, which echoes back here.
+			SDPIComponents.streamDeckClient.didReceiveSettings.subscribe(({ payload }) => load(payload?.settings));
 
 			SDPIComponents.streamDeckClient.sendToPropertyInspector.subscribe((message) => {
 				const payload = message?.payload ?? message;
+
 				if (payload?.event === "sounds") {
 					renderSounds(payload.sounds ?? []);
 					return;

@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 
 import { asDataUri, DEFAULT_PALETTE, renderRing, ringColour, themeFor, THEMES } from "../src/render.ts";
 
-const base = { status: "running" as const, warning: false, palette: DEFAULT_PALETTE };
+const base = { status: "running" as const, dimmed: false, palette: DEFAULT_PALETTE };
 
 describe("renderRing", () => {
 	it("produces a well-formed svg", () => {
@@ -47,23 +47,26 @@ describe("renderRing", () => {
 describe("ringColour", () => {
 	it("maps each state to its own colour", () => {
 		assert.equal(ringColour({ ...base, remainingFraction: 1, status: "running" }), DEFAULT_PALETTE.running);
-		assert.equal(ringColour({ ...base, remainingFraction: 1, status: "paused" }), DEFAULT_PALETTE.paused);
 		assert.equal(ringColour({ ...base, remainingFraction: 1, status: "idle" }), DEFAULT_PALETTE.idle);
 		assert.equal(ringColour({ ...base, remainingFraction: 0, status: "elapsed" }), DEFAULT_PALETTE.elapsed);
 	});
 
-	it("lets the warning colour win over running, but not over elapsed", () => {
-		assert.equal(ringColour({ ...base, remainingFraction: 0.1, warning: true }), DEFAULT_PALETTE.warn);
+	it("does not recolour on pause — the glyph states that, not the colour", () => {
 		assert.equal(
-			ringColour({ ...base, remainingFraction: 0, status: "elapsed", warning: true }),
-			DEFAULT_PALETTE.elapsed,
-			"a finished timer is finished, whatever the blink is doing"
+			ringColour({ ...base, remainingFraction: 0.5, status: "paused" }),
+			DEFAULT_PALETTE.running,
+			"pausing must not change the ring's colour"
 		);
 	});
 
-	it("honours a custom warning colour", () => {
-		const palette = { ...DEFAULT_PALETTE, warn: "#123456" };
-		assert.equal(ringColour({ remainingFraction: 0.1, status: "running", warning: true, palette }), "#123456");
+	it("keeps the state's own colour while blinking, and only dims it", () => {
+		const lit = renderRing({ ...base, remainingFraction: 0.1 });
+		const dim = renderRing({ ...base, remainingFraction: 0.1, dimmed: true });
+
+		assert.ok(lit.includes(DEFAULT_PALETTE.running), "precondition: the lit half is the running colour");
+		assert.ok(dim.includes(DEFAULT_PALETTE.running), "the dim half must be the same colour, not a different one");
+		assert.notEqual(lit, dim, "and it must actually differ");
+		assert.match(dim, /opacity="0\.3"/, "the difference is opacity");
 	});
 });
 
@@ -82,7 +85,7 @@ describe("themes", () => {
 		assert.ok(ids.length >= 5, `expected a handful of themes, got ${ids.length}`);
 
 		for (const [id, palette] of Object.entries(THEMES)) {
-			for (const role of ["running", "paused", "elapsed", "idle", "warn", "track"]) {
+			for (const role of ["running", "elapsed", "idle", "track"]) {
 				assert.match(palette[role], /^#[0-9A-Fa-f]{6}$/, `${id}.${role} is not a hex colour`);
 			}
 		}
@@ -90,7 +93,7 @@ describe("themes", () => {
 
 	it("keeps each theme's states visually distinct from one another", () => {
 		for (const [id, palette] of Object.entries(THEMES)) {
-			const states = [palette.running, palette.paused, palette.elapsed, palette.idle];
+			const states = [palette.running, palette.elapsed, palette.idle];
 			assert.equal(new Set(states).size, states.length, `${id} reuses a colour across states`);
 			assert.ok(!states.includes(palette.track), `${id} uses its track colour for a state`);
 		}
@@ -100,5 +103,27 @@ describe("themes", () => {
 		assert.equal(themeFor(undefined), THEMES.default);
 		assert.equal(themeFor("nope"), THEMES.default);
 		assert.equal(themeFor("ocean"), THEMES.ocean);
+	});
+});
+
+describe("the centre of the ring", () => {
+	it("shows a pause glyph when paused, so the state is stated and not merely coloured", () => {
+		const svg = renderRing({ ...base, remainingFraction: 0.5, status: "paused" });
+		assert.equal(svg.match(/<rect /g)?.length, 2, "a pause glyph is two bars");
+	});
+
+	it("shows the pause glyph even when the logo is switched off", () => {
+		const svg = renderRing({ ...base, remainingFraction: 0.5, status: "paused", logo: false });
+		assert.ok(svg.includes("<rect "));
+	});
+
+	it("gives way to the pause glyph rather than drawing the logo too", () => {
+		const svg = renderRing({ ...base, remainingFraction: 0.5, status: "paused", logo: true });
+		assert.ok(!svg.includes("<path d=\"M0 100"), "the mark must not be drawn behind the pause glyph");
+	});
+
+	it("draws the logo only when asked, and only when not paused", () => {
+		assert.ok(renderRing({ ...base, remainingFraction: 0.5, logo: true }).includes("M0 100"));
+		assert.ok(!renderRing({ ...base, remainingFraction: 0.5, logo: false }).includes("M0 100"));
 	});
 });

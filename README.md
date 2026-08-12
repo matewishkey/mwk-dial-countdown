@@ -14,7 +14,7 @@ Each of the four dials holds its own independent timer.
 | Hold-tap touchscreen | Reset to full |
 | Press dial (short) | Next preset |
 | Press dial (hold ~0.6s) | Previous preset |
-| Turn | Adjust — accelerates from 10s to 1m to 5m a tick |
+| Turn | Adjust — accelerates from 1s to 10s to 1min a tick |
 | Press + turn | A flat 1 minute a tick |
 
 Turning an idle timer edits that preset's duration and persists it. Turning a running timer nudges only the time left, leaving the preset alone.
@@ -67,9 +67,13 @@ npx streamdeck pack com.mergodon.dial-timer.sdPlugin
 
 `src/render.ts` carries a `mwk` theme built from the Mate Wish Key dark-mode tokens, and can draw the brand mark inside the ring from the published `mwk-mark.svg` path data — kept as bare paths so it scales and takes the ring's colour rather than being a fixed-colour image. Plugin icons are the brand's own block and mark; the action-list icons use the white variant, as Elgato requires a monochrome white glyph on transparent.
 
+## Settings
+
+`src/settings.ts` owns the settings shape and is the only place they are read. Stream Deck keeps an action's settings across an uninstall, so every build is handed settings written by an older one; `normaliseSettings` therefore rebuilds a known-good object from whatever arrived rather than trusting it — unrecognised keys discarded, numbers clamped, a broken preset index repaired, and the legacy `{ label, seconds }` preset shape unwrapped. The result is written back on first appearance, so a fresh install has a complete valid set on disk.
+
 ## Themes, repeat and finish time
 
-Seven palettes live in `src/render.ts`; a theme is six colours (idle, running, paused, elapsed, warn, track) and an unknown id falls back to the default rather than throwing. Auto-repeat restarts the moment the alert fires, with no pause, because a gap between cycles is exactly what an interval timer must not have; laps are counted and shown. The finish time is only rendered while running — on a stopped timer it would be a prediction that quietly goes stale.
+Seven palettes live in `src/render.ts`; a theme is four colours (idle, running, elapsed, track) and an unknown id falls back to the default rather than throwing. There is no paused colour: pausing draws a glyph in the middle of the ring instead, since stating the same fact twice only invites the two to disagree. The warning "blink" is the state's own colour shaded and unshaded, and its window is capped at half the preset's length so a warning can never cover a whole timer. Auto-repeat restarts the moment the alert fires, with no pause, because a gap between cycles is exactly what an interval timer must not have; laps are counted and shown. The finish time is only rendered while running — on a stopped timer it would be a prediction that quietly goes stale.
 
 The touchscreen label shows the *preset's* length rather than the live duration, so nudging a running timer does not rewrite where it started.
 
@@ -82,7 +86,7 @@ The touchscreen label shows the *preset's* length rather than the live duration,
 
 ## Acceleration
 
-Turning accelerates: 10 seconds per tick for a nudge, a minute once the dial is being wound, five minutes when it is wound hard. Momentum is built from tick count rather than event count, so a single fast flick escalates as readily as a sustained turn, and any pause longer than `IDLE_RESET_MS` drops straight back to fine control. Holding the dial is a flat minute a tick and deliberately does not compound with momentum.
+Turning accelerates: one second per tick for a nudge, ten once the dial is being wound, a minute when it is wound hard. Momentum is built from tick count rather than event count, so a single fast flick escalates as readily as a sustained turn, and any pause longer than `IDLE_RESET_MS` drops straight back to fine control. Holding the dial is a flat minute a tick and deliberately does not compound with momentum.
 
 ## Sound
 

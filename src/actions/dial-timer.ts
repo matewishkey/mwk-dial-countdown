@@ -15,8 +15,11 @@ import streamDeck, {
 
 import { Accelerator } from "../acceleration";
 import { asDataUri, renderRing, ringColour, themeFor } from "../render";
-import { CUSTOM_SOUND, listSounds, NO_SOUND, playSound, soundExists } from "../sound";
-import { DEFAULT_PRESETS, formatClockTime, formatDuration, formatPresetLabel, Timer, type Preset } from "../timer";
+import { listSounds, playSound, resolveSound, soundExists } from "../sound";
+import { normaliseSettings, NO_SOUND, type DialTimerSettings, type Preset } from "../settings";
+import { formatClockTime, formatDuration, formatPresetLabel, Timer } from "../timer";
+
+export type { DialTimerSettings };
 
 /** How long the dial must be held before it counts as a reset rather than a start/pause. */
 const LONG_PRESS_MS = 600;
@@ -30,32 +33,17 @@ const RENDER_INTERVAL_MS = 250;
 /** Blink period while inside the warning window — two render frames on, two off. */
 const BLINK_MS = 500;
 
+/**
+ * Font sizes for the big clock. `1:10:10` at the layout's default 30px overruns its 96px box, so the
+ * size steps down with the length of the string rather than being fixed.
+ */
+const VALUE_FONT_SIZES: Record<number, number> = { 4: 32, 5: 30, 6: 25, 7: 22, 8: 20 };
+const VALUE_FONT_MIN = 18;
+
 /** Settings changes are batched, so spinning the dial does not write to disk on every tick. */
 const SETTINGS_DEBOUNCE_MS = 400;
 
 const DEFAULT_WARN_SECONDS = 300;
-
-export type DialTimerSettings = {
-	presets?: Preset[];
-	presetIndex?: number;
-	/** `"ring"` is the countdown ring; `"bar"` falls back to Stream Deck's built-in bar layout. */
-	layout?: "ring" | "bar";
-	warnEnabled?: boolean;
-	warnSeconds?: number;
-	warnColor?: string;
-	theme?: string;
-	soundEnabled?: boolean;
-	soundId?: string;
-	/** Path to a user-supplied sound, used when `soundId` is {@link CUSTOM_SOUND}. */
-	customSoundPath?: string;
-	volume?: number;
-	/** Restart automatically when the timer finishes. */
-	repeat?: boolean;
-	/** Show the wall-clock time the timer will finish at. */
-	showFinishTime?: boolean;
-	/** Draw the Mate Wish Key mark inside the ring. */
-	showLogo?: boolean;
-};
 
 /** Everything that lives only for as long as the action is on screen. */
 type Instance = {
@@ -90,9 +78,11 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 			return;
 		}
 
-		const settings = ev.payload.settings ?? {};
-		const presets = normalisePresets(settings.presets);
-		const presetIndex = clampIndex(settings.presetIndex, presets.length);
+		// Settings arriving from an older build are rebuilt rather than trusted, then written straight
+		// back, so a fresh install ends up with a complete, valid set on disk instead of nothing.
+		const settings = normaliseSettings(ev.payload.settings);
+		const presets = settings.presets;
+		const presetIndex = settings.presetIndex;
 
 		const instance: Instance = {
 			action: ev.action,
@@ -115,6 +105,12 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 		instance.renderHandle = setInterval(() => this.#render(instance), RENDER_INTERVAL_MS);
 		this.#applyLayout(instance);
 		this.#render(instance, true);
+
+		if (!deepEqual(ev.payload.settings, settings)) {
+			instance.action
+				.setSettings(settings)
+				.catch((err) => streamDeck.logger.error("Failed to persist normalised settings", err));
+		}
 	}
 
 	/**
@@ -139,9 +135,9 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 			return;
 		}
 
-		const settings = ev.payload.settings ?? {};
-		const presets = normalisePresets(settings.presets);
-		const presetIndex = clampIndex(settings.presetIndex, presets.length);
+		const settings = normaliseSettings(ev.payload.settings);
+		const presets = settings.presets;
+		const presetIndex = settings.presetIndex;
 
 		// Only reload the clock when the selected duration actually changed — otherwise adjusting the
 		// volume slider would reset a running timer.
@@ -323,8 +319,8 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 
 		if (status === "elapsed" && !instance.alerted) {
 			instance.alerted = true;
-			if (settings.soundEnabled !== false) {
-				playSound(resolveSound(settings), settings.volume ?? 100);
+			if (settings.soundEnabled) {
+				playSound(resolveSound(settings), settings.volume, settings.soundRepeat);
 			}
 
 			// Auto-repeat restarts immediately rather than after a pause: the alert has already fired,
@@ -344,27 +340,24 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 		const presetSeconds = instance.presets[instance.presetIndex];
 		const label = formatPresetLabel(presetSeconds * 1000);
 		const value = formatDuration(remainingMs);
-		const warning = this.#isWarning(instance, remainingMs, status);
+		const dimmed = this.#isBlinkDim(instance, remainingMs, status);
 		const finish = this.#finishText(instance, remainingMs, status);
+		const title = settings.showTitle ? `${label}${suffixFor(instance, status)}` : "";
 
-		const signature = `${instance.lastLayout}|${label}|${value}|${status}|${warning}|${finish}|${instance.cycles}|${settings.showLogo}|${settings.theme}`;
+		const signature = `${instance.lastLayout}|${title}|${value}|${status}|${dimmed}|${finish}|${settings.showLogo}|${settings.theme}`;
 		if (!force && signature === instance.lastFeedback) {
 			return;
 		}
 		instance.lastFeedback = signature;
 
-		const theme = themeFor(settings.theme);
-		const palette = { ...theme, warn: settings.warnColor || theme.warn };
+		const palette = themeFor(settings.theme);
 		const remainingFraction = remainingMs / Math.max(1, timer.durationMs);
-		const colour = ringColour({ remainingFraction, status, warning, palette });
-
-		// A repeating timer counts its laps; a finished one says so.
-		const suffix = instance.cycles > 0 ? ` · ×${instance.cycles}` : status === "elapsed" ? " · done" : "";
+		const colour = ringColour({ remainingFraction, status, dimmed, palette });
 
 		const feedback: FeedbackPayload =
 			instance.lastLayout === "$B1"
 				? {
-						title: `${label}${suffix}`,
+						title,
 						value,
 						indicator: {
 							value: Math.round((1 - remainingFraction) * 100),
@@ -373,9 +366,10 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 						}
 					}
 				: {
-						ring: asDataUri(renderRing({ remainingFraction, status, warning, palette, logo: settings.showLogo === true })),
-						value,
-						label: `${label}${suffix}`,
+						ring: asDataUri(renderRing({ remainingFraction, status, dimmed, palette, logo: settings.showLogo })),
+						// The clock is sent as a full item definition so its size can shrink for `1:10:10`.
+						value: { value, font: { size: valueFontSize(value) } },
+						label: title,
 						finish
 					};
 
@@ -387,27 +381,30 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 	 * would be a prediction that quietly goes stale, which is worse than showing nothing.
 	 */
 	#finishText(instance: Instance, remainingMs: number, status: string): string {
-		if (instance.settings.showFinishTime !== true || status !== "running") {
+		if (!instance.settings.showFinishTime || status !== "running") {
 			return "";
 		}
 		return `ends ${formatClockTime(Date.now() + remainingMs)}`;
 	}
 
 	/**
-	 * True while the timer is inside its warning window *and* the blink is in its visible half. The
-	 * phase comes from the wall clock rather than a counter, so it stays even when frames are dropped.
+	 * True on the dim half of the warning blink.
+	 *
+	 * The window is capped at half the preset's own length: a five minute warning on a five minute
+	 * timer would blink from the moment it started, which is what made adjusting the clock look like
+	 * it had triggered the warning.
 	 */
-	#isWarning(instance: Instance, remainingMs: number, status: string): boolean {
-		if (instance.settings.warnEnabled !== true || status !== "running") {
+	#isBlinkDim(instance: Instance, remainingMs: number, status: string): boolean {
+		if (!instance.settings.warnEnabled || status !== "running") {
 			return false;
 		}
 
-		const windowMs = (instance.settings.warnSeconds ?? DEFAULT_WARN_SECONDS) * 1000;
+		const windowMs = Math.min(instance.settings.warnSeconds * 1000, instance.timer.durationMs / 2);
 		if (remainingMs > windowMs) {
 			return false;
 		}
 
-		return Math.floor(Date.now() / BLINK_MS) % 2 === 0;
+		return Math.floor(Date.now() / BLINK_MS) % 2 === 1;
 	}
 
 	#cancelLongPress(instance: Instance): void {
@@ -430,6 +427,24 @@ export class DialTimer extends SingletonAction<DialTimerSettings> {
 	}
 }
 
+/** A repeating timer counts its laps; a finished one says so. */
+function suffixFor(instance: Instance, status: string): string {
+	if (instance.cycles > 0) {
+		return ` · ×${instance.cycles}`;
+	}
+	return status === "elapsed" ? " · done" : "";
+}
+
+/** Shrinks the clock as it gets longer, so `1:10:10` fits the same box as `5:00`. */
+function valueFontSize(value: string): number {
+	return VALUE_FONT_SIZES[value.length] ?? VALUE_FONT_MIN;
+}
+
+/** Structural comparison, used only to avoid a pointless settings write on every appearance. */
+function deepEqual(a: unknown, b: unknown): boolean {
+	return JSON.stringify(a) === JSON.stringify(b);
+}
+
 function clearTimers(instance: Instance): void {
 	if (instance.renderHandle !== null) {
 		clearInterval(instance.renderHandle);
@@ -444,34 +459,3 @@ function clearTimers(instance: Instance): void {
 	instance.saveHandle = null;
 }
 
-/**
- * Guards against a hand-edited or empty preset list arriving from settings. Also tolerates the
- * `{ label, seconds }` shape presets used to have, so an existing dial keeps its durations.
- */
-function normalisePresets(presets: unknown): Preset[] {
-	if (!Array.isArray(presets) || presets.length === 0) {
-		return [...DEFAULT_PRESETS];
-	}
-
-	const valid = presets
-		.map((preset) => (typeof preset === "object" && preset !== null ? (preset as { seconds?: unknown }).seconds : preset))
-		.filter((seconds): seconds is number => typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0)
-		.map((seconds) => Math.round(seconds));
-
-	return valid.length > 0 ? valid : [...DEFAULT_PRESETS];
-}
-
-/** Turns the sound settings into the single path that will actually be played. */
-function resolveSound(settings: { soundId?: string; customSoundPath?: string }): string {
-	if (settings.soundId === CUSTOM_SOUND) {
-		return settings.customSoundPath ?? NO_SOUND;
-	}
-	return settings.soundId ?? NO_SOUND;
-}
-
-function clampIndex(index: number | undefined, length: number): number {
-	if (typeof index !== "number" || !Number.isInteger(index) || index < 0 || index >= length) {
-		return 0;
-	}
-	return index;
-}

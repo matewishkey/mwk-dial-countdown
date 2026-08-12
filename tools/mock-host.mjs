@@ -68,7 +68,7 @@ const INFO = {
 };
 
 /** Latest touchscreen state, as reported by the plugin's setFeedback calls. */
-const screen = { title: "—", value: "—", label: "", finish: "", indicator: 0, ring: 0, colour: "", layout: "(default)" };
+const screen = { title: "—", value: "—", label: "", finish: "", indicator: 0, ring: 0, colour: "", font: 0, opacity: 1, glyph: "", layout: "(default)" };
 let settings = {};
 let socket = null;
 
@@ -129,9 +129,13 @@ function handlePluginMessage(message) {
 		case "setFeedback": {
 			const payload = message.payload ?? {};
 			if (payload.title !== undefined) screen.title = payload.title;
-			if (payload.value !== undefined) screen.value = payload.value;
+			if (typeof payload.value === "string") screen.value = payload.value;
 			if (payload.label !== undefined) screen.label = payload.label;
 			if (payload.finish !== undefined) screen.finish = payload.finish;
+			if (payload.value !== undefined && typeof payload.value === "object") {
+				screen.value = payload.value.value ?? screen.value;
+				screen.font = payload.value.font?.size ?? screen.font;
+			}
 			if (payload.indicator !== undefined) {
 				screen.indicator = typeof payload.indicator === "object" ? payload.indicator.value : payload.indicator;
 				screen.colour = payload.indicator?.bar_fill_c ?? screen.colour;
@@ -184,6 +188,10 @@ function readRing(dataUri) {
 	if (colour !== null) {
 		screen.colour = colour[1];
 	}
+
+	const opacity = svg.match(/stroke-linecap="round" fill="none" opacity="([\d.]+)"/);
+	screen.opacity = opacity === null ? 1 : Number(opacity[1]);
+	screen.glyph = svg.includes("<rect ") ? "pause" : svg.includes("M0 100") ? "logo" : "";
 
 	// Two arcs is the full-circle special case; no path at all means nothing is drawn.
 	const arcs = svg.match(/A /g)?.length ?? 0;
@@ -290,74 +298,69 @@ const wait = (ms) => new Promise((done) => setTimeout(done, ms));
  */
 async function runDemo() {
 	const steps = [
-		["default preset on appear", async () => {}],
-		["press dial → next preset (20m)", async () => press(80)],
-		["turn right ×3 → +30s", async () => gestures.rotate(3)],
-		["press+turn right → +60s", async () => gestures.rotate(1, true)],
-		["tap screen → running", async () => gestures.touch(false)],
-		["…2s later", async () => wait(2000)],
-		["tap screen → paused (amber)", async () => gestures.touch(false)],
-		["…1s later, still paused", async () => wait(1000)],
-		["hold screen → reset to full, idle (blue)", async () => gestures.touch(true)],
-		["hold dial → previous preset (5m)", async () => press(900)],
-		["press dial ×2 → 30m", async () => {
-			await press(80);
-			await wait(200);
-			await press(80);
-		}],
-		["settled — persisted settings catch up", async () => wait(600)],
+		["fresh install → defaults, and they get written back", async () => {}],
+		["press dial → 20m", async () => press(80)],
 
-		// Acceleration: the same wrist movement, done slowly and then quickly.
-		["8 slow ticks (400ms apart) → stays at 10s each, +1m20s", async () => spin(8, 1, 400)],
-		["reset before the fast run", async () => gestures.touch(true)],
-		["8 fast ticks (60ms apart) → accelerates into minutes", async () => spin(8, 1, 60)],
-		["a hard spin → reaches hours in one gesture", async () => spin(10, 3, 50)],
+		// Cadence: a single click is now one second, and winding reaches a minute a tick.
+		["one click → +1s", async () => gestures.rotate(1)],
+		["8 slow clicks → +8s, still fine control", async () => spin(8, 1, 400)],
+		["a hard spin → minutes a tick, hours reachable", async () => spin(10, 3, 50)],
 
-		// The warning window, driven from the property inspector's settings. A 10 minute preset with a
-		// 15 minute warning threshold is inside the window the moment it starts.
-		["blink on: 10m preset, warn under 15m", async () => {
-			applySettings({ presets: [600], presetIndex: 0, warnEnabled: true, warnSeconds: 900, warnColor: "#F97316" });
+		// The long clock has to fit its box.
+		["set 1:10:10 → font shrinks to fit", async () => {
+			applySettings({ presets: [4210], presetIndex: 0 });
 			await wait(300);
 		}],
+		["…running", async () => {
+			gestures.touch(false);
+			await wait(300);
+		}],
+
+		// Pause is now stated by a glyph, not by colour alone.
+		["tap screen → paused, pause glyph in the ring", async () => gestures.touch(false)],
+		["tap screen → running again", async () => gestures.touch(false)],
+
+		// The bug: adjusting the clock used to look like it triggered the warning.
+		["fade on at 5 min, on a 5 min preset — must NOT fade immediately", async () => {
+			applySettings({ presets: [300], presetIndex: 0, warnEnabled: true, warnSeconds: 300 });
+			await wait(300);
+			gestures.touch(false);
+			await wait(600);
+		}],
 		[
-			"start → ring blinks (one frame cannot prove this, so the colour is sampled 8×)",
+			"fade at 20s on a 20s preset, run into the window → shades, one colour",
 			async () => {
+				applySettings({ presets: [20], presetIndex: 0, warnEnabled: true, warnSeconds: 20 });
+				await wait(300);
 				gestures.touch(false);
+				await wait(11_000);
+
 				const seen = [];
 				for (let i = 0; i < 8; i++) {
 					await wait(260);
-					seen.push(screen.colour);
+					seen.push(`${screen.colour}@${screen.opacity}`);
 				}
-				const distinct = new Set(seen);
+				const colours = new Set(seen.map((s) => s.split("@")[0]));
+				const opacities = new Set(seen.map((s) => s.split("@")[1]));
 				console.log(`\n   sampled: ${seen.join(" ")}`);
-				console.log(`   ${distinct.size > 1 ? "✓ alternating — it is blinking" : "✗ static — not blinking"}`);
+				console.log(`   ${colours.size === 1 ? "\u2713 one colour throughout" : "\u2717 colour changed"}`);
+				console.log(`   ${opacities.size > 1 ? "\u2713 shaded and unshaded" : "\u2717 not fading"}`);
 			}
 		],
 
-		// Wind the duration down to the 1s floor so the elapsed path can be shown without waiting.
-		["reset, then turn left ×60 → clamped to the 1s minimum", async () => {
-			gestures.touch(true);
-			await wait(500);
-			gestures.rotate(-60);
-		}],
-		["tap screen, then let it run out → done (red), alert fires", async () => {
-			gestures.touch(false);
-			await wait(1900);
+		// Title off, logo on, brand theme.
+		["title hidden, logo on, brand theme", async () => {
+			applySettings({ presets: [600], presetIndex: 0, warnEnabled: false, showTitle: false, showLogo: true, theme: "mwk" });
+			await wait(300);
 		}],
 
-		// Finish time and auto-repeat.
-		["finish time on, 10m preset, started", async () => {
-			applySettings({ presets: [600], presetIndex: 0, warnEnabled: false, showFinishTime: true, theme: "ocean" });
-			await wait(300);
-			gestures.touch(false);
-		}],
-		["repeat on, 2s preset → runs out and restarts itself", async () => {
-			applySettings({ presets: [2], presetIndex: 0, repeat: true, showFinishTime: false, theme: "mwk", showLogo: true });
+		// Sound repeats. On Linux no player exists, so this proves it does not crash.
+		["alarm set to play 3 times, 2s timer → runs out", async () => {
+			applySettings({ presets: [2], presetIndex: 0, soundEnabled: true, soundRepeat: 3, showTitle: true });
 			await wait(300);
 			gestures.touch(false);
 			await wait(2600);
-		}],
-		["…and keeps going, counting laps", async () => wait(2200)]
+		}]
 	];
 
 	for (const [label, run] of steps) {
@@ -443,7 +446,10 @@ function screenLines() {
 		`  │ ${bar} │`,
 		"  └────────────────────────────────────┘",
 		`  │ ${pad(screen.finish, 34)} │`,
-		dim(`   ${isRing ? "ring" : "bar "} ${String(percent).padStart(3)}%   colour ${screen.colour || "—"}   layout ${screen.layout}`),
+		dim(
+			`   ${isRing ? "ring" : "bar "} ${String(percent).padStart(3)}%   colour ${screen.colour || "—"}` +
+				`   opacity ${screen.opacity}   font ${screen.font || "—"}   centre ${screen.glyph || "—"}`
+		),
 		dim(`   presets: ${presets || "(not yet saved)"}`)
 	];
 }

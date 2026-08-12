@@ -5,15 +5,6 @@
 
 export type TimerStatus = "idle" | "running" | "paused" | "elapsed";
 
-/**
- * A preset is only a duration in seconds. There is no name: a timer's length is its own label, and
- * asking someone to christen "20 minutes" is a chore, not a feature.
- */
-export type Preset = number;
-
-/** Presets a fresh action instance starts with, in seconds. */
-export const DEFAULT_PRESETS: Preset[] = [5 * 60, 20 * 60, 30 * 60, 40 * 60];
-
 /** Shortest and longest duration a preset can be adjusted to. */
 export const MIN_DURATION_MS = 1_000;
 export const MAX_DURATION_MS = 24 * 60 * 60 * 1_000;

@@ -11,17 +11,20 @@ import { spawn } from "node:child_process";
 import { existsSync, readdirSync } from "node:fs";
 import { basename, extname, join, resolve } from "node:path";
 
+import { CUSTOM_SOUND, DEFAULT_SOUND, NO_SOUND } from "./settings";
+
 export type SoundOption = {
-	/** Absolute path, or `"none"`. */
+	/** Absolute path, or one of the sentinels from settings. */
 	id: string;
 	label: string;
 	group: "Bundled" | "System";
 };
 
-export const NO_SOUND = "none";
+/** The sound a fresh install uses, and the fallback when a chosen one has gone missing. */
+const DEFAULT_SOUND_FILE = "chime.wav";
 
-/** Sentinel for "use the file the user picked", whose path lives separately in settings. */
-export const CUSTOM_SOUND = "custom";
+/** Gap between repeats, long enough that two plays do not run into one another. */
+const REPEAT_GAP_MS = 900;
 
 /** Sounds shipped inside the plugin; always present, on every platform. */
 const BUNDLED_DIR = resolve(process.cwd(), "sounds");
@@ -37,9 +40,32 @@ const SYSTEM_DIRS: Partial<Record<NodeJS.Platform, string[]>> = {
 
 const PLAYABLE = new Set([".wav", ".aiff", ".aif", ".mp3", ".m4a"]);
 
+/** Absolute path of the bundled default, whatever the plugin folder turns out to be. */
+export function defaultSoundPath(): string {
+	return join(BUNDLED_DIR, DEFAULT_SOUND_FILE);
+}
+
+/**
+ * Turns the sound settings into the single path that will actually be played. The sentinels are
+ * resolved here rather than stored, since a bundled sound's path is only known at runtime and a
+ * stored absolute path would break the moment the plugin moved.
+ */
+export function resolveSound(settings: { soundId?: string; customSoundPath?: string }): string {
+	if (settings.soundId === CUSTOM_SOUND) {
+		return settings.customSoundPath || NO_SOUND;
+	}
+	if (settings.soundId === DEFAULT_SOUND || settings.soundId === undefined) {
+		return defaultSoundPath();
+	}
+	return settings.soundId;
+}
+
 /** Everything the user can pick from, ready for the property inspector. */
 export function listSounds(): SoundOption[] {
-	const options: SoundOption[] = [{ id: NO_SOUND, label: "No sound", group: "Bundled" }];
+	const options: SoundOption[] = [
+		{ id: NO_SOUND, label: "No sound", group: "Bundled" },
+		{ id: DEFAULT_SOUND, label: "Default (Chime)", group: "Bundled" }
+	];
 
 	for (const [dir, group] of [
 		[BUNDLED_DIR, "Bundled"] as const,
@@ -89,9 +115,10 @@ export function soundExists(path: string | undefined): boolean {
  *
  * @param soundId Absolute path to a sound file, or {@link NO_SOUND}.
  * @param volumePercent 0-100, as set in the property inspector.
+ * @param repeat How many times to play it, spaced out so the plays do not overlap.
  * @returns `true` if a player was launched.
  */
-export function playSound(soundId: string | undefined, volumePercent = 100): boolean {
+export function playSound(soundId: string | undefined, volumePercent = 100, repeat = 1): boolean {
 	if (!soundId || soundId === NO_SOUND || !existsSync(soundId)) {
 		return false;
 	}
@@ -106,6 +133,22 @@ export function playSound(soundId: string | undefined, volumePercent = 100): boo
 		return false;
 	}
 
+	const plays = Math.max(1, Math.min(10, Math.round(repeat)));
+	for (let i = 0; i < plays; i++) {
+		// Later repeats are scheduled rather than queued, so a long sound cannot stack on itself and
+		// so the timer never waits on audio finishing.
+		if (i === 0) {
+			if (!launch(command)) {
+				return false;
+			}
+		} else {
+			setTimeout(() => launch(command), i * REPEAT_GAP_MS).unref?.();
+		}
+	}
+	return true;
+}
+
+function launch(command: { file: string; args: string[] }): boolean {
 	try {
 		const child = spawn(command.file, command.args, { stdio: "ignore", detached: true });
 		child.on("error", () => {
