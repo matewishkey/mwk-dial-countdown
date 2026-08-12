@@ -22,7 +22,7 @@ import { WebSocketServer } from "ws";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PLUGIN_UUID = "com.matewishkey.dial-countdown";
-const ACTION_UUID = `${PLUGIN_UUID}.timer`;
+const ACTION_UUID = `${PLUGIN_UUID}.countdown`;
 const PLUGIN_DIR = resolve(ROOT, `${PLUGIN_UUID}.sdPlugin`);
 const PLUGIN_ENTRY = resolve(PLUGIN_DIR, "bin/plugin.js");
 
