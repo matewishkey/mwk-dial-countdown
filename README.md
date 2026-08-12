@@ -96,10 +96,10 @@ A few decisions worth knowing before changing things:
 
 Issues and pull requests are welcome. Please run `npm test` and `npx streamdeck validate` before opening one.
 
-If you fork this into your own plugin, change the UUID in `manifest.json` and replace the brand assets — see LICENSE.
+If you fork this into your own plugin, change the UUID in `manifest.json` and replace the brand assets — see [NOTICE.md](NOTICE.md).
 
 ## Licence
 
 [MIT](LICENSE) — free to use, modify and distribute.
 
-The Mate Wish Key name, logo and brand colours are trademarks and are **not** covered by the MIT licence; `ui/sdpi-components.js` is Elgato's property inspector library, vendored for offline use under its own licence. Both are spelled out in [LICENSE](LICENSE).
+The Mate Wish Key name, logo and brand colours are trademarks and are **not** covered by the MIT licence; `ui/sdpi-components.js` is Elgato's property inspector library, vendored for offline use under its own licence. Both are spelled out in [NOTICE.md](NOTICE.md).
