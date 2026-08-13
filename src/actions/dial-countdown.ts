@@ -145,7 +145,14 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 		}
 	}
 
-	/** Switches the touchscreen between the ring layout and the built-in bar, when the choice changes. */
+	/**
+	 * Switches the touchscreen between the ring layout and the built-in bar, when the choice changes.
+	 *
+	 * A layout switch wipes the screen back to the layout's own defaults and discards feedback still
+	 * in flight alongside it, so the frame that follows this may well not land. That is survivable
+	 * because the render loop re-asserts the current frame every couple of seconds — and because the
+	 * ring layout now defaults its pixmap to nothing rather than falling through to the action icon.
+	 */
 	#applyLayout(instance: DialInstance): void {
 		const layout = instance.countdown.settings.layout === "bar" ? "$B1" : "layouts/ring.json";
 		if (layout === instance.lastLayout) {

@@ -80,6 +80,9 @@ const key = { value: "—", caption: "", colour: "", flash: false, glyph: "" };
 let settings = {};
 let socket = null;
 
+/** Counts frames the plugin pushed, so the periodic re-assert can be observed rather than assumed. */
+let feedbackCount = 0;
+
 const wss = new WebSocketServer({ host: "127.0.0.1", port: PORT });
 
 wss.on("connection", (ws) => {
@@ -149,6 +152,7 @@ function handlePluginMessage(message) {
 			break;
 
 		case "setFeedback": {
+			feedbackCount += 1;
 			const payload = message.payload ?? {};
 			if (payload.title !== undefined) screen.title = payload.title;
 			if (typeof payload.value === "string") screen.value = payload.value;
@@ -417,6 +421,24 @@ async function runDemo() {
 		// Pause is now stated by a glyph, not by colour alone. The bottom line names the gesture.
 		["one tap → paused, pause glyph in the ring, bottom line says so", async () => gestures.touch(false)],
 		["one tap → running again", async () => gestures.touch(false)],
+
+		// A frame lost on the way — Stream Deck discards feedback sent alongside a layout switch —
+		// would sit on screen for ever on a display that is static by nature. So the current frame is
+		// re-asserted every couple of seconds even when nothing has changed.
+		[
+			"an untouched, idle timer still re-sends its frame, so a dropped one cannot stick",
+			async () => {
+				applySettings({ presets: [3600], presetIndex: 0, theme: "default" });
+				await wait(1000);
+
+				const before = feedbackCount;
+				await wait(5000);
+				const sent = feedbackCount - before;
+
+				console.log(`\n   frames in 5s with nothing happening: ${sent}`);
+				console.log(`   ${sent >= 2 && sent <= 12 ? "\u2713 re-asserting, and not spamming" : "\u2717 " + (sent < 2 ? "silent — a dropped frame would stick" : "far too chatty")}`);
+			}
+		],
 
 		// There are no haptics on this hardware, so the ring pulsing is the whole of the physical
 		// acknowledgement. It has to be there on the frame after the gesture, and gone shortly after.

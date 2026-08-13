@@ -33,6 +33,20 @@ const RENDER_INTERVAL_MS = 250;
 /** Settings changes are batched, so spinning the dial does not write to disk on every tick. */
 const SETTINGS_DEBOUNCE_MS = 400;
 
+/**
+ * How often the current frame is re-sent even though nothing has changed.
+ *
+ * Dropping unchanged frames assumes every frame that *is* sent arrives, and there is no way to ask
+ * the hardware what it is actually showing. A countdown is static for long stretches — idle, paused,
+ * finished — so a single frame lost on the way would stay lost until the user touched something. It
+ * has happened: feedback sent alongside a layout switch is discarded by Stream Deck, which left the
+ * ring layout showing its fallback for an undrawn pixmap, the action's own red icon.
+ *
+ * Re-asserting every 2 seconds bounds that to 2 seconds, at a cost of one message per control.
+ */
+const RESEND_INTERVAL_MS = 2_000;
+const RESEND_EVERY_TICKS = Math.round(RESEND_INTERVAL_MS / RENDER_INTERVAL_MS);
+
 /** Everything that lives only for as long as the action is on screen. */
 export type Instance<A> = {
 	action: A;
@@ -44,6 +58,8 @@ export type Instance<A> = {
 	flashHandle: NodeJS.Timeout | null;
 	/** Signature of the last frame sent, so an unchanged one can be dropped. */
 	last: string;
+	/** Turns of the render loop, counted only so the frame can be re-asserted periodically. */
+	ticks: number;
 };
 
 export abstract class CountdownAction<
@@ -69,7 +85,7 @@ export abstract class CountdownAction<
 	/** Pushes the current state to the hardware, dropping the frame if nothing has changed. */
 	protected abstract draw(instance: I, force: boolean): void;
 
-	/** Anything the control needs setting up once, after its instance exists. */
+	/** Anything the control needs setting up once, before it can be drawn on. */
 	protected attach(instance: I): void {
 		void instance;
 	}
@@ -104,6 +120,7 @@ export abstract class CountdownAction<
 			saveHandle: null,
 			flashHandle: null,
 			last: "",
+			ticks: 0,
 			...this.extras()
 		} as unknown as I;
 		instance.taps = new TapResolver((gesture) => this.perform(instance, gesture));
@@ -236,7 +253,8 @@ export abstract class CountdownAction<
 			playSound(resolveSound(settings), settings.volume, settings.soundRepeat);
 		}
 
-		this.draw(instance, force);
+		instance.ticks += 1;
+		this.draw(instance, force || instance.ticks % RESEND_EVERY_TICKS === 0);
 	}
 
 	protected scheduleSave(instance: I): void {

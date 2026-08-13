@@ -69,6 +69,19 @@ It draws its **whole face as one SVG**, digits included, rather than using `setT
 
 With no room for a glyph behind the digits, the line under the clock carries the state instead: the gesture you just made, then `paused` if it is paused, then the preset's name.
 
+## Why the screen redraws when nothing has changed
+
+The render loop runs at 4 Hz and drops any frame identical to the last, which is what keeps an idle timer free. That optimisation quietly assumes every frame it *does* send arrives — and there is no way to ask a Stream Deck what it is currently showing.
+
+A countdown is static for long stretches: idle, paused, finished. So a single frame lost on the way would stay on screen until the user touched something.
+
+That is exactly what happened. Stream Deck discards feedback sent alongside a layout switch, and `layouts/ring.json` gave its `ring` pixmap no default value — so the slot fell through to the action's `Encoder.Icon`, a red Mate Wish Key mark, and an idle dial sat there showing a red logo instead of a themed ring until it was turned.
+
+Two changes, because either alone leaves a hole:
+
+- The pixmap now defaults to a transparent pixel, so the action icon is never what shows through.
+- The current frame is re-asserted every **2 seconds** regardless, which bounds any dropped frame to 2 seconds at a cost of one message per control — comfortably inside Elgato's 10-per-second guideline.
+
 ## Presets
 
 A preset is **just a duration**. There is no name, because a countdown's length is its own label: the screen shows `20m`, or `20m 30s` once it has been nudged off a round number.
