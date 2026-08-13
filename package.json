@@ -1,6 +1,6 @@
 {
 	"name": "mwk-dial-countdown",
-	"version": "0.1.0",
+	"version": "0.10.0",
 	"private": true,
 	"description": "Stream Deck countdown timer for dials and keys, with presets, tap-to-pause and double-tap-to-restart.",
 	"type": "module",
