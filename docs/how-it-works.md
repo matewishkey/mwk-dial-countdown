@@ -1,6 +1,6 @@
 # How the dial, the gestures and the presets work
 
-Three things in this plugin are worth explaining properly, because each does more than it looks like it does: **turning the dial**, **the three press gestures**, and **presets**.
+A few things in this plugin are worth explaining properly, because each does more than it looks like it does: **turning the dial**, **the three press gestures**, **the key**, **why the screen redraws when nothing has changed**, and **presets**.
 
 ## The dial accelerates
 
@@ -67,7 +67,7 @@ The key action is the same countdown with the turning taken away — press, pres
 
 It draws its **whole face as one SVG**, digits included, rather than using `setTitle`. Stream Deck stops honouring a plugin's title the moment the user types one of their own, and a clock that silently stops being a clock because somebody labelled the button is not a clock. The title is left free for whatever you want it for.
 
-With no room for a glyph behind the digits, the line under the clock carries the state instead: the gesture you just made, then `paused` if it is paused, then the preset's name.
+With no room for a glyph behind the digits, the line under the clock carries the state instead: the gesture you just made, then `paused` if it is paused, then the preset's length.
 
 ## Why the screen redraws when nothing has changed
 
@@ -80,6 +80,7 @@ That is exactly what happened. Stream Deck discards feedback sent alongside a la
 Two changes, because either alone leaves a hole:
 
 - The pixmap now defaults to a transparent pixel, so the action icon is never what shows through.
+- Awaiting `setFeedbackLayout` before drawing was tried and **reverted** — it is the obvious-looking fix and it does nothing. The SDK's `send` resolves once the command is written to the socket, not once Stream Deck has applied it, so it guarantees nothing that ordering on a single socket did not already give.
 - The current frame is re-asserted every **2 seconds** regardless, which bounds any dropped frame to 2 seconds at a cost of one message per control — comfortably inside Elgato's 10-per-second guideline.
 
 ## Presets
@@ -103,14 +104,14 @@ The label tracks the *preset's* length rather than the live duration. So if you 
 
 ## Try it without hardware
 
-`npm run mock` drives the whole thing from the keyboard with no Stream Deck attached, and `npm run demo` plays a scripted pass that shows the acceleration ladder, among other things:
+`npm run mock` drives the whole thing from the keyboard with no Stream Deck attached, and `npm run demo` plays a scripted pass. It prints a labelled ASCII frame per step; the acceleration ladder shows up across four of them:
 
-```
-▸ one click → +1s                        20m  → 20m 1s
-▸ 8 slow clicks → +8s, still fine        20m 1s → 20m 9s
-▸ a hard spin → minutes a tick           20m 9s → 24m 45s
-▸ keep winding → ten minutes a tick      24m 45s → 3h 41m 21s
-```
+| Step | Clock goes from | to |
+| --- | --- | --- |
+| one click → +1s | `20m` | `20m 1s` |
+| 8 slow clicks → +8s, still fine control | `20m 1s` | `20m 9s` |
+| a hard spin → minutes a tick | `20m 9s` | `24m 45s` |
+| keep winding → ten minutes a tick, half a day in one gesture | `24m 45s` | `3h 41m 21s` |
 
 It also walks the gesture vocabulary and asserts the parts a person would otherwise have to check by eye — that a hold really does leave the clock stopped, that the pulse appears and then clears, and that the key's caption falls back from the gesture to the state:
 

@@ -1,6 +1,6 @@
 # Notices
 
-The plugin is [MIT licensed](LICENSE). Three things that licence does not cover:
+The plugin is [MIT licensed](LICENSE). Two things that licence does not cover:
 
 The Mate Wish Key name, logo and brand colours are trademarks of Mate Wish Key
 and are NOT covered by the MIT licence above. If you fork this plugin, replace
@@ -12,5 +12,5 @@ plugin UUID in `manifest.json` so your build does not collide with this one.
 library, vendored here for offline use, and is distributed under its own
 licence: https://github.com/geekyeggo/sdpi-components
 
-The bundled sounds in `sounds/` were generated for this project and are covered
-by the MIT licence above.
+Everything else is MIT, including the bundled sounds in `sounds/`, which were
+generated for this project.

@@ -50,7 +50,7 @@ Turning an **idle** timer edits that preset's duration and saves it. Turning a *
 There is no haptic feedback to be had on this hardware — the SDK exposes no such command, and there is no motor to drive if it did. Two things stand in for it, doing different jobs:
 
 - **The ring pulses** on every gesture and every tick of the dial. It says only that *something* registered, which is the part you catch without reading — you cannot read a word per tick, but you can see the ring answer every one of them.
-- **A line names the action** — `+10s`, `pause`, `resume`, `restart`, `next · 20m` — for about a second, then gives way to the finish time on a dial, or to the preset's name on a key.
+- **A line names the action** — `+10s`, `start`, `pause`, `resume`, `restart`, `next · 20m` — for about a second, then gives way to the finish time on a dial, or to the preset's length on a key.
 
 **[How the dial and the presets work →](docs/how-it-works.md)** — the acceleration logic and the preset model, explained.
 
@@ -60,9 +60,9 @@ There is no haptic feedback to be had on this hardware — the SDK exposes no su
 - **Countdown ring** that empties as the timer runs, with the clock beside it. A progress bar is available instead.
 - **Seven colour themes**, and an optional logo in the middle of the ring.
 - **A pause glyph** rather than a colour change, so the state is stated outright.
-- **Fade near the end** — the same colour, shaded and unshaded, from a threshold you set in seconds.
+- **Fade near the end** — the same colour, shaded and unshaded, from a threshold you set in minutes and seconds.
 - **Sound when finished**, repeatable up to ten times, at a volume you set. Choose a bundled sound, any sound already installed on your machine, or your own file.
-- **Auto-repeat**, counting laps on screen.
+- **Auto-repeat**, counting laps on screen, up to a limit you set — nothing here should still be going tomorrow.
 - **Finish time** — `ends 14:35`, more useful than a raw remaining count on a long timer.
 - Anything up to **24 hours**.
 
@@ -73,7 +73,7 @@ Stream Deck runs on macOS and Windows only, so the plugin cannot be *run* on Lin
 ```sh
 npm install
 npm run build      # bundle into com.matewishkey.dial-countdown.sdPlugin/bin
-npm test           # 105 unit tests
+npm test           # 106 unit tests
 npm run demo       # scripted gesture pass, prints one frame per step
 npm run mock       # the same harness, driven from the keyboard
 ```
@@ -96,6 +96,8 @@ npm run watch                                       # rebuild + restart on save
 npx streamdeck validate com.matewishkey.dial-countdown.sdPlugin
 npx streamdeck pack com.matewishkey.dial-countdown.sdPlugin
 ```
+
+**Bump `Version` in `manifest.json` to match the release tag.** It is what the Stream Deck application shows the user, and it sat at `0.1.0.0` through nine releases — so the app reported the same version whichever build was installed, which is the one question it is asked. `v0.10.0` ↔ `0.10.0.0`.
 
 ## How it fits together
 
@@ -129,6 +131,8 @@ A few decisions worth knowing before changing things:
 **The key draws its own text.** `setTitle` is the only text facility a key has, and Stream Deck stops honouring it the moment the user types a title of their own — a clock that silently stops being a clock because someone labelled the button is not a clock. So the key face is one SVG, digits included, and the title is left free for whatever the user wants it for.
 
 **Frames are re-asserted every couple of seconds**, even when nothing has changed. Dropping unchanged frames assumes every frame sent arrives, and there is no way to ask the hardware what it is actually showing — so on a display that is static for long stretches, one lost frame would stay lost. This is not hypothetical: Stream Deck discards feedback sent alongside a layout switch, which left the ring showing the layout's fallback for an undrawn pixmap — the action's own red icon — until the dial was touched. The pixmap now defaults to nothing rather than to that icon, and the re-assert bounds any dropped frame to two seconds.
+
+**Awaiting `setFeedbackLayout` fixes nothing.** It is the obvious-looking cure for feedback lost to a layout switch, and it was tried and reverted. The SDK's `send` resolves once the command is written to the socket, not once Stream Deck has applied it, so awaiting it guarantees nothing that ordering on a single socket did not already give. The re-assert above is what actually bounds the problem.
 
 **The tests resolve imports through a hook.** `src/` is written for rollup, which fills in file extensions; Node's ESM resolver deliberately does not, so `test/ts-resolve.mjs` does that one job and nothing else.
 
