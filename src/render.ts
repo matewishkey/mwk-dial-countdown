@@ -10,11 +10,40 @@
 import type { TimerStatus } from "./timer";
 
 /** The ring occupies a square on the left of the 200 × 100 touchscreen. */
-const RING_SIZE = 88;
+export const RING_SIZE = 88;
+
+/** A Stream Deck key is 144 × 144, so the same ring is drawn again at nearly twice the size. */
+export const KEY_SIZE = 144;
 
 const CENTRE = RING_SIZE / 2;
 const RADIUS = 36;
 const STROKE = 9;
+
+/**
+ * The ring's proportions at an arbitrary size.
+ *
+ * Every dimension is expressed as a fraction of the 88px original rather than picked again for the
+ * key, so the two controls cannot drift apart: change the ring's weight once and both follow.
+ */
+type Geometry = {
+	size: number;
+	centre: number;
+	radius: number;
+	stroke: number;
+	/** Width the brand mark is drawn at. */
+	mark: number;
+};
+
+function geometryFor(size: number): Geometry {
+	const scale = size / RING_SIZE;
+	return {
+		size,
+		centre: size / 2,
+		radius: round(RADIUS * scale),
+		stroke: round(STROKE * scale),
+		mark: round(MARK_TARGET_WIDTH * scale)
+	};
+}
 
 export type Palette = {
 	running: string;
@@ -97,6 +126,19 @@ export type RingState = {
 	palette: Palette;
 	/** Draw the Mate Wish Key mark inside the ring. */
 	logo?: boolean;
+	/**
+	 * Pulse the ring, acknowledging a gesture. Drawn as a separate hairline outside the arc rather
+	 * than by brightening the arc itself, so it is unmistakably an event and not a change of state —
+	 * and so it still reads during the warning blink, when the arc is already being dimmed.
+	 */
+	flash?: boolean;
+	/** Edge length of the square the ring is drawn in. Defaults to the touchscreen's 88px. */
+	size?: number;
+	/**
+	 * Leave the middle of the ring empty — no mark, and no pause glyph either. The key draws its
+	 * clock there and cannot have a glyph sitting behind the digits.
+	 */
+	hollow?: boolean;
 };
 
 /** Opacity of the ring on the dim half of a blink. */
@@ -104,6 +146,15 @@ const DIM_OPACITY = 0.3;
 
 /** A paused ring is very slightly held back, so the glyph is what carries the state. */
 const PAUSED_OPACITY = 0.85;
+
+/**
+ * The gesture pulse, as fractions of the arc's own stroke width. The gap places it clear of the arc
+ * while staying inside the box — at the touchscreen's 88px that lands the hairline at r=42 in a
+ * 44px half-width, which is the tightest the geometry allows without clipping.
+ */
+const PULSE_GAP_RATIO = 0.667;
+const PULSE_STROKE_RATIO = 0.22;
+const PULSE_OPACITY = 0.9;
 
 /**
  * The Mate Wish Key mark, as published in the brand's own `mwk-mark.svg`: an "M" and a "K" stroke.
@@ -139,6 +190,8 @@ export function ringColour({ status, palette }: RingState): string {
  * runs — a full ring means a full timer, which is the way round people expect.
  */
 export function renderRing(state: RingState): string {
+	const geometry = geometryFor(state.size ?? RING_SIZE);
+
 	// A finished timer draws a *full* ring in the elapsed colour. Left to its own arithmetic it would
 	// draw nothing at all — zero remaining, zero arc — and the one moment the user most needs to see
 	// would be the blankest thing on the screen.
@@ -148,47 +201,77 @@ export function renderRing(state: RingState): string {
 	const opacity = state.dimmed ? DIM_OPACITY : state.status === "paused" ? PAUSED_OPACITY : 1;
 
 	return [
-		`<svg xmlns="http://www.w3.org/2000/svg" width="${RING_SIZE}" height="${RING_SIZE}" viewBox="0 0 ${RING_SIZE} ${RING_SIZE}">`,
-		`<circle cx="${CENTRE}" cy="${CENTRE}" r="${RADIUS}" fill="none" stroke="${state.palette.track}" stroke-width="${STROKE}"/>`,
-		arc(fraction, colour, opacity),
-		centre(state, colour, opacity),
+		svgOpen(geometry),
+		track(geometry, state.palette.track),
+		arc(geometry, fraction, colour, opacity),
+		centre(geometry, state, colour, opacity),
+		pulse(geometry, state, colour),
 		`</svg>`
 	].join("");
+}
+
+function svgOpen({ size }: Geometry): string {
+	return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`;
+}
+
+function track({ centre: c, radius, stroke }: Geometry, colour: string): string {
+	return `<circle cx="${c}" cy="${c}" r="${radius}" fill="none" stroke="${colour}" stroke-width="${stroke}"/>`;
+}
+
+/**
+ * The gesture pulse: a hairline circle just outside the arc, drawn only on the frames immediately
+ * following a press or a tick of the dial. It has to sit clear of the arc without leaving the box,
+ * so its radius is set from the arc's own outer edge rather than picked.
+ */
+function pulse(geometry: Geometry, state: RingState, colour: string): string {
+	if (state.flash !== true) {
+		return "";
+	}
+
+	const { centre: c, radius, stroke } = geometry;
+	const width = round(stroke * PULSE_STROKE_RATIO);
+	const at = round(radius + stroke * PULSE_GAP_RATIO);
+
+	return `<circle cx="${c}" cy="${c}" r="${at}" fill="none" stroke="${colour}" stroke-width="${width}" opacity="${PULSE_OPACITY}"/>`;
 }
 
 /**
  * Whatever sits inside the ring. A paused timer shows a pause glyph, because "paused" is a fact
  * worth stating outright rather than leaving to a colour the user has to have learnt.
  */
-function centre(state: RingState, colour: string, opacity: number): string {
-	if (state.status === "paused") {
-		return pauseGlyph(colour, opacity);
+function centre(geometry: Geometry, state: RingState, colour: string, opacity: number): string {
+	if (state.hollow === true) {
+		return "";
 	}
-	return state.logo === true ? mark(colour, opacity) : "";
+	if (state.status === "paused") {
+		return pauseGlyph(geometry, colour, opacity);
+	}
+	return state.logo === true ? mark(geometry, colour, opacity) : "";
 }
 
 /** Two upright bars, the universal pause mark. */
-function pauseGlyph(colour: string, opacity: number): string {
-	const barWidth = 6;
-	const barHeight = 24;
-	const gap = 7;
-	const y = CENTRE - barHeight / 2;
-	const left = CENTRE - gap / 2 - barWidth;
-	const right = CENTRE + gap / 2;
+function pauseGlyph({ size, centre: c }: Geometry, colour: string, opacity: number): string {
+	const scale = size / RING_SIZE;
+	const barWidth = round(6 * scale);
+	const barHeight = round(24 * scale);
+	const gap = round(7 * scale);
+	const y = round(c - barHeight / 2);
+	const left = round(c - gap / 2 - barWidth);
+	const right = round(c + gap / 2);
 
 	return (
 		`<g opacity="${opacity}">` +
-		`<rect x="${left}" y="${y}" width="${barWidth}" height="${barHeight}" rx="1.5" fill="${colour}"/>` +
-		`<rect x="${right}" y="${y}" width="${barWidth}" height="${barHeight}" rx="1.5" fill="${colour}"/>` +
+		`<rect x="${left}" y="${y}" width="${barWidth}" height="${barHeight}" rx="${round(1.5 * scale)}" fill="${colour}"/>` +
+		`<rect x="${right}" y="${y}" width="${barWidth}" height="${barHeight}" rx="${round(1.5 * scale)}" fill="${colour}"/>` +
 		`</g>`
 	);
 }
 
 /** The brand mark, centred in the ring and tinted to match it so the two read as one object. */
-function mark(colour: string, opacity: number): string {
-	const scale = MARK_TARGET_WIDTH / MARK_WIDTH;
-	const x = CENTRE - MARK_WIDTH * scale * 0.5;
-	const y = CENTRE - MARK_HEIGHT * scale * 0.5;
+function mark({ centre: c, mark: width }: Geometry, colour: string, opacity: number): string {
+	const scale = width / MARK_WIDTH;
+	const x = c - MARK_WIDTH * scale * 0.5;
+	const y = c - MARK_HEIGHT * scale * 0.5;
 	const stroke = `stroke="${colour}" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" fill="none"`;
 
 	return (
@@ -198,34 +281,35 @@ function mark(colour: string, opacity: number): string {
 	);
 }
 
-function arc(fraction: number, colour: string, opacity: number): string {
+function arc(geometry: Geometry, fraction: number, colour: string, opacity: number): string {
 	if (fraction <= 0) {
 		return "";
 	}
 
-	const stroke = `stroke="${colour}" stroke-width="${STROKE}" stroke-linecap="round" fill="none" opacity="${opacity}"`;
+	const { centre: c, radius, stroke: width } = geometry;
+	const stroke = `stroke="${colour}" stroke-width="${width}" stroke-linecap="round" fill="none" opacity="${opacity}"`;
 
 	// A full circle cannot be expressed as a single arc — the start and end points coincide, and the
 	// renderer draws nothing at all. Two half-circles are the standard way round it.
 	if (fraction >= 1) {
 		return (
-			`<path d="M ${CENTRE} ${CENTRE - RADIUS} A ${RADIUS} ${RADIUS} 0 0 1 ${CENTRE} ${CENTRE + RADIUS} ` +
-			`A ${RADIUS} ${RADIUS} 0 0 1 ${CENTRE} ${CENTRE - RADIUS}" ${stroke}/>`
+			`<path d="M ${c} ${round(c - radius)} A ${radius} ${radius} 0 0 1 ${c} ${round(c + radius)} ` +
+			`A ${radius} ${radius} 0 0 1 ${c} ${round(c - radius)}" ${stroke}/>`
 		);
 	}
 
 	const angle = fraction * 2 * Math.PI;
-	const end = pointOnCircle(angle);
+	const end = pointOnCircle(geometry, angle);
 	const largeArc = fraction > 0.5 ? 1 : 0;
 
-	return `<path d="M ${CENTRE} ${CENTRE - RADIUS} A ${RADIUS} ${RADIUS} 0 ${largeArc} 1 ${end.x} ${end.y}" ${stroke}/>`;
+	return `<path d="M ${c} ${round(c - radius)} A ${radius} ${radius} 0 ${largeArc} 1 ${end.x} ${end.y}" ${stroke}/>`;
 }
 
 /** Clockwise from twelve o'clock. */
-function pointOnCircle(angle: number): { x: number; y: number } {
+function pointOnCircle({ centre: c, radius }: Geometry, angle: number): { x: number; y: number } {
 	return {
-		x: round(CENTRE + RADIUS * Math.sin(angle)),
-		y: round(CENTRE - RADIUS * Math.cos(angle))
+		x: round(c + radius * Math.sin(angle)),
+		y: round(c - radius * Math.cos(angle))
 	};
 }
 
@@ -238,6 +322,101 @@ function clamp01(value: number): number {
 		return 0;
 	}
 	return Math.max(0, Math.min(1, value));
+}
+
+/**
+ * Draws the whole key face: the ring, the clock inside it, and a line of state underneath.
+ *
+ * Unlike the touchscreen, a key has no layout with text items to fill, and its one text facility —
+ * `setTitle` — is overridden the moment the user types a title of their own in the Stream Deck
+ * application. A clock that silently stops being a clock because someone labelled the button is not
+ * a clock, so the text is drawn into the image instead, where nothing can take it away.
+ */
+export function renderKey(state: KeyState): string {
+	const geometry = geometryFor(KEY_SIZE);
+	const { centre: c } = geometry;
+	const colour = ringColour(state);
+
+	return [
+		renderRing({ ...state, size: KEY_SIZE, hollow: true }).replace(/<\/svg>$/, ""),
+		text(state.value, c, round(c + KEY_VALUE_BASELINE), keyValueFontSize(state.value), 600, "#FFFFFF"),
+		state.caption === ""
+			? ""
+			: text(
+					state.caption,
+					c,
+					round(c + KEY_CAPTION_BASELINE),
+					keyCaptionFontSize(state.caption),
+					400,
+					state.accent ? colour : KEY_CAPTION_COLOUR
+				),
+		`</svg>`
+	].join("");
+}
+
+export type KeyState = Omit<RingState, "size" | "logo" | "hollow"> & {
+	/** The clock itself, already formatted. */
+	value: string;
+	/** The line beneath it: the gesture just made, the paused state, or the preset's name. */
+	caption: string;
+	/**
+	 * Draw the caption in the ring's own colour rather than grey. Reserved for the things that are
+	 * happening — a gesture, a pause — so that a caption which is merely naming the preset does not
+	 * shout as loudly as one reporting an event.
+	 */
+	accent: boolean;
+};
+
+/** Caption colour when it is only labelling, matching the touchscreen layout's own muted grey. */
+const KEY_CAPTION_COLOUR = "#9A9AA0";
+
+/** Baselines, measured down from the centre of the key. */
+const KEY_VALUE_BASELINE = 4;
+const KEY_CAPTION_BASELINE = 30;
+
+/**
+ * How wide the caption may be.
+ *
+ * The caption sits 30px below the centre, where the ring has closed in from the sides — so the room
+ * is not the key's width but the chord across the ring's inside at that height, which works out at
+ * about 90px. A caption is a variable-length string (`next · 40m`, `1h 10m 10s`) so it is the font
+ * that gives way, not the text: at these sizes sans-serif digits and lower case average close
+ * enough to half the font size per character to size from the length alone.
+ */
+const KEY_CAPTION_WIDTH = 88;
+const KEY_CAPTION_SIZE_MAX = 19;
+const KEY_CAPTION_SIZE_MIN = 11;
+
+export function keyCaptionFontSize(caption: string): number {
+	const fitted = Math.floor((KEY_CAPTION_WIDTH * 2) / Math.max(1, caption.length));
+	return Math.max(KEY_CAPTION_SIZE_MIN, Math.min(KEY_CAPTION_SIZE_MAX, fitted));
+}
+
+/**
+ * Font sizes for the key's clock, by length of string. A key is square and the ring eats its
+ * corners, so the usable width is narrower than the touchscreen's box and the steps are steeper.
+ */
+const KEY_VALUE_FONT_SIZES: Record<number, number> = { 4: 40, 5: 36, 6: 28, 7: 25, 8: 22 };
+const KEY_VALUE_FONT_MIN = 20;
+
+export function keyValueFontSize(value: string): number {
+	return KEY_VALUE_FONT_SIZES[value.length] ?? KEY_VALUE_FONT_MIN;
+}
+
+/**
+ * A centred line of text. The font is named only by generic family: the plugin cannot ship a font
+ * to the renderer, and asking for one it does not have is how you get a fallback nobody chose.
+ */
+function text(value: string, x: number, y: number, size: number, weight: number, colour: string): string {
+	return (
+		`<text x="${x}" y="${y}" text-anchor="middle" fill="${colour}" ` +
+		`font-family="sans-serif" font-size="${size}" font-weight="${weight}">${escapeText(value)}</text>`
+	);
+}
+
+/** SVG is XML, so anything a preset label or a custom sound name might contain has to be escaped. */
+function escapeText(value: string): string {
+	return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
 /** Wraps SVG markup as a data URI, the form a `pixmap` item's value takes. */

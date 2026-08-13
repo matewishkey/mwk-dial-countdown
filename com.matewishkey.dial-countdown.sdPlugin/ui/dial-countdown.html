@@ -63,13 +63,29 @@
 			}
 
 			.time input {
-				width: 34px;
+				width: 42px;
 				background: none;
 				border: 0;
 				color: #d8d8d8;
 				text-align: right;
 				padding: 2px 0;
 				font-variant-numeric: tabular-nums;
+			}
+
+			/*
+				The stepper arrows are dropped from every number field. On a panel this narrow they take
+				a third of the box and leave the digits with less room than the arrows nobody clicks —
+				and three of these sit side by side in a single duration.
+			*/
+			input[type="number"] {
+				-moz-appearance: textfield;
+				appearance: textfield;
+			}
+
+			input[type="number"]::-webkit-outer-spin-button,
+			input[type="number"]::-webkit-inner-spin-button {
+				-webkit-appearance: none;
+				margin: 0;
 			}
 
 			.time input:focus {
@@ -126,7 +142,17 @@
 			}
 
 			.row .time input {
-				width: 30px;
+				width: 40px;
+			}
+
+			/* Settings that only exist on a dial, hidden when the same page is inspecting a key. */
+			body[data-controller="Keypad"] .dial-only {
+				display: none;
+			}
+
+			body:not([data-controller="Keypad"]) .key-only,
+			body[data-controller="Keypad"] .encoder-only {
+				display: none;
 			}
 
 			input[type="range"] {
@@ -168,11 +194,18 @@
 		</style>
 	</head>
 	<body>
-		<p class="hint">
-			<strong>Tap the screen</strong> to start or pause, <strong>hold the screen</strong> to reset.
+		<p class="hint encoder-only">
+			<strong>Tap the screen</strong> to pause or resume, <strong>tap it twice</strong> to restart from the top,
+			<strong>hold it</strong> to load the next preset without starting it.
 			<strong>Press the dial</strong> for the next preset, hold it for the previous. Turn to adjust — the step grows
 			from 1&nbsp;second to 10, then a minute, then ten, the longer you keep turning. Hold and turn for a flat
 			minute a tick.
+		</p>
+
+		<p class="hint key-only">
+			<strong>Press</strong> to pause or resume, <strong>press twice</strong> to restart from the top,
+			<strong>hold</strong> to load the next preset without starting it. Every gesture is acknowledged on the key
+			itself — the ring pulses and the line under the clock names what just happened.
 		</p>
 
 		<h2>Presets</h2>
@@ -182,7 +215,7 @@
 		</div>
 
 		<h2>Appearance</h2>
-		<div class="row">
+		<div class="row dial-only">
 			<label for="layout">Display</label>
 			<select id="layout">
 				<option value="ring">Countdown ring</option>
@@ -205,11 +238,11 @@
 			<label for="showTitle">Show the title</label>
 			<input type="checkbox" id="showTitle" />
 		</div>
-		<div class="row">
+		<div class="row dial-only">
 			<label for="showLogo">Logo in the ring</label>
 			<input type="checkbox" id="showLogo" />
 		</div>
-		<div class="row">
+		<div class="row dial-only">
 			<label for="showFinishTime">Show finish time</label>
 			<input type="checkbox" id="showFinishTime" />
 		</div>
@@ -540,6 +573,13 @@
 
 			SDPIComponents.streamDeckClient.sendToPropertyInspector.subscribe((message) => {
 				const payload = message?.payload ?? message;
+
+				// The same page serves both actions, and only the plugin knows which one is selected:
+				// a key has no touchscreen layout, no room for a finish time, and no logo behind a clock.
+				if (payload?.event === "controller") {
+					document.body.dataset.controller = payload.controller ?? "Encoder";
+					return;
+				}
 
 				if (payload?.event === "sounds") {
 					renderSounds(payload.sounds ?? []);

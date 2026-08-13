@@ -1,7 +1,18 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { asDataUri, DEFAULT_PALETTE, renderRing, ringColour, themeFor, THEMES } from "../src/render.ts";
+import {
+	asDataUri,
+	DEFAULT_PALETTE,
+	KEY_SIZE,
+	keyCaptionFontSize,
+	keyValueFontSize,
+	renderKey,
+	renderRing,
+	ringColour,
+	themeFor,
+	THEMES
+} from "../src/render.ts";
 
 const base = { status: "running" as const, dimmed: false, palette: DEFAULT_PALETTE };
 
@@ -103,6 +114,96 @@ describe("themes", () => {
 		assert.equal(themeFor(undefined), THEMES.default);
 		assert.equal(themeFor("nope"), THEMES.default);
 		assert.equal(themeFor("ocean"), THEMES.ocean);
+	});
+});
+
+describe("the gesture pulse", () => {
+	/** The pulse is the only circle carrying an opacity of its own. */
+	const pulses = (svg: string): boolean => /<circle[^>]*opacity="0\.9"/.test(svg);
+
+	it("appears only when asked for", () => {
+		assert.ok(!pulses(renderRing({ ...base, remainingFraction: 0.5 })));
+		assert.ok(pulses(renderRing({ ...base, remainingFraction: 0.5, flash: true })));
+	});
+
+	it("stays inside the box it is drawn in, at every size", () => {
+		for (const size of [88, KEY_SIZE]) {
+			const svg = renderRing({ ...base, remainingFraction: 0.5, flash: true, size });
+			const circle = svg.match(/<circle cx="[\d.]+" cy="[\d.]+" r="([\d.]+)"[^>]*stroke-width="([\d.]+)"[^>]*opacity="0\.9"/);
+			assert.ok(circle !== null, `no pulse found at ${size}px`);
+
+			const outer = Number(circle[1]) + Number(circle[2]) / 2;
+			assert.ok(outer < size / 2, `the pulse reaches ${outer} of a ${size / 2} half-width and would be clipped`);
+		}
+	});
+
+	it("sits clear of the arc rather than on top of it", () => {
+		const svg = renderRing({ ...base, remainingFraction: 0.5, flash: true });
+		const circle = svg.match(/r="([\d.]+)"[^>]*opacity="0\.9"/);
+
+		// The arc is radius 36 with a 9px stroke, so its outer edge is at 40.5.
+		assert.ok(Number(circle?.[1]) > 40.5, "a pulse drawn over the arc reads as a thicker arc, not an event");
+	});
+
+	it("still shows during the warning blink, when the arc itself is being dimmed", () => {
+		const svg = renderRing({ ...base, remainingFraction: 0.1, dimmed: true, flash: true });
+		assert.ok(pulses(svg), "the one moment feedback matters most must not be the moment it disappears");
+	});
+});
+
+describe("the key face", () => {
+	const key = { ...base, remainingFraction: 0.5, value: "5:00", caption: "20m", accent: false };
+
+	it("is a single well-formed svg at the key's own size", () => {
+		const svg = renderKey(key);
+		assert.match(svg, new RegExp(`^<svg [^>]*width="${KEY_SIZE}" height="${KEY_SIZE}"`));
+		assert.match(svg, /<\/svg>$/);
+		assert.equal(svg.match(/<svg /g)?.length, 1, "the ring and the text must be one image, not two nested ones");
+	});
+
+	it("draws the clock and the caption itself, since setTitle can be taken away by the user", () => {
+		const svg = renderKey(key);
+		assert.ok(svg.includes(">5:00</text>"));
+		assert.ok(svg.includes(">20m</text>"));
+	});
+
+	it("leaves the middle clear, so nothing is drawn behind the digits", () => {
+		const paused = renderKey({ ...key, status: "paused", caption: "paused" });
+		assert.ok(!paused.includes("<rect "), "the pause glyph belongs to the dial, where there is room for it");
+	});
+
+	it("colours the caption only when it is reporting something, not merely labelling", () => {
+		assert.match(
+			renderKey({ ...key, accent: true }),
+			new RegExp(`fill="${DEFAULT_PALETTE.running}"[^>]*>20m</text>`),
+			"a gesture or a pause takes the ring's own colour"
+		);
+		assert.match(renderKey({ ...key, accent: false }), /fill="#9A9AA0"[^>]*>20m<\/text>/, "a plain label stays grey");
+	});
+
+	it("omits the caption line entirely when there is nothing to say", () => {
+		assert.equal(renderKey({ ...key, caption: "" }).match(/<text /g)?.length, 1);
+	});
+
+	it("escapes anything a label could contain, since svg is xml", () => {
+		const svg = renderKey({ ...key, caption: "a & b <c>" });
+		assert.ok(svg.includes("a &amp; b &lt;c&gt;"));
+		assert.ok(!svg.includes("<c>"), "an unescaped angle bracket would break the whole image");
+	});
+
+	it("shrinks the caption so it stays inside the ring rather than running under it", () => {
+		// The ring closes in at the caption's height, leaving roughly 88px across — a caption that
+		// overruns that is drawn straight through the ring's stroke.
+		for (const caption of ["20m", "paused", "next · 40m", "1h 10m 10s", "×10/10", "restart"]) {
+			const width = (caption.length * keyCaptionFontSize(caption)) / 2;
+			assert.ok(width <= 90, `"${caption}" needs about ${Math.round(width)}px and would foul the ring`);
+		}
+	});
+
+	it("shrinks the clock as it gets longer, so an hour-long timer still fits the key", () => {
+		assert.ok(keyValueFontSize("5:00") > keyValueFontSize("1:10:10"));
+		assert.ok(keyValueFontSize("59:59") > keyValueFontSize("10:00:00"));
+		assert.equal(keyValueFontSize("wildly too long"), keyValueFontSize("123456789"), "anything unexpected floors");
 	});
 });
 

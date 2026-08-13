@@ -23,11 +23,13 @@ import { WebSocketServer } from "ws";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PLUGIN_UUID = "com.matewishkey.dial-countdown";
 const ACTION_UUID = `${PLUGIN_UUID}.countdown`;
+const KEY_ACTION_UUID = `${PLUGIN_UUID}.key`;
 const PLUGIN_DIR = resolve(ROOT, `${PLUGIN_UUID}.sdPlugin`);
 const PLUGIN_ENTRY = resolve(PLUGIN_DIR, "bin/plugin.js");
 
 const DEVICE_ID = "MOCK-DEVICE-0001";
 const CONTEXT = "mock-context-dial-0";
+const KEY_CONTEXT = "mock-context-key-0";
 const PORT = Number(process.env.MOCK_PORT ?? 34567);
 
 /** `--demo` replays a fixed gesture sequence and exits, for CI and for showing the thing off. */
@@ -68,7 +70,13 @@ const INFO = {
 };
 
 /** Latest touchscreen state, as reported by the plugin's setFeedback calls. */
-const screen = { title: "—", value: "—", label: "", finish: "", indicator: 0, ring: 0, colour: "", font: 0, opacity: 1, glyph: "", layout: "(default)" };
+const screen = { title: "—", value: "—", label: "", finish: "", indicator: 0, ring: 0, colour: "", font: 0, opacity: 1, glyph: "", layout: "(default)", flash: false };
+
+/**
+ * Latest key face, recovered from the SVG the plugin sends to setImage. The key draws its own text
+ * rather than using setTitle, so everything it says is in that one image and can be read back here.
+ */
+const key = { value: "—", caption: "", colour: "", flash: false, glyph: "" };
 let settings = {};
 let socket = null;
 
@@ -104,7 +112,8 @@ plugin.on("exit", (code) => {
 function handlePluginMessage(message) {
 	switch (message.event) {
 		case "register":
-			// The plugin has registered. Put a dial on screen, exactly as a real device would.
+			// The plugin has registered. Put a dial *and* a key on screen, as a real device would —
+			// the two actions are separate registrations and must not interfere with one another.
 			send({
 				event: "willAppear",
 				action: ACTION_UUID,
@@ -114,6 +123,19 @@ function handlePluginMessage(message) {
 					controller: "Encoder",
 					coordinates: { column: 0, row: 0 },
 					isInMultiAction: false,
+					settings
+				}
+			});
+			send({
+				event: "willAppear",
+				action: KEY_ACTION_UUID,
+				context: KEY_CONTEXT,
+				device: DEVICE_ID,
+				payload: {
+					controller: "Keypad",
+					coordinates: { column: 1, row: 0 },
+					isInMultiAction: false,
+					state: 0,
 					settings
 				}
 			});
@@ -158,6 +180,10 @@ function handlePluginMessage(message) {
 			break;
 
 		case "setImage":
+			readKey(message.payload?.image ?? "");
+			draw();
+			break;
+
 		case "setTitle":
 			break;
 
@@ -192,6 +218,7 @@ function readRing(dataUri) {
 	const opacity = svg.match(/stroke-linecap="round" fill="none" opacity="([\d.]+)"/);
 	screen.opacity = opacity === null ? 1 : Number(opacity[1]);
 	screen.glyph = svg.includes("<rect ") ? "pause" : svg.includes("M0 100") ? "logo" : "";
+	screen.flash = PULSE.test(svg);
 
 	// Two arcs is the full-circle special case; no path at all means nothing is drawn.
 	const arcs = svg.match(/A /g)?.length ?? 0;
@@ -216,6 +243,32 @@ function readRing(dataUri) {
 		angle += 2 * Math.PI;
 	}
 	screen.ring = Math.round((angle / (2 * Math.PI)) * 100);
+}
+
+/**
+ * The gesture pulse is the only circle drawn with an opacity of its own, so its presence in the
+ * markup is exactly the assertion "the ring acknowledged that gesture on this frame".
+ */
+const PULSE = /<circle[^>]*opacity="0\.9"/;
+
+/**
+ * Reads back the key face. Everything the key says is drawn into its image — there is no title to
+ * inspect — so the two text runs in the SVG are the clock and the line underneath it, in that order.
+ */
+function readKey(image) {
+	const svg = image.startsWith("data:")
+		? Buffer.from(image.split(",")[1] ?? "", "base64").toString("utf8")
+		: image;
+
+	const texts = [...svg.matchAll(/<text[^>]*fill="([^"]+)"[^>]*>([^<]*)<\/text>/g)];
+	key.value = texts[0]?.[2] ?? key.value;
+	key.caption = texts[1]?.[2] ?? "";
+	key.flash = PULSE.test(svg);
+
+	// The state colour is the arc's, not the clock's — the clock is always white.
+	const arc = svg.match(/stroke="(#[0-9A-Fa-f]{6})" stroke-width="[\d.]+" stroke-linecap/);
+	key.colour = arc === null ? key.colour : arc[1];
+	key.glyph = svg.includes("<rect ") ? "pause" : "";
 }
 
 /** Sends an event as though the user had touched the hardware. */
@@ -251,10 +304,26 @@ const gestures = {
 			context: CONTEXT,
 			device: DEVICE_ID,
 			payload: { controller: "Encoder", coordinates: { column: 0, row: 0 }, settings, hold, tapPos: [100, 50] }
+		}),
+	keyDown: () =>
+		send({
+			event: "keyDown",
+			action: KEY_ACTION_UUID,
+			context: KEY_CONTEXT,
+			device: DEVICE_ID,
+			payload: { controller: "Keypad", coordinates: { column: 1, row: 0 }, isInMultiAction: false, state: 0, settings }
+		}),
+	keyUp: () =>
+		send({
+			event: "keyUp",
+			action: KEY_ACTION_UUID,
+			context: KEY_CONTEXT,
+			device: DEVICE_ID,
+			payload: { controller: "Keypad", coordinates: { column: 1, row: 0 }, isInMultiAction: false, state: 0, settings }
 		})
 };
 
-/** Pushes a settings change, as the property inspector would. */
+/** Pushes a settings change, as the property inspector would — to both controls, as it would. */
 function applySettings(patch) {
 	settings = { ...settings, ...patch };
 	send({
@@ -263,6 +332,13 @@ function applySettings(patch) {
 		context: CONTEXT,
 		device: DEVICE_ID,
 		payload: { controller: "Encoder", coordinates: { column: 0, row: 0 }, isInMultiAction: false, settings }
+	});
+	send({
+		event: "didReceiveSettings",
+		action: KEY_ACTION_UUID,
+		context: KEY_CONTEXT,
+		device: DEVICE_ID,
+		payload: { controller: "Keypad", coordinates: { column: 1, row: 0 }, isInMultiAction: false, settings }
 	});
 }
 
@@ -286,6 +362,27 @@ function press(holdMs) {
 			done();
 		}, holdMs)
 	);
+}
+
+/** The same, for the key. A hold is decided by the plugin's own threshold, not by the hardware. */
+function keyPress(holdMs) {
+	gestures.keyDown();
+	return new Promise((done) =>
+		setTimeout(() => {
+			gestures.keyUp();
+			done();
+		}, holdMs)
+	);
+}
+
+/**
+ * Two taps inside the double-tap window. The gap has to be shorter than the plugin's own window
+ * (250 ms) or this is simply two single taps, which is the very thing being tested.
+ */
+async function doubleTap(tap, gapMs = 90) {
+	await tap();
+	await wait(gapMs);
+	await tap();
 }
 
 // ── Scripted pass ────────────────────────────────────────────────────────────
@@ -317,9 +414,55 @@ async function runDemo() {
 			await wait(300);
 		}],
 
-		// Pause is now stated by a glyph, not by colour alone.
-		["tap screen → paused, pause glyph in the ring", async () => gestures.touch(false)],
-		["tap screen → running again", async () => gestures.touch(false)],
+		// Pause is now stated by a glyph, not by colour alone. The bottom line names the gesture.
+		["one tap → paused, pause glyph in the ring, bottom line says so", async () => gestures.touch(false)],
+		["one tap → running again", async () => gestures.touch(false)],
+
+		// There are no haptics on this hardware, so the ring pulsing is the whole of the physical
+		// acknowledgement. It has to be there on the frame after the gesture, and gone shortly after.
+		[
+			"every gesture pulses the ring — on immediately, off again within a few frames",
+			async () => {
+				await wait(400);
+				gestures.rotate(1);
+				await wait(60);
+				const during = screen.flash;
+				await wait(500);
+				const after = screen.flash;
+				console.log(`\n   pulse right after the tick: ${during ? "yes" : "no"}, half a second later: ${after ? "yes" : "no"}`);
+				console.log(`   ${during && !after ? "\u2713 pulses, then clears" : "\u2717 not pulsing as intended"}`);
+			}
+		],
+
+		// The three screen gestures, each doing something the other two do not.
+		[
+			"two taps → restart from the top, and straight off again",
+			async () => {
+				await wait(400);
+				await spin(3, -1, 400);
+				await wait(400);
+				await doubleTap(() => gestures.touch(false));
+			}
+		],
+		[
+			"hold the screen → next preset, LOADED BUT NOT STARTED",
+			async () => {
+				applySettings({ presets: [4210, 600], presetIndex: 0 });
+				await wait(400);
+				gestures.touch(false);
+				await wait(500);
+				gestures.touch(true);
+			}
+		],
+		[
+			"…and the clock stays put, proving it did not start itself",
+			async () => {
+				const settled = screen.value;
+				await wait(1500);
+				console.log(`\n   clock 1.5s apart: ${settled} then ${screen.value}`);
+				console.log(`   ${settled === screen.value ? "\u2713 stopped" : "\u2717 it started on its own"}`);
+			}
+		],
 
 		// The bug: adjusting the clock used to look like it triggered the warning.
 		["fade on at 5 min, on a 5 min preset — must NOT fade immediately", async () => {
@@ -383,12 +526,60 @@ async function runDemo() {
 		]
 	];
 
+	// ── The key, which has the same three gestures minus the turning ──────────
+	const keySteps = [
+		[
+			"key: one press → starts",
+			async () => {
+				applySettings({ presets: [600, 1200], presetIndex: 0, repeat: false, soundEnabled: false, showTitle: true });
+				await wait(400);
+				await keyPress(60);
+			}
+		],
+		[
+			"key: one press → pauses; the caption names the gesture, then settles on the state",
+			async () => {
+				await keyPress(60);
+				await wait(400);
+				const said = key.caption;
+				// The toast lasts 900 ms and expires between render ticks, so the state it falls back to
+				// can be up to one 250 ms frame late. Sample past that, not on the nose.
+				await wait(1400);
+				console.log(`\n   caption right after: "${said}", once the toast expires: "${key.caption}"`);
+				console.log(`   ${said === "pause" && key.caption === "paused" ? "\u2713 gesture then state" : "\u2717 caption not settling"}`);
+			}
+		],
+		["key: two presses → restarts from the top", async () => doubleTap(() => keyPress(60))],
+		[
+			"key: hold → next preset, loaded but not started",
+			async () => {
+				await keyPress(900);
+				await wait(400);
+			}
+		],
+		[
+			"…and the key's clock stays put too",
+			async () => {
+				const settled = key.value;
+				await wait(1500);
+				console.log(`\n   key clock 1.5s apart: ${settled} then ${key.value}`);
+				console.log(`   ${settled === key.value ? "\u2713 stopped" : "\u2717 it started on its own"}`);
+			}
+		]
+	];
+
 	for (const [label, run] of steps) {
 		await run();
 		// Long enough for the plugin's reply to land, the 250ms render loop to turn over, and the
 		// 400ms settings debounce to flush — otherwise a frame shows state that is merely in flight.
 		await wait(600);
 		frame(label);
+	}
+
+	for (const [label, run] of keySteps) {
+		await run();
+		await wait(600);
+		keyFrame(label);
 	}
 
 	console.log("\nScripted pass complete.\n");
@@ -431,8 +622,20 @@ process.stdin.on("keypress", (_str, key) => {
 		case "t":
 			gestures.touch(false);
 			break;
+		case "d":
+			doubleTap(() => gestures.touch(false));
+			break;
 		case "y":
 			gestures.touch(true);
+			break;
+		case "k":
+			keyPress(80);
+			break;
+		case "j":
+			doubleTap(() => keyPress(60));
+			break;
+		case "l":
+			keyPress(900);
 			break;
 		default:
 			break;
@@ -483,9 +686,12 @@ function draw() {
 		"",
 		...screenLines(),
 		"",
+		...keyLines(),
+		"",
 		dim("   ←/→ adjust   shift+←/→ ×5   ↑/↓ press+turn 60s"),
-		dim("   t tap screen: start/pause   y hold screen: reset"),
-		dim("   space press dial: next preset   r hold dial: previous   ctrl+c quit")
+		dim("   t tap: pause/resume   d double tap: restart   y hold: next preset"),
+		dim("   space press dial: next preset   r hold dial: previous"),
+		dim("   k press key   j double press key   l hold key   ctrl+c quit")
 	];
 
 	process.stdout.write("\x1b[2J\x1b[H" + lines.join("\n") + "\n");
@@ -495,6 +701,23 @@ function draw() {
 function frame(label) {
 	console.log(`\n▸ ${label}`);
 	console.log(screenLines().join("\n"));
+}
+
+/** Same, for a step whose point is what the key did. */
+function keyFrame(label) {
+	console.log(`\n▸ ${label}`);
+	console.log(keyLines().join("\n"));
+}
+
+/** The key, drawn as the 144 × 144 square it is — clock, caption, and whether the ring pulsed. */
+function keyLines() {
+	return [
+		"  ┌──────────────────┐",
+		`  │ ${pad(key.value.padStart((18 + key.value.length) >> 1), 16)} │`,
+		`  │ ${pad(key.caption.padStart((18 + key.caption.length) >> 1), 16)} │`,
+		"  └──────────────────┘",
+		dim(`   key   colour ${key.colour || "—"}   pulse ${key.flash ? "yes" : "no"}   centre ${key.glyph || "clock"}`)
+	];
 }
 
 function pad(text, width) {
