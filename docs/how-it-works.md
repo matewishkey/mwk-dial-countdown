@@ -73,7 +73,9 @@ The key action is the same countdown with the turning taken away — press, pres
 
 It draws its **whole face as one SVG**, digits included, rather than using `setTitle`. Stream Deck stops honouring a plugin's title the moment the user types one of their own, and a clock that silently stops being a clock because somebody labelled the button is not a clock. The title is left free for whatever you want it for.
 
-That image is sent as a **data URI**, never as raw markup. `setImage` takes a file path or "a base64 encoded string with the mime type declared"; a bare `<svg>` string is neither, and is discarded silently — the key then shows the static image from the manifest and looks completely dead, which is exactly how that bug presented.
+That image is sent as a **data URI**, never as raw markup — `asDataUri`, the same wrapper the touchscreen ring uses.
+
+This is worth stating carefully, because the obvious explanation is not proven. The key action originally sent bare `<svg>` markup and did nothing at all on hardware: no ring, no clock, and every gesture invisible because nothing it drew ever reached the screen. Sending a data URI fixed it. But Elgato's own documentation disagrees with itself on whether raw markup was ever valid — the WebSocket reference lists only a file path or "a base64 encoded string with the mime type declared", while the SDK's JSDoc for `setImage` explicitly allows "an SVG `string`". So the data URI is the form known to work, and the raw string is the form known to have failed; which of the two facts explains the other is not settled.
 
 With no room for a glyph behind the digits, the line under the clock carries the state instead: the gesture you just made, then `paused` if it is paused, then the preset's length.
 
@@ -137,4 +139,4 @@ It also walks the gesture vocabulary and asserts the parts a person would otherw
    ✓ gesture then state
 ```
 
-The implementation is `src/acceleration.ts`, and it is a pure module with an injectable clock, so all of the above is asserted in `test/acceleration.test.ts` rather than described and hoped for.
+The ladder itself is `src/acceleration.ts` — a pure module that is handed the timestamp of each rotation rather than reading a clock, so every step and threshold above is asserted in `test/acceleration.test.ts` rather than described and hoped for. The gesture checks quoted above come from `tools/mock-host.mjs`, which drives the built plugin end to end.

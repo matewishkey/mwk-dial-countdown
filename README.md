@@ -62,7 +62,7 @@ There is no haptic feedback to be had on this hardware — the SDK exposes no su
 - **Countdown ring** that empties as the timer runs, with the clock beside it. A progress bar is available instead.
 - **Seven colour themes**, and an optional logo in the middle of the ring.
 - **A pause glyph** rather than a colour change, so the state is stated outright.
-- **Fade near the end** — the same colour, shaded and unshaded, from a threshold you set in minutes and seconds.
+- **Fade near the end** — the same colour, shaded and unshaded, from a threshold you set in minutes and seconds, capped at half the preset's own length so a fresh timer never starts already fading.
 - **Sound when finished**, repeatable up to ten times, at a volume you set. Choose a bundled sound, any sound already installed on your machine, or your own file.
 - **Auto-repeat**, counting laps on screen, up to a limit you set — nothing here should still be going tomorrow.
 - **Finish time** — `ends 14:35`, more useful than a raw remaining count on a long timer.
@@ -75,7 +75,7 @@ Stream Deck runs on macOS and Windows only, so the plugin cannot be *run* on Lin
 ```sh
 npm install
 npm run build      # bundle into com.matewishkey.dial-countdown.sdPlugin/bin
-npm test           # 106 unit tests
+npm test           # 112 unit tests
 npm run demo       # scripted gesture pass, prints one frame per step
 npm run mock       # the same harness, driven from the keyboard
 ```
@@ -99,7 +99,7 @@ npx streamdeck validate com.matewishkey.dial-countdown.sdPlugin
 npx streamdeck pack com.matewishkey.dial-countdown.sdPlugin
 ```
 
-**Bump `Version` in `manifest.json` to match the release tag.** It is what the Stream Deck application shows the user, and it sat at `0.1.0.0` through nine releases — so the app reported the same version whichever build was installed, which is the one question it is asked. `v0.10.0` ↔ `0.10.0.0`.
+**Bump `Version` in `manifest.json` to match the release tag.** It is what the Stream Deck application shows the user, and it sat at `0.1.0.0` through nine releases — so the app reported the same version whichever build was installed, which is the one question it is asked. `v1.0.0` ↔ `1.0.0.0`.
 
 ## How it fits together
 
@@ -116,6 +116,7 @@ npx streamdeck pack com.matewishkey.dial-countdown.sdPlugin
 | `src/actions/countdown-action.ts` | The half of an action that does not care which control it is on. |
 | `src/actions/dial-countdown.ts` | Dial events, and the touchscreen layout. |
 | `src/actions/key-countdown.ts` | Key events, and the key face. |
+| `src/plugin.ts` | Registers both actions and connects. |
 | `tools/mock-host.mjs` | A stand-in for the Stream Deck application. |
 | `tools/make-icons.mjs` | Draws the key action's artwork from the same mark the ring uses. |
 
@@ -133,9 +134,9 @@ A few decisions worth knowing before changing things:
 
 **The key draws its own text.** `setTitle` is the only text facility a key has, and Stream Deck stops honouring it the moment the user types a title of their own — a clock that silently stops being a clock because someone labelled the button is not a clock. So the key face is one SVG, digits included, and the title is left free for whatever the user wants it for.
 
-**`setImage` will not take raw SVG markup.** It documents a file path or "a base64 encoded string with the mime type declared", and a bare `<svg>` string is neither — it is dropped without an error, leaving the key showing the static image from the manifest and looking completely dead. Everything drawn at runtime goes through `asDataUri` for this reason, keys and touchscreen alike.
+**Send `setImage` a data URI, not raw SVG markup** — and be careful what you conclude from that. Elgato's two sources disagree: the WebSocket reference says the field takes a file path or "a base64 encoded string with the mime type declared", while the SDK's own JSDoc for `setImage` says a path, base64, "or an SVG `string`". The key action shipped raw markup and did nothing on hardware; it works sending the same SVG through `asDataUri`, which is the form the touchscreen ring has always used. What is *not* established is that raw markup was the cause — only that the data URI works. Do not "simplify" it back.
 
-**Frames are re-asserted every couple of seconds**, even when nothing has changed. Dropping unchanged frames assumes every frame sent arrives, and there is no way to ask the hardware what it is actually showing — so on a display that is static for long stretches, one lost frame would stay lost. This is not hypothetical: Stream Deck discards feedback sent alongside a layout switch, which left the ring showing the layout's fallback for an undrawn pixmap — the action's own red icon — until the dial was touched. The pixmap now defaults to nothing rather than to that icon, and the re-assert bounds any dropped frame to two seconds.
+**Frames are re-asserted every couple of seconds**, even when nothing has changed. Dropping unchanged frames assumes every frame sent arrives, and there is no way to ask the hardware what it is actually showing — so on a display that is static for long stretches, one lost frame would stay lost. This is not hypothetical: Stream Deck discards feedback sent alongside a layout switch, which left the ring showing the layout's fallback for an undrawn pixmap — the action's own red icon — until the dial was touched. The pixmap now defaults to a transparent pixel rather than to that icon, and the re-assert bounds any dropped frame to two seconds.
 
 **Awaiting `setFeedbackLayout` fixes nothing.** It is the obvious-looking cure for feedback lost to a layout switch, and it was tried and reverted. The SDK's `send` resolves once the command is written to the socket, not once Stream Deck has applied it, so awaiting it guarantees nothing that ordering on a single socket did not already give. The re-assert above is what actually bounds the problem.
 
