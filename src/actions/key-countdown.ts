@@ -2,7 +2,7 @@
  * The same countdown, on an ordinary key.
  *
  * A key has one button and no dial, so the gesture vocabulary is the screen's, minus the turning:
- * press to pause or resume, press twice to restart, hold for the next preset. Presets themselves
+ * press to pause or resume, press twice to reset, hold for the next preset. Presets themselves
  * are edited in the property inspector, since there is nothing here to wind them with.
  *
  * The one thing the key must do for itself is decide what counts as a hold. The touchscreen reports
@@ -21,13 +21,10 @@ import streamDeck, {
 
 import type { Countdown } from "../countdown";
 import { LONG_PRESS_MS } from "../gestures";
-import { renderKey, themeFor } from "../render";
+import { asDataUri, renderKey, themeFor } from "../render";
 import type { DialCountdownSettings } from "../settings";
 import { formatDuration, formatPresetLabel } from "../timer";
 import { CountdownAction, type Instance } from "./countdown-action";
-
-/** Blink period while inside the warning window — two render frames on, two off. */
-const BLINK_MS = 500;
 
 type Key = KeyAction<DialCountdownSettings>;
 
@@ -98,7 +95,7 @@ export class KeyCountdown extends CountdownAction<Key, KeyInstance> {
 		const remainingMs = timer.remainingMs;
 
 		const value = formatDuration(remainingMs);
-		const dimmed = isBlinkDim(countdown, remainingMs, status);
+		const dimmed = countdown.dimmed;
 		const flash = countdown.flashing;
 		const toast = countdown.toast;
 
@@ -124,7 +121,10 @@ export class KeyCountdown extends CountdownAction<Key, KeyInstance> {
 			accent
 		});
 
-		instance.action.setImage(svg).catch((err) => streamDeck.logger.error("Failed to set key image", err));
+		// A data URI, not the bare markup. setImage documents a file path or "a base64 encoded string
+		// with the mime type declared" — a raw <svg> string is not one of them, and is dropped, which
+		// leaves the key showing the static image from the manifest and looking completely dead.
+		instance.action.setImage(asDataUri(svg)).catch((err) => streamDeck.logger.error("Failed to set key image", err));
 	}
 }
 
@@ -137,18 +137,4 @@ function captionFor(countdown: Countdown, status: string): string {
 		return "done";
 	}
 	return countdown.settings.showTitle ? formatPresetLabel(countdown.presetSeconds * 1000) : "";
-}
-
-/** As on the dial: the window is capped at half the preset, so a fresh timer never starts faded. */
-function isBlinkDim(countdown: Countdown, remainingMs: number, status: string): boolean {
-	if (!countdown.settings.warnEnabled || status !== "running") {
-		return false;
-	}
-
-	const windowMs = Math.min(countdown.settings.warnSeconds * 1000, countdown.timer.durationMs / 2);
-	if (remainingMs > windowMs) {
-		return false;
-	}
-
-	return Math.floor(Date.now() / BLINK_MS) % 2 === 1;
 }

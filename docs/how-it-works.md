@@ -41,8 +41,14 @@ Tapping the touchscreen, or pressing a key, does one of three things depending o
 | Gesture | Does | Why that one |
 | --- | --- | --- |
 | **One tap** | Pause / resume | The thing you do most, so it gets the plainest gesture. |
-| **Two taps** | Restart from the top, running | Restarting is common enough to deserve a gesture, and it is always "back to full *and go*" — a reset that then waits to be started is two gestures pretending to be one. |
+| **Two taps** | Reset the clock to full, stopped | Getting back to the top is common enough to deserve a gesture of its own. |
 | **Hold** | Load the next preset, stopped | Choosing what to time is not the same as beginning it. |
+
+### Why neither the reset nor the hold starts anything
+
+This one was got wrong first time round. The double tap originally reset *and* started, on the reasoning that "a reset that then waits to be started is two gestures pretending to be one".
+
+That reasoning is backwards. Putting a clock back to the top and setting it running are two separate decisions, and a gesture that makes both takes the second one away from you: there is then no way to reset without immediately committing to a fresh run. Starting is what the single tap is for, and it is right there.
 
 ### Why a single tap waits a moment
 
@@ -57,7 +63,7 @@ A **hold** does not wait, because there is nothing ambiguous about it — and a 
 There is none to be had: `@elgato/streamdeck` exposes no haptic command, and the hardware has no motor to drive if it did. Two things stand in for it, and they are doing different jobs.
 
 - **The ring pulses** — a hairline that appears just outside the arc for 200 ms, on every gesture and every tick of the dial. It carries no information beyond "that registered", which is exactly what makes it work in peripheral vision. You cannot read a word per tick while winding a dial; you can see the ring answer each one.
-- **A line names the action** — `+10s`, `pause`, `resume`, `restart`, `next · 20m` — for 900 ms. It is drawn where the finish time normally sits on a dial, and under the clock on a key.
+- **A line names the action** — `+10s`, `start`, `pause`, `resume`, `reset`, `next · 20m` — for 900 ms. It is drawn where the finish time normally sits on a dial, and under the clock on a key.
 
 The pulse is drawn as its own hairline rather than by brightening the arc, for two reasons: an event should not look like a change of state, and it has to remain visible during the end-of-timer fade, which is the one moment feedback matters most and the arc is already being dimmed.
 
@@ -66,6 +72,8 @@ The pulse is drawn as its own hairline rather than by brightening the arc, for t
 The key action is the same countdown with the turning taken away — press, press twice, hold. Presets are edited in the property inspector, since there is nothing on a key to wind them with.
 
 It draws its **whole face as one SVG**, digits included, rather than using `setTitle`. Stream Deck stops honouring a plugin's title the moment the user types one of their own, and a clock that silently stops being a clock because somebody labelled the button is not a clock. The title is left free for whatever you want it for.
+
+That image is sent as a **data URI**, never as raw markup. `setImage` takes a file path or "a base64 encoded string with the mime type declared"; a bare `<svg>` string is neither, and is discarded silently — the key then shows the static image from the manifest and looks completely dead, which is exactly how that bug presented.
 
 With no room for a glyph behind the digits, the line under the clock carries the state instead: the gesture you just made, then `paused` if it is paused, then the preset's length.
 

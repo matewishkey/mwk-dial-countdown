@@ -15,6 +15,9 @@ import type { Gesture } from "./gestures";
 import { normaliseSettings, type DialCountdownSettings, type Preset } from "./settings";
 import { formatPresetLabel, Timer } from "./timer";
 
+/** Blink period while inside the warning window — two render frames on, two off. */
+const BLINK_MS = 500;
+
 type Clock = () => number;
 
 export class Countdown {
@@ -77,6 +80,26 @@ export class Countdown {
 		return isFlashing(this.#ack, this.#now());
 	}
 
+	/**
+	 * True on the dim half of the end-of-timer blink.
+	 *
+	 * The window is capped at half the preset's own length: a five minute warning on a five minute
+	 * timer would blink from the moment it started, which is what once made adjusting the clock look
+	 * like it had triggered the warning.
+	 */
+	get dimmed(): boolean {
+		if (!this.#settings.warnEnabled || this.timer.status !== "running") {
+			return false;
+		}
+
+		const windowMs = Math.min(this.#settings.warnSeconds * 1000, this.timer.durationMs / 2);
+		if (this.timer.remainingMs > windowMs) {
+			return false;
+		}
+
+		return Math.floor(this.#now() / BLINK_MS) % 2 === 1;
+	}
+
 	/** The settings to persist: what the inspector wrote, plus what the dial has since changed. */
 	get persistable(): DialCountdownSettings {
 		return { ...this.#settings, presets: this.#presets, presetIndex: this.#presetIndex };
@@ -110,8 +133,8 @@ export class Countdown {
 			case "toggle":
 				this.toggle();
 				return;
-			case "restart":
-				this.restart();
+			case "reset":
+				this.reset();
 				return;
 			case "next":
 				this.cyclePreset(1);
@@ -120,21 +143,28 @@ export class Countdown {
 
 	/** Pause a running timer, start or resume a stopped one. */
 	toggle(): void {
-		const wasRunning = this.timer.status === "running";
-		const wasIdle = this.timer.status === "idle";
+		// "resume" is only honest when there is something to resume. A timer that has run out goes
+		// back to its full duration when started, so calling that a resume would describe the one
+		// case where the clock jumps rather than carries on.
+		const before = this.timer.status;
 		this.timer.toggle();
 		this.#alerted = false;
-		this.#say(wasRunning ? "pause" : wasIdle ? "start" : "resume");
+		this.#say(before === "running" ? "pause" : before === "paused" ? "resume" : "start");
 	}
 
-	/** Back to a full clock, and straight off again — the double tap. */
-	restart(): void {
+	/**
+	 * Back to a full clock, stopped — the double tap.
+	 *
+	 * Deliberately does not start it. Putting a timer back to the top and setting it running are two
+	 * decisions, and a gesture that makes both takes the second one away from you: there is then no
+	 * way to reset without immediately committing to a fresh run.
+	 */
+	reset(): void {
 		this.timer.reset();
-		this.timer.start();
 		this.#cycles = 0;
 		this.#alerted = false;
 		this.#accelerator.reset();
-		this.#say("restart");
+		this.#say("reset");
 	}
 
 	/**
@@ -203,11 +233,6 @@ export class Countdown {
 		}
 
 		return alert;
-	}
-
-	/** Drops a gesture's acknowledgement early, e.g. when the action leaves the screen. */
-	clearAck(): void {
-		this.#ack = null;
 	}
 
 	#say(text: string): void {

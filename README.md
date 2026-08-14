@@ -3,7 +3,7 @@
 [![MIT](https://img.shields.io/badge/licence-MIT-e2342b)](LICENSE)
 [![Stream Deck +](https://img.shields.io/badge/Stream%20Deck-%2B-101317)](https://www.elgato.com/stream-deck-plus)
 
-A countdown timer for the **Stream Deck +** dials, and for ordinary keys. Tap to pause or resume, tap twice to restart, hold for the next preset — and on a dial, turn to adjust.
+A countdown timer for the **Stream Deck +** dials, and for ordinary keys. Tap to pause or resume, tap twice to reset, hold for the next preset — and on a dial, turn to adjust.
 
 Two actions ship, sharing everything but the control they run on:
 
@@ -25,7 +25,7 @@ The same three gestures on both actions — the touchscreen on a dial, the butto
 | Gesture | Does |
 | --- | --- |
 | One tap | Pause / resume |
-| Two taps | Restart from the top, and straight off again |
+| Two taps | Reset the clock to full — stopped, not started |
 | Hold | Load the next preset — **without** starting it |
 
 And on a dial, the encoder as well:
@@ -39,7 +39,9 @@ And on a dial, the encoder as well:
 
 The screen owns the gestures used constantly, because pressing a dial in is a fiddly, two-handed movement next to tapping the screen directly above it; the dial owns preset cycling, which is used far less often.
 
-A single tap acts a quarter of a second after your finger lifts, not the instant it does — that is the window in which a second tap would make it a restart. There is no way to have both an instant pause and a double tap, and a restart that briefly flashes "paused" first would be worse than the wait.
+A single tap acts a quarter of a second after your finger lifts, not the instant it does — that is the window in which a second tap would make it a reset. There is no way to have both an instant pause and a double tap, and a reset that briefly flashes "paused" first would be worse than the wait.
+
+Neither the reset nor the hold starts anything. Putting a clock back to the top and setting it running are two decisions, and a gesture that makes both takes the second one away from you — there would be no way to reset without immediately committing to a fresh run.
 
 Holding **loads** the next preset rather than running it. Choosing what to time is not the same as starting it, and with one preset configured it simply stays where it is.
 
@@ -50,7 +52,7 @@ Turning an **idle** timer edits that preset's duration and saves it. Turning a *
 There is no haptic feedback to be had on this hardware — the SDK exposes no such command, and there is no motor to drive if it did. Two things stand in for it, doing different jobs:
 
 - **The ring pulses** on every gesture and every tick of the dial. It says only that *something* registered, which is the part you catch without reading — you cannot read a word per tick, but you can see the ring answer every one of them.
-- **A line names the action** — `+10s`, `start`, `pause`, `resume`, `restart`, `next · 20m` — for about a second, then gives way to the finish time on a dial, or to the preset's length on a key.
+- **A line names the action** — `+10s`, `start`, `pause`, `resume`, `reset`, `next · 20m` — for about a second, then gives way to the finish time on a dial, or to the preset's length on a key.
 
 **[How the dial and the presets work →](docs/how-it-works.md)** — the acceleration logic and the preset model, explained.
 
@@ -108,13 +110,14 @@ npx streamdeck pack com.matewishkey.dial-countdown.sdPlugin
 | `src/acceleration.ts` | Turns dial rotation into a step size. |
 | `src/render.ts` | Draws the countdown ring, and the whole key face, as SVG. |
 | `src/sound.ts` | Hands a sound file to the platform's own player. |
-| `src/gestures.ts` | Turns raw presses into `toggle` / `restart` / `next`, double taps included. |
+| `src/gestures.ts` | Turns raw presses into `toggle` / `reset` / `next`, double taps included. |
 | `src/feedback.ts` | How long a gesture is acknowledged for, and in what words. |
 | `src/countdown.ts` | Everything a countdown *is*, minus the Stream Deck — shared by both actions. |
 | `src/actions/countdown-action.ts` | The half of an action that does not care which control it is on. |
 | `src/actions/dial-countdown.ts` | Dial events, and the touchscreen layout. |
 | `src/actions/key-countdown.ts` | Key events, and the key face. |
 | `tools/mock-host.mjs` | A stand-in for the Stream Deck application. |
+| `tools/make-icons.mjs` | Draws the key action's artwork from the same mark the ring uses. |
 
 A few decisions worth knowing before changing things:
 
@@ -129,6 +132,8 @@ A few decisions worth knowing before changing things:
 **A finished timer fills the ring** rather than emptying it. Drawn literally, the moment that most needs to be seen would be blank.
 
 **The key draws its own text.** `setTitle` is the only text facility a key has, and Stream Deck stops honouring it the moment the user types a title of their own — a clock that silently stops being a clock because someone labelled the button is not a clock. So the key face is one SVG, digits included, and the title is left free for whatever the user wants it for.
+
+**`setImage` will not take raw SVG markup.** It documents a file path or "a base64 encoded string with the mime type declared", and a bare `<svg>` string is neither — it is dropped without an error, leaving the key showing the static image from the manifest and looking completely dead. Everything drawn at runtime goes through `asDataUri` for this reason, keys and touchscreen alike.
 
 **Frames are re-asserted every couple of seconds**, even when nothing has changed. Dropping unchanged frames assumes every frame sent arrives, and there is no way to ask the hardware what it is actually showing — so on a display that is static for long stretches, one lost frame would stay lost. This is not hypothetical: Stream Deck discards feedback sent alongside a layout switch, which left the ring showing the layout's fallback for an undrawn pixmap — the action's own red icon — until the dial was touched. The pixmap now defaults to nothing rather than to that icon, and the re-assert bounds any dropped frame to two seconds.
 

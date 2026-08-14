@@ -18,9 +18,6 @@ import { CountdownAction, type Instance } from "./countdown-action";
 
 export type { DialCountdownSettings };
 
-/** Blink period while inside the warning window — two render frames on, two off. */
-const BLINK_MS = 500;
-
 /**
  * Font sizes for the big clock. `1:10:10` at the layout's default 30px overruns its 96px box, so the
  * size steps down with the length of the string rather than being fixed.
@@ -116,7 +113,7 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 	}
 
 	/**
-	 * Every gesture the screen has: one tap pauses or resumes, two restart from the top, and a held
+	 * Every gesture the screen has: one tap pauses or resumes, two reset the clock to full, and a held
 	 * tap loads the next preset without starting it.
 	 *
 	 * The hardware reports a tap and whether it was held, but never that two taps were a pair — that
@@ -178,7 +175,7 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 		// a running timer is nudged. Adjusting a stopped timer edits the preset, and the label follows.
 		const label = formatPresetLabel(countdown.presetSeconds * 1000);
 		const value = formatDuration(remainingMs);
-		const dimmed = isBlinkDim(countdown, remainingMs, status);
+		const dimmed = countdown.dimmed;
 		const flash = countdown.flashing;
 		const toast = countdown.toast;
 		const title = settings.showTitle ? `${label}${suffixFor(countdown, status)}` : "";
@@ -232,25 +229,6 @@ function finishText(countdown: Countdown, remainingMs: number, status: string): 
 	return `ends ${formatClockTime(Date.now() + remainingMs)}`;
 }
 
-/**
- * True on the dim half of the warning blink.
- *
- * The window is capped at half the preset's own length: a five minute warning on a five minute
- * timer would blink from the moment it started, which is what made adjusting the clock look like it
- * had triggered the warning.
- */
-function isBlinkDim(countdown: Countdown, remainingMs: number, status: string): boolean {
-	if (!countdown.settings.warnEnabled || status !== "running") {
-		return false;
-	}
-
-	const windowMs = Math.min(countdown.settings.warnSeconds * 1000, countdown.timer.durationMs / 2);
-	if (remainingMs > windowMs) {
-		return false;
-	}
-
-	return Math.floor(Date.now() / BLINK_MS) % 2 === 1;
-}
 
 /** A repeating timer counts its laps; a finished one says so. */
 function suffixFor(countdown: Countdown, status: string): string {

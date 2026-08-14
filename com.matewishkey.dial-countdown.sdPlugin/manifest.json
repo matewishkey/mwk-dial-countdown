@@ -1,13 +1,13 @@
 {
 	"Name": "MWK Dial Countdown",
-	"Version": "0.10.0.0",
+	"Version": "0.11.0.0",
 	"Author": "Mate Wish Key",
 	"Actions": [
 		{
 			"Name": "Countdown",
 			"UUID": "com.matewishkey.dial-countdown.countdown",
 			"Icon": "imgs/actions/timer/icon",
-			"Tooltip": "A countdown timer on a dial. Tap the screen to pause or resume, tap twice to restart, hold to load the next preset, and turn to adjust.",
+			"Tooltip": "A countdown timer on a dial. Tap the screen to pause or resume, tap twice to reset it to full, hold to load the next preset, and turn to adjust.",
 			"PropertyInspectorPath": "ui/dial-countdown.html",
 			"Controllers": [
 				"Encoder"
@@ -19,7 +19,7 @@
 				"TriggerDescription": {
 					"Rotate": "Adjust time",
 					"Push": "Next preset",
-					"Touch": "Pause / resume · twice restarts",
+					"Touch": "Pause / resume · twice resets",
 					"LongTouch": "Next preset"
 				}
 			},
@@ -33,15 +33,15 @@
 		{
 			"Name": "Countdown (Key)",
 			"UUID": "com.matewishkey.dial-countdown.key",
-			"Icon": "imgs/actions/timer/icon",
-			"Tooltip": "The same countdown timer on an ordinary key. Press to pause or resume, press twice to restart, hold to load the next preset.",
+			"Icon": "imgs/actions/key/icon",
+			"Tooltip": "The same countdown timer on an ordinary key. Press to pause or resume, press twice to reset it to full, hold to load the next preset.",
 			"PropertyInspectorPath": "ui/dial-countdown.html",
 			"Controllers": [
 				"Keypad"
 			],
 			"States": [
 				{
-					"Image": "imgs/actions/timer/key",
+					"Image": "imgs/actions/key/key",
 					"TitleAlignment": "middle"
 				}
 			]
@@ -50,7 +50,7 @@
 	"Category": "MWK Dial Countdown",
 	"CategoryIcon": "imgs/plugin/category-icon",
 	"CodePath": "bin/plugin.js",
-	"Description": "Countdown timers for the Stream Deck + dials and for ordinary keys. Tap to pause or resume, tap twice to restart, hold for the next preset — and on a dial, turn to adjust, with a step that grows the longer you keep turning.",
+	"Description": "Countdown timers for the Stream Deck + dials and for ordinary keys. Tap to pause or resume, tap twice to reset, hold for the next preset — and on a dial, turn to adjust, with a step that grows the longer you keep turning.",
 	"Icon": "imgs/plugin/marketplace",
 	"SDKVersion": 3,
 	"Software": {

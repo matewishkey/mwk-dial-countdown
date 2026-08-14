@@ -35,17 +35,45 @@ describe("the gestures a countdown answers to", () => {
 		assert.equal(countdown.toast, "resume", "coming back from a pause is a resume, not a fresh start");
 	});
 
-	it("restarts from the top and keeps running, rather than merely resetting", () => {
+	it("resets to the full duration without starting it", () => {
 		const { countdown, advance } = fixture();
 
 		countdown.toggle();
 		advance(120_000);
 		assert.equal(countdown.timer.remainingMs, 180_000, "precondition: two minutes gone");
 
-		countdown.restart();
-		assert.equal(countdown.timer.remainingMs, 300_000, "a restart goes back to the full duration");
-		assert.equal(countdown.timer.status, "running", "and it does not wait to be started again");
-		assert.equal(countdown.toast, "restart");
+		countdown.reset();
+		assert.equal(countdown.timer.remainingMs, 300_000, "a reset goes back to the full duration");
+		assert.equal(
+			countdown.timer.status,
+			"idle",
+			"and it must NOT start itself — resetting and running are two decisions, and the gesture only makes the first"
+		);
+		assert.equal(countdown.toast, "reset");
+	});
+
+	it("resets a finished timer back to a full, stopped clock too", () => {
+		const { countdown, advance } = fixture([2]);
+
+		countdown.toggle();
+		advance(2_000);
+		assert.equal(countdown.timer.status, "elapsed", "precondition: it ran out");
+
+		countdown.reset();
+		assert.equal(countdown.timer.status, "idle");
+		assert.equal(countdown.timer.remainingMs, 2_000);
+	});
+
+	it("calls a finished timer's restart a start, not a resume", () => {
+		const { countdown, advance } = fixture([2]);
+
+		countdown.toggle();
+		advance(2_000);
+		assert.equal(countdown.timer.status, "elapsed", "precondition: it ran out");
+
+		countdown.toggle();
+		assert.equal(countdown.timer.remainingMs, 2_000, "a finished timer goes back to full when started");
+		assert.equal(countdown.toast, "start", "so calling it a resume would describe a clock carrying on, which it is not");
 	});
 
 	it("loads the next preset without starting it — choosing what to time is not beginning", () => {
@@ -183,6 +211,61 @@ describe("acknowledgement", () => {
 
 		assert.equal(countdown.toast, "");
 		assert.equal(countdown.flashing, false);
+	});
+});
+
+describe("the end-of-timer fade", () => {
+	function fading(presetSeconds: number, warnSeconds: number): ReturnType<typeof fixture> {
+		let now = 1_000_000;
+		const countdown = new Countdown(
+			normaliseSettings({ presets: [presetSeconds], presetIndex: 0, warnEnabled: true, warnSeconds }),
+			() => now
+		);
+		return { countdown, advance: (ms: number) => void (now += ms) };
+	}
+
+	it("stays off entirely when the fade is switched off", () => {
+		const { countdown, advance } = fixture([20]);
+		countdown.toggle();
+		advance(19_000);
+		assert.equal(countdown.dimmed, false);
+	});
+
+	it("stays off on a stopped timer, however little is left on it", () => {
+		const { countdown, advance } = fading(20, 20);
+		countdown.toggle();
+		advance(19_000);
+		countdown.toggle();
+		assert.equal(countdown.timer.status, "paused", "precondition");
+		assert.equal(countdown.dimmed, false, "a paused clock is not counting down towards anything");
+	});
+
+	it("caps the window at half the preset, so a fresh timer never starts already fading", () => {
+		// The bug this guards: a five minute warning on a five minute timer blinked from the off,
+		// which made adjusting the clock look like it had triggered the warning.
+		const { countdown, advance } = fading(300, 300);
+		countdown.toggle();
+		assert.equal(countdown.dimmed, false, "it must not fade the instant it starts");
+
+		advance(151_000);
+		assert.equal(
+			[countdown.dimmed, (advance(500), countdown.dimmed)].includes(true),
+			true,
+			"but past the halfway cap it does fade"
+		);
+	});
+
+	it("alternates rather than sitting dim, so it reads as a blink", () => {
+		const { countdown, advance } = fading(60, 30);
+		countdown.toggle();
+		advance(40_000);
+
+		const seen = new Set<boolean>();
+		for (let i = 0; i < 8; i++) {
+			seen.add(countdown.dimmed);
+			advance(250);
+		}
+		assert.deepEqual([...seen].sort(), [false, true], "both halves of the blink must occur");
 	});
 });
 

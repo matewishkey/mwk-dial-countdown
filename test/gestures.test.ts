@@ -32,13 +32,13 @@ describe("TapResolver", () => {
 		assert.deepEqual(await settle(), ["toggle"]);
 	});
 
-	it("turns two taps inside the window into one restart, and not a toggle as well", async () => {
+	it("turns two taps inside the window into one reset, and not a toggle as well", async () => {
 		const { resolver, settle } = collector();
 
 		resolver.press(false);
 		resolver.press(false);
 
-		assert.deepEqual(await settle(), ["restart"], "the first tap's toggle must be cancelled, not merely joined");
+		assert.deepEqual(await settle(), ["reset"], "the first tap's toggle must be cancelled, not merely joined");
 	});
 
 	it("treats two taps either side of the window as two separate toggles", async () => {

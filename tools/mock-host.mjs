@@ -458,12 +458,18 @@ async function runDemo() {
 
 		// The three screen gestures, each doing something the other two do not.
 		[
-			"two taps → restart from the top, and straight off again",
+			"two taps → back to full, and NOT started",
 			async () => {
 				await wait(400);
 				await spin(3, -1, 400);
 				await wait(400);
 				await doubleTap(() => gestures.touch(false));
+				await wait(600);
+
+				const settled = screen.value;
+				await wait(1500);
+				console.log(`\n   clock 1.5s after the double tap: ${settled} then ${screen.value}`);
+				console.log(`   ${settled === screen.value ? "\u2713 reset and stayed stopped" : "\u2717 it started itself"}`);
 			}
 		],
 		[
@@ -571,7 +577,18 @@ async function runDemo() {
 				console.log(`   ${said === "pause" && key.caption === "paused" ? "\u2713 gesture then state" : "\u2717 caption not settling"}`);
 			}
 		],
-		["key: two presses → restarts from the top", async () => doubleTap(() => keyPress(60))],
+		[
+			"key: two presses → back to full, and NOT started",
+			async () => {
+				await doubleTap(() => keyPress(60));
+				await wait(600);
+
+				const settled = key.value;
+				await wait(1500);
+				console.log(`\n   key clock 1.5s after the double press: ${settled} then ${key.value}`);
+				console.log(`   ${settled === key.value ? "\u2713 reset and stayed stopped" : "\u2717 it started itself"}`);
+			}
+		],
 		[
 			"key: hold → next preset, loaded but not started",
 			async () => {
@@ -711,7 +728,7 @@ function draw() {
 		...keyLines(),
 		"",
 		dim("   ←/→ adjust   shift+←/→ ×5   ↑/↓ press+turn 60s"),
-		dim("   t tap: pause/resume   d double tap: restart   y hold: next preset"),
+		dim("   t tap: pause/resume   d double tap: reset   y hold: next preset"),
 		dim("   space press dial: next preset   r hold dial: previous"),
 		dim("   k press key   j double press key   l hold key   ctrl+c quit")
 	];

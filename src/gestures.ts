@@ -13,10 +13,10 @@
  * What a press meant.
  *
  * - `toggle` — pause a running timer, resume a stopped one.
- * - `restart` — back to full, and straight off again.
+ * - `reset` — back to a full clock, stopped.
  * - `next` — the next preset, loaded but deliberately not started.
  */
-export type Gesture = "toggle" | "restart" | "next";
+export type Gesture = "toggle" | "reset" | "next";
 
 /** How long a second tap has to arrive for the pair to count as one double tap. */
 export const DOUBLE_TAP_MS = 250;
@@ -63,7 +63,7 @@ export class TapResolver {
 
 		if (this.#handle !== null) {
 			this.cancel();
-			this.#emit("restart");
+			this.#emit("reset");
 			return;
 		}
 

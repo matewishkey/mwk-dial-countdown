@@ -194,7 +194,7 @@ describe("the key face", () => {
 	it("shrinks the caption so it stays inside the ring rather than running under it", () => {
 		// The ring closes in at the caption's height, leaving roughly 88px across — a caption that
 		// overruns that is drawn straight through the ring's stroke.
-		for (const caption of ["20m", "paused", "next · 40m", "1h 10m 10s", "×10/10", "restart"]) {
+		for (const caption of ["20m", "paused", "next · 40m", "1h 10m 10s", "×10/10", "reset"]) {
 			const width = (caption.length * keyCaptionFontSize(caption)) / 2;
 			assert.ok(width <= 90, `"${caption}" needs about ${Math.round(width)}px and would foul the ring`);
 		}
