@@ -72,6 +72,9 @@ const INFO = {
 /** Latest touchscreen state, as reported by the plugin's setFeedback calls. */
 const screen = { title: "—", value: "—", label: "", finish: "", indicator: 0, ring: 0, colour: "", font: 0, opacity: 1, glyph: "", layout: "(default)", flash: false };
 
+/** How many times the plugin has raised Stream Deck's own "that failed" alert. */
+let alertCount = 0;
+
 /**
  * Latest key face, recovered from the SVG the plugin sends to setImage. The key draws its own text
  * rather than using setTitle, so everything it says is in that one image and can be read back here.
@@ -189,6 +192,10 @@ function handlePluginMessage(message) {
 			break;
 
 		case "setTitle":
+			break;
+
+		case "showAlert":
+			alertCount += 1;
 			break;
 
 		default:
@@ -402,11 +409,49 @@ async function runDemo() {
 		["fresh install → defaults, and they get written back", async () => {}],
 		["press dial → 20m", async () => press(80)],
 
-		// Cadence: a single click is now one second, and winding reaches a minute a tick.
+		// Cadence: the step sits in a gear, and the gear is chosen by how FAST the dial is turned
+		// rather than by how long it has been turning. A deliberate turn never changes up on its own.
 		["one click → +1s", async () => gestures.rotate(1)],
-		["8 slow clicks → +8s, still fine control", async () => spin(8, 1, 400)],
+		["8 slow clicks → +8s, still fine control however long it goes on", async () => spin(8, 1, 400)],
 		["a hard spin → minutes a tick", async () => spin(6, 3, 50)],
 		["keep winding → ten minutes a tick, half a day in one gesture", async () => spin(16, 3, 45)],
+
+		// The gear is HELD. This is what the old accelerator did not do: it recomputed the step from
+		// the current speed every tick, so it collapsed back to seconds the moment you slowed — which
+		// is exactly when you want the coarse step, to place the value you just wound to.
+		[
+			"…now slow right down: the coarse gear is HELD, so you can place the value carefully",
+			async () => {
+				// One tick at a time, half a second apart — well under the rate that changes up, and
+				// well inside the time-out that drops back. The delta per click is the gear made visible.
+				await spin(4, 1, 500);
+				console.log(`\n   step per click after slowing right down: ${screen.finish} (first gear would be +1s)`);
+				console.log(`   ${screen.finish === "+10m" ? "\u2713 held" : "\u2717 collapsed back to a fine step"}`);
+			}
+		],
+
+		// Turning never writes to the preset list. The label says so — "from 20m" — for as long as the
+		// two disagree, and the first press of the dial is what closes the gap rather than moving on.
+		[
+			"press dial once → BACK to the preset it was dialled off, not on to the next one",
+			async () => {
+				await wait(2500);
+				const drifted = screen.label;
+				await press(80);
+				await wait(300);
+				console.log(`\n   label while drifted: "${drifted}", clock after one press: ${screen.value}`);
+				console.log(
+					`   ${drifted.startsWith("from ") && screen.value === "20:00" ? "\u2713 restored, and the preset was never overwritten" : "\u2717 the preset did not survive being dialled"}`
+				);
+			}
+		],
+		[
+			"…press dial again → NOW it moves on, because there is nothing left to put back",
+			async () => {
+				await press(80);
+				await wait(300);
+			}
+		],
 
 		// The long clock has to fit its box.
 		["set 1:10:10 → font shrinks to fit", async () => {
@@ -526,12 +571,17 @@ async function runDemo() {
 			await wait(300);
 		}],
 
-		// Sound repeats. On Linux no player exists, so this proves it does not crash.
+		// Sound repeats. On Linux no player exists, so this proves it does not crash — and, since the
+		// sound genuinely cannot play here, that a failed alarm raises Stream Deck's own alert rather
+		// than finishing in a silence indistinguishable from not having finished at all.
 		["alarm set to play 3 times, 2s timer → runs out", async () => {
+			const before = alertCount;
 			applySettings({ presets: [2], presetIndex: 0, soundEnabled: true, soundRepeat: 3, showTitle: true });
 			await wait(300);
 			gestures.touch(false);
 			await wait(2600);
+			console.log(`\n   no audio player on this platform, so the alarm cannot sound: showAlert raised ${alertCount - before}x`);
+			console.log(`   ${alertCount > before ? "\u2713 a failed alert is reported, not swallowed" : "\u2717 silent failure"}`);
 		}],
 
 		// Auto-repeat, and the fact that it stops. A timer that loops for ever is a nuisance.
@@ -550,6 +600,23 @@ async function runDemo() {
 				await wait(2000);
 				console.log(`\n   clock 2s apart: ${settled} then ${screen.value}`);
 				console.log(`   ${settled === screen.value ? "\u2713 stopped" : "\u2717 still running"}`);
+			}
+		],
+
+		// The bug: the lap count was left where the spent run put it, so starting the timer again gave
+		// a run that could never repeat once — under a display still reading ×2/2.
+		[
+			"…and starting it again is a FRESH run, with its laps back",
+			async () => {
+				gestures.touch(false);
+				await wait(700);
+				// The ring layout's heading is the `label` slot; `title` belongs to the bar layout.
+				const restarted = screen.label;
+				await wait(2400);
+				console.log(`\n   label on restart: "${restarted}", one lap later: "${screen.label}"`);
+				console.log(
+					`   ${restarted === "2s" && screen.label.includes("\u00d71/2") ? "\u2713 counter reset, and it repeats again" : "\u2717 the spent lap count stuck"}`
+				);
 			}
 		]
 	];

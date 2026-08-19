@@ -29,6 +29,17 @@ export class Countdown {
 
 	#presetIndex: number;
 
+	/**
+	 * The preset duration the clock was last loaded from, in seconds.
+	 *
+	 * Not the same as the clock's own duration, which the dial moves freely, and not the same as the
+	 * selected preset either while an inspector edit is being taken. It exists so that
+	 * {@link Countdown.applySettings} can tell "the configured length changed" from "the clock has
+	 * been dialled off it" — comparing the settings against the live clock would make every touch of
+	 * the volume slider reload a countdown that had merely been nudged.
+	 */
+	#loadedSeconds: number;
+
 	#settings: DialCountdownSettings;
 
 	/** Guards against re-playing the alert on every frame once the timer has elapsed. */
@@ -46,7 +57,8 @@ export class Countdown {
 		this.#settings = settings;
 		this.#presets = settings.presets;
 		this.#presetIndex = settings.presetIndex;
-		this.timer = new Timer(this.#presets[this.#presetIndex] * 1000, now);
+		this.#loadedSeconds = this.#presets[this.#presetIndex];
+		this.timer = new Timer(this.#loadedSeconds * 1000, now);
 	}
 
 	get settings(): DialCountdownSettings {
@@ -65,9 +77,20 @@ export class Countdown {
 		return this.#cycles;
 	}
 
-	/** Length of the selected preset, in seconds — where this timer started, not where it is now. */
+	/** Length of the selected preset, in seconds — as configured, not as the dial has since left it. */
 	get presetSeconds(): number {
 		return this.#presets[this.#presetIndex];
+	}
+
+	/**
+	 * True when the clock has been dialled away from the preset it was loaded from.
+	 *
+	 * The dial deliberately no longer writes back to the preset list, so this is the state that needs
+	 * a way out: the working duration says one thing and the configuration says another. Pressing for
+	 * the next preset spends its first press closing that gap — see {@link Countdown.cyclePreset}.
+	 */
+	get drifted(): boolean {
+		return this.timer.durationMs !== this.presetSeconds * 1000;
 	}
 
 	/** The word acknowledging the last gesture, or `""` once it has had its time. */
@@ -100,7 +123,7 @@ export class Countdown {
 		return Math.floor(this.#now() / BLINK_MS) % 2 === 1;
 	}
 
-	/** The settings to persist: what the inspector wrote, plus what the dial has since changed. */
+	/** The settings to persist: what the inspector wrote, plus whichever preset is now selected. */
 	get persistable(): DialCountdownSettings {
 		return { ...this.#settings, presets: this.#presets, presetIndex: this.#presetIndex };
 	}
@@ -113,15 +136,20 @@ export class Countdown {
 	 */
 	applySettings(raw: unknown): boolean {
 		const settings = normaliseSettings(raw);
-		const durationChanged = settings.presets[settings.presetIndex] * 1000 !== this.timer.durationMs;
+
+		// Against the preset the clock was loaded from, never against the clock itself — otherwise a
+		// countdown dialled off its preset would be yanked back to it by an unrelated edit.
+		const durationChanged = settings.presets[settings.presetIndex] !== this.#loadedSeconds;
 
 		this.#settings = settings;
 		this.#presets = settings.presets;
 		this.#presetIndex = settings.presetIndex;
 
 		if (durationChanged) {
-			this.timer.setDuration(this.presetSeconds * 1000);
+			this.#loadedSeconds = this.presetSeconds;
+			this.timer.setDuration(this.#loadedSeconds * 1000);
 			this.#alerted = false;
+			this.#cycles = 0;
 		}
 
 		return durationChanged;
@@ -147,6 +175,14 @@ export class Countdown {
 		// back to its full duration when started, so calling that a resume would describe the one
 		// case where the clock jumps rather than carries on.
 		const before = this.timer.status;
+
+		// Starting an expired timer puts the clock back to full, which begins a fresh run — so the lap
+		// count goes back with it. Leaving it where it was is what used to strand an auto-repeating
+		// timer: its budget read as already spent, so the restarted run never repeated even once.
+		if (before === "elapsed") {
+			this.#cycles = 0;
+		}
+
 		this.timer.toggle();
 		this.#alerted = false;
 		this.#say(before === "running" ? "pause" : before === "paused" ? "resume" : "start");
@@ -168,43 +204,64 @@ export class Countdown {
 	}
 
 	/**
-	 * Moves to another preset and loads its duration, stopped.
+	 * Moves to another preset and loads its duration, stopped — but spends its first press putting
+	 * the clock back on the preset it is already on, if the dial has taken it off it.
 	 *
-	 * Deliberately does not start it: this is how you choose what to time, and choosing is not the
-	 * same as beginning. The word names the preset landed on, so a blind cycle through four of them
-	 * is still readable.
+	 * The restore comes first because it is wanted far more often. Turning the dial now leaves the
+	 * configured preset alone, so a countdown that has been wound to 23 minutes has no other way back
+	 * to the 20 it was set to, and "put it back" is a thing you do constantly while "move to the next
+	 * one" is a thing you do occasionally. Press once and the clock returns; press again and it moves
+	 * on. There is nothing to lose either way, since the press that would have advanced still does.
+	 *
+	 * Loading a preset deliberately does not start it: this is how you choose what to time, and
+	 * choosing is not the same as beginning. The word names the preset landed on, so a blind cycle
+	 * through four of them is still readable — and says which of the two things the press just did.
 	 */
 	cyclePreset(step: number): void {
+		if (this.drifted) {
+			this.#load("preset");
+			return;
+		}
+
 		const count = this.#presets.length;
 		this.#presetIndex = (this.#presetIndex + step + count) % count;
-		this.timer.setDuration(this.presetSeconds * 1000);
+		this.#load("next");
+	}
+
+	/** Puts the clock on the selected preset, stopped, and says so. */
+	#load(word: string): void {
+		this.#loadedSeconds = this.presetSeconds;
+		this.timer.setDuration(this.#loadedSeconds * 1000);
 		this.#alerted = false;
 		this.#cycles = 0;
 		this.#accelerator.reset();
-		this.#say(`next · ${formatPresetLabel(this.presetSeconds * 1000)}`);
+		this.#say(`${word} · ${formatPresetLabel(this.presetSeconds * 1000)}`);
 	}
 
 	/**
-	 * Turning adjusts time. The step accelerates the longer the dial is spun — a second for a nudge,
-	 * ten once it is being wound, a minute once it is being wound hard — so setting an hour-long
-	 * timer does not mean sixty turns of the wrist.
+	 * Turning adjusts the clock, and nothing else.
 	 *
-	 * @returns `true` when the change edited the preset rather than merely nudging a running clock,
-	 * so the caller knows there is something worth saving.
+	 * It used to write the new length straight back into the preset, on the reasoning that the dial
+	 * is the preset editor. In practice that made the presets unusable: winding a 20 minute timer up
+	 * to 23 for one call silently redefined "20 minutes" as 23, and cycling away saved it there. A
+	 * preset is a setting, and a setting is changed where settings are changed. What the dial changes
+	 * is the clock in front of you — the same thing it has always done to a *running* countdown, now
+	 * true of a stopped one as well.
+	 *
+	 * The step sits in a gear chosen by how fast the dial is turned; see `./acceleration`.
 	 */
-	adjust(ticks: number, pressed: boolean): boolean {
+	adjust(ticks: number, pressed: boolean): void {
+		const before = this.timer.status;
 		const deltaSeconds = this.#accelerator.rotate(ticks, this.#now(), pressed);
+
+		// Adjusting an expired timer puts it back to a full, stopped clock, which ends that run.
+		if (before === "elapsed") {
+			this.#cycles = 0;
+		}
+
 		this.timer.adjust(deltaSeconds * 1000);
 		this.#alerted = false;
 		this.#say(formatDelta(deltaSeconds));
-
-		// Only an idle timer writes back: while running the dial nudges the clock, not the preset.
-		if (this.timer.status === "running") {
-			return false;
-		}
-
-		this.#presets[this.#presetIndex] = Math.round(this.timer.durationMs / 1000);
-		return true;
 	}
 
 	/**

@@ -58,6 +58,9 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 	 * Turning adjusts time, and every tick is acknowledged by a pulse of the ring — there is no
 	 * haptic feedback to be had on this hardware, so the ring answering each click is what tells you
 	 * the dial is being heard.
+	 *
+	 * Nothing is saved. Turning changes the clock, never the preset behind it, so a rotation leaves
+	 * the stored settings untouched by design and there is no write to schedule.
 	 */
 	override onDialRotate(ev: DialRotateEvent<DialCountdownSettings>): void {
 		const instance = this.instanceFor(ev.action.id);
@@ -69,10 +72,7 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 		// press-and-turn does not move the preset out from under the value being set.
 		this.#cancelLongPress(instance);
 
-		if (instance.countdown.adjust(ev.payload.ticks, ev.payload.pressed)) {
-			this.scheduleSave(instance);
-		}
-
+		instance.countdown.adjust(ev.payload.ticks, ev.payload.pressed);
 		this.acknowledge(instance);
 	}
 
@@ -171,9 +171,10 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 		const status = timer.status;
 		const remainingMs = timer.remainingMs;
 
-		// The label shows the preset's own length — where this timer started — and so stays put while
-		// a running timer is nudged. Adjusting a stopped timer edits the preset, and the label follows.
-		const label = formatPresetLabel(countdown.presetSeconds * 1000);
+		// The label shows the preset's own length — as configured, never as the dial has since left it.
+		// Once the two disagree it says so, because the gap is otherwise invisible: the clock reads
+		// 23:00, the settings still say 20m, and the next press of the dial is what closes it.
+		const label = `${countdown.drifted ? "from " : ""}${formatPresetLabel(countdown.presetSeconds * 1000)}`;
 		const value = formatDuration(remainingMs);
 		const dimmed = countdown.dimmed;
 		const flash = countdown.flashing;

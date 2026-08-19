@@ -1,13 +1,13 @@
 {
-	"Name": "MWK Dial Countdown",
-	"Version": "1.0.0.0",
+	"Name": "Dial Countdown",
+	"Version": "1.1.0.0",
 	"Author": "Mate Wish Key",
 	"Actions": [
 		{
 			"Name": "Countdown",
 			"UUID": "com.matewishkey.dial-countdown.countdown",
 			"Icon": "imgs/actions/timer/icon",
-			"Tooltip": "A countdown timer on a dial. Tap the screen to pause or resume, tap twice to reset it to full, hold to load the next preset, and turn to adjust.",
+			"Tooltip": "A countdown timer on a dial. Tap the screen to pause or resume, tap twice to reset it to full, hold to load the next preset, and turn to adjust — the step changes gear with how fast you turn.",
 			"PropertyInspectorPath": "ui/dial-countdown.html",
 			"Controllers": [
 				"Encoder"
@@ -18,9 +18,9 @@
 				"StackColor": "#E2342B",
 				"TriggerDescription": {
 					"Rotate": "Adjust time",
-					"Push": "Next preset",
+					"Push": "Back to preset, then next",
 					"Touch": "Pause / resume · twice resets",
-					"LongTouch": "Next preset"
+					"LongTouch": "Back to preset, then next"
 				}
 			},
 			"States": [
@@ -47,10 +47,10 @@
 			]
 		}
 	],
-	"Category": "MWK Dial Countdown",
+	"Category": "Dial Countdown",
 	"CategoryIcon": "imgs/plugin/category-icon",
 	"CodePath": "bin/plugin.js",
-	"Description": "Countdown timers for the Stream Deck + dials and for ordinary keys. Tap to pause or resume, tap twice to reset, hold for the next preset — and on a dial, turn to adjust, with a step that grows the longer you keep turning.",
+	"Description": "Countdown timers for the Stream Deck + dials and for ordinary keys. Tap to pause or resume, tap twice to reset, hold for the next preset — and on a dial, turn to adjust, with a step that changes gear according to how fast you turn.",
 	"Icon": "imgs/plugin/marketplace",
 	"SDKVersion": 3,
 	"Software": {
