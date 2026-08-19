@@ -1,4 +1,4 @@
-# MWK Dial Countdown
+# Dial Countdown
 
 [![MIT](https://img.shields.io/badge/licence-MIT-e2342b)](LICENSE)
 [![Stream Deck +](https://img.shields.io/badge/Stream%20Deck-%2B-101317)](https://www.elgato.com/stream-deck-plus)
@@ -16,7 +16,7 @@ Every dial and every key holds its own independent timer.
 
 ## Install
 
-Download the latest `.streamDeckPlugin` from [Releases](https://github.com/matewishkey/mwk-dial-countdown/releases) and double-click it. Stream Deck installs it and adds **MWK Dial Countdown** to the actions list; drag **Countdown** onto a dial, or **Countdown (Key)** onto a button.
+Download the latest `.streamDeckPlugin` from [Releases](https://github.com/matewishkey/mwk-dial-countdown/releases) and double-click it. Stream Deck installs it and adds **Dial Countdown** to the actions list; drag **Countdown** onto a dial, or **Countdown (Key)** onto a button.
 
 ## Gestures
 
@@ -26,15 +26,15 @@ The same three gestures on both actions — the touchscreen on a dial, the butto
 | --- | --- |
 | One tap | Pause / resume |
 | Two taps | Reset the clock to full — stopped, not started |
-| Hold | Load the next preset — **without** starting it |
+| Hold | Put the clock back on its preset, or load the next one — **without** starting it |
 
 And on a dial, the encoder as well:
 
 | Gesture | Does |
 | --- | --- |
-| Press dial | Next preset |
-| Hold dial | Previous preset |
-| Turn | Adjust — accelerates 1s → 10s → 1min → 10min a tick |
+| Press dial | Back to the preset, then the next one |
+| Hold dial | Back to the preset, then the previous one |
+| Turn | Adjust the clock — 1s, 10s, 1min or 10min a tick, depending on the gear |
 | Press + turn | A flat 1 minute a tick |
 
 The screen owns the gestures used constantly, because pressing a dial in is a fiddly, two-handed movement next to tapping the screen directly above it; the dial owns preset cycling, which is used far less often.
@@ -43,22 +43,24 @@ A single tap acts a quarter of a second after your finger lifts, not the instant
 
 Neither the reset nor the hold starts anything. Putting a clock back to the top and setting it running are two decisions, and a gesture that makes both takes the second one away from you — there would be no way to reset without immediately committing to a fresh run.
 
-Holding **loads** the next preset rather than running it. Choosing what to time is not the same as starting it, and with one preset configured it simply stays where it is.
+Holding **loads** the next preset rather than running it. Choosing what to time is not the same as starting it.
 
-Turning an **idle** timer edits that preset's duration and saves it. Turning a **running** timer nudges only the time left, leaving the preset alone.
+Turning **never edits a preset** — running or stopped, it moves the clock in front of you and leaves the configuration alone. While the two disagree the label says so, reading `from 20m`, and the next press of the dial puts the clock back rather than moving on. Press again and it moves on as usual.
+
+The step **changes gear with how fast you turn**, not with how long. A deliberate turn stays on seconds for as long as you like; a flick changes up, and the gear then holds — through slowing down and through reversing — until you let go of the dial for a couple of seconds.
 
 ## Feedback
 
 There is no haptic feedback to be had on this hardware — the SDK exposes no such command, and there is no motor to drive if it did. Two things stand in for it, doing different jobs:
 
 - **The ring pulses** on every gesture and every tick of the dial. It says only that *something* registered, which is the part you catch without reading — you cannot read a word per tick, but you can see the ring answer every one of them.
-- **A line names the action** — `+10s`, `start`, `pause`, `resume`, `reset`, `next · 20m` — for about a second, then gives way to the finish time on a dial, or to the preset's length on a key.
+- **A line names the action** — `+10s`, `start`, `pause`, `resume`, `reset`, `preset · 20m`, `next · 20m` — for about a second, then gives way to the finish time on a dial, or to the preset's length on a key.
 
-**[How the dial and the presets work →](docs/how-it-works.md)** — the acceleration logic and the preset model, explained.
+**[How the dial and the presets work →](docs/how-it-works.md)** — the gearbox and the preset model, explained.
 
 ## Features
 
-- **Presets** — 5, 20, 30 and 40 minutes out of the box, edited as hours, minutes and seconds, or with the dial itself. They carry no names: a timer's length is its own label, so the display reads `20m`, or `20m 30s` once nudged off a round number.
+- **Presets** — 5, 20, 30 and 40 minutes out of the box, edited as hours, minutes and seconds. They carry no names: a timer's length is its own label, so the display reads `20m`, or `20m 30s` once nudged off a round number. The dial cannot overwrite them.
 - **Countdown ring** that empties as the timer runs, with the clock beside it. A progress bar is available instead.
 - **Seven colour themes**, and an optional logo in the middle of the ring.
 - **A pause glyph** rather than a colour change, so the state is stated outright.
@@ -107,7 +109,7 @@ npx streamdeck pack com.matewishkey.dial-countdown.sdPlugin
 | --- | --- |
 | `src/timer.ts` | The countdown state machine. No Stream Deck imports and an injectable clock, so it is tested directly. |
 | `src/settings.ts` | The settings shape, and the only place they are read. |
-| `src/acceleration.ts` | Turns dial rotation into a step size. |
+| `src/acceleration.ts` | The gearbox: turns how fast the dial is turned into a step size, and holds the gear. |
 | `src/render.ts` | Draws the countdown ring, and the whole key face, as SVG. |
 | `src/sound.ts` | Hands a sound file to the platform's own player. |
 | `src/gestures.ts` | Turns raw presses into `toggle` / `reset` / `next`, double taps included. |
@@ -118,7 +120,7 @@ npx streamdeck pack com.matewishkey.dial-countdown.sdPlugin
 | `src/actions/key-countdown.ts` | Key events, and the key face. |
 | `src/plugin.ts` | Registers both actions and connects. |
 | `tools/mock-host.mjs` | A stand-in for the Stream Deck application. |
-| `tools/make-icons.mjs` | Draws the key action's artwork from the same mark the ring uses. |
+| `tools/make-icons.mjs` | Draws every icon from the same mark the ring uses — white for the app, red for the hardware. |
 
 A few decisions worth knowing before changing things:
 
@@ -139,6 +141,8 @@ A few decisions worth knowing before changing things:
 **Frames are re-asserted every couple of seconds**, even when nothing has changed. Dropping unchanged frames assumes every frame sent arrives, and there is no way to ask the hardware what it is actually showing — so on a display that is static for long stretches, one lost frame would stay lost. This is not hypothetical: Stream Deck discards feedback sent alongside a layout switch, which left the ring showing the layout's fallback for an undrawn pixmap — the action's own red icon — until the dial was touched. The pixmap now defaults to a transparent pixel rather than to that icon, and the re-assert bounds any dropped frame to two seconds.
 
 **Awaiting `setFeedbackLayout` fixes nothing.** It is the obvious-looking cure for feedback lost to a layout switch, and it was tried and reverted. The SDK's `send` resolves once the command is written to the socket, not once Stream Deck has applied it, so awaiting it guarantees nothing that ordering on a single socket did not already give. The re-assert above is what actually bounds the problem.
+
+**Icons shown inside the Stream Deck application must be white.** The category icon and both action list icons are a monochromatic `#FFFFFF` stroke on a transparent background, with no colour and no solid backing — Elgato's guidelines require it, and a Marketplace submission was rejected on exactly this. `Encoder.Icon` counts too: the manifest reference describes it as the image "displayed in the Stream Deck application in the circular canvas that represents the dial". A key's `States[].Image` is the face of the button on the deck itself and keeps the brand red. `tools/make-icons.mjs` is what draws both, so the rule lives in one place rather than in six hand-edited files.
 
 **The tests resolve imports through a hook.** `src/` is written for rollup, which fills in file extensions; Node's ESM resolver deliberately does not, so `test/ts-resolve.mjs` does that one job and nothing else.
 

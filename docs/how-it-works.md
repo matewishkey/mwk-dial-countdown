@@ -2,37 +2,54 @@
 
 A few things in this plugin are worth explaining properly, because each does more than it looks like it does: **turning the dial**, **the three press gestures**, **the key**, **why the screen redraws when nothing has changed**, and **presets**.
 
-## The dial accelerates
+## The dial changes gear
 
 A dial reports *ticks* — one click of rotation. The obvious thing to do is map one tick to a fixed amount of time, and that is exactly what makes most timer plugins annoying: pick a step small enough to trim thirty seconds off a countdown and setting a two-hour one takes a minute of winding. Pick a step big enough for two hours and you can no longer nudge.
 
-So the step is not fixed. It grows while you keep turning, and drops back the moment you stop.
+So the step is not fixed. It sits in a **gear**:
 
-| Momentum | Step per tick | Feels like |
+| Gear | Step per tick | Feels like |
 | --- | --- | --- |
-| 0–3 | **1 second** | Trimming. One click, one second. |
-| 4–13 | **10 seconds** | Adjusting. A short turn moves half a minute. |
-| 14–27 | **1 minute** | Setting. A wrist-turn covers ten minutes. |
-| 28+ | **10 minutes** | Winding. One sustained gesture reaches twelve hours. |
+| 1 | **1 second** | Trimming. One click, one second. |
+| 2 | **10 seconds** | Adjusting. A short turn moves half a minute. |
+| 3 | **1 minute** | Setting. A wrist-turn covers ten minutes. |
+| 4 | **10 minutes** | Winding. One sustained gesture reaches twelve hours. |
 
-### Momentum
+The gear is chosen by **how fast you turn**, and once reached it is **held**. Both halves of that were wrong first time round, and the two mistakes compounded.
 
-Momentum is a counter that goes up as you turn and resets when you stop.
+### Speed, not distance
 
-- **It counts ticks, not events.** A dial batches its ticks when spun hard — one event can carry three or four. Counting ticks means a single fast flick escalates as readily as a long steady turn, which is how it feels in the hand.
-- **A pause of more than 350 ms resets it to zero.** Stop turning for a third of a second and the next click is one second again. You never have to *undo* acceleration; you just pause.
-- **It is capped**, so the top step arrives after a predictable amount of winding rather than running away.
+The first version counted ticks. Four clicks inside a third of a second of each other and it changed up; fourteen and it changed up again. That reads well on paper and is unusable in the hand, because *any* sustained turn escalates — there was no way to click out thirty seconds one second at a time. You would get four seconds in and find the dial moving ten a click.
+
+Now the accelerator measures the **rate**: ticks per second, smoothed across the last few rotations. Turn at a deliberate three to six clicks a second and it stays on seconds for as long as you care to keep turning. Cross **12 clicks a second** — a flick of the wrist, not a turn — and it changes up.
+
+Two details make that behave:
+
+- **Ticks, not events.** A dial batches its ticks when spun hard, so one event can carry three or four. A batch of three in a given gap is three times the rate of a single one, which is what makes a flick read as a flick.
+- **It takes two quick clicks, not one.** The smoothed rate starts from zero, so a single fast click only carries half its weight. One stray fast click cannot change gear; two in a row can. The bias is deliberately towards staying in the fine gear, which is the one that was impossible to stay in before.
+
+A change of gear also has a **120 ms dwell** on it, so the whole ladder cannot be climbed inside one flick. A sustained hard spin walks up a gear at a time and reaches the top in about a third of a second.
+
+### Why the gear is held
+
+Textbook rotary-encoder acceleration recomputes its multiplier from the current speed on every pulse, so the step collapses the moment you slow down. That is precisely backwards here. The reason to change up is to *then dial carefully at the coarser step* — you flick to get into minutes, and then you want to place the value a minute at a time. A step that falls back to seconds exactly when you slow down to aim is a step that only exists while you do not need it.
+
+So the gear only comes down when you **let go of the dial for two seconds**. In particular:
+
+- **Slowing down does not drop it.** Crawl along at three clicks a second in fourth gear and you get ten minutes a click, all day.
+- **Reversing does not drop it either.** Overshooting and coming back is one continuous gesture, and a correction that landed in a different unit from the movement it was correcting would be useless. Direction is not part of the calculation at all.
 
 ### Holding the dial
 
-Holding the dial down while turning is a **flat one minute per tick**, regardless of momentum. It is an explicit request for a coarse step, and deliberately does not compound with acceleration — otherwise the one gesture meant to be predictable would be the least predictable one.
+Holding the dial down while turning is a **flat one minute per tick**, regardless of gear. It is an explicit request for a coarse step, and deliberately does not compound with the gear — otherwise the one gesture meant to be predictable would be the least predictable one.
 
 ### What a rotation actually changes
 
-This depends on whether the countdown is running.
+**The clock in front of you. Never the preset behind it.**
 
-- **Stopped** — turning edits the preset's own duration, and saves it. The dial is the preset editor.
-- **Running** — turning nudges only the time left. The preset is untouched, so the next time you load it you get the length you set, not the length you improvised.
+Turning a stopped countdown used to write the new length straight back into the preset list, on the reasoning that the dial is the preset editor. In practice that made the presets unusable: winding a 20 minute timer up to 23 for one call silently redefined "20 minutes" as 23, and cycling away saved it there. A preset is a setting, and settings are changed where settings are changed — in the property inspector.
+
+So turning is now the same thing whether the timer is running or stopped: it moves the clock, and the configuration is untouched. While the two disagree, the label says so — `from 20m` — and the next press of the dial closes the gap.
 
 ## The three gestures
 
@@ -42,7 +59,7 @@ Tapping the touchscreen, or pressing a key, does one of three things depending o
 | --- | --- | --- |
 | **One tap** | Pause / resume | The thing you do most, so it gets the plainest gesture. |
 | **Two taps** | Reset the clock to full, stopped | Getting back to the top is common enough to deserve a gesture of its own. |
-| **Hold** | Load the next preset, stopped | Choosing what to time is not the same as beginning it. |
+| **Hold** | Put the clock back on its preset, or load the next one | Choosing what to time is not the same as beginning it. |
 
 ### Why neither the reset nor the hold starts anything
 
@@ -63,7 +80,7 @@ A **hold** does not wait, because there is nothing ambiguous about it — and a 
 There is none to be had: `@elgato/streamdeck` exposes no haptic command, and the hardware has no motor to drive if it did. Two things stand in for it, and they are doing different jobs.
 
 - **The ring pulses** — a hairline that appears just outside the arc for 200 ms, on every gesture and every tick of the dial. It carries no information beyond "that registered", which is exactly what makes it work in peripheral vision. You cannot read a word per tick while winding a dial; you can see the ring answer each one.
-- **A line names the action** — `+10s`, `start`, `pause`, `resume`, `reset`, `next · 20m` — for 900 ms. It is drawn where the finish time normally sits on a dial, and under the clock on a key.
+- **A line names the action** — `+10s`, `start`, `pause`, `resume`, `reset`, `preset · 20m`, `next · 20m` — for 900 ms. It is drawn where the finish time normally sits on a dial, and under the clock on a key.
 
 The pulse is drawn as its own hairline rather than by brightening the arc, for two reasons: an event should not look like a change of state, and it has to remain visible during the end-of-timer fade, which is the one moment feedback matters most and the arc is already being dimmed.
 
@@ -99,29 +116,52 @@ A preset is **just a duration**. There is no name, because a countdown's length 
 
 Out of the box: **5, 20, 30 and 40 minutes**.
 
-- **Hold the screen** — or **press the dial** for the next preset, **hold the dial** for the previous one.
 - **Edit them in the property inspector**, as hours, minutes and seconds. Add as many as you like; remove any but the last.
-- **Or edit them with the dial** — turn a stopped countdown and the preset moves with it. That is usually faster than opening the inspector.
+- **Hold the screen** — or **press the dial** for the next one, **hold the dial** for the previous.
 - Anything from **one second to twenty-four hours**.
 
 Each dial and each key keeps its own preset list and its own running countdown, so they never interfere.
 
-With only one preset configured, the "next preset" gesture lands back on the same one. It still acknowledges the press, so the control does not feel dead.
+### The dial does not edit them
+
+It used to, and that is covered above under *What a rotation actually changes*. The short version: a preset that the dial rewrites is not a preset, it is a last-used value. Turning moves the clock; the list stays as configured.
+
+### Why a press puts it back before it moves on
+
+Because the dial no longer writes back, a countdown wound from 20 minutes to 23 has nothing that returns it to 20 — the property inspector still says 20, the clock says 23, and there is no gesture that closes the gap. That gap is the direct cost of the change above, so the change has to pay for it.
+
+The press of the dial pays for it. **Once the clock has drifted from its preset, the first press puts it back; only the next one moves on.**
+
+| State | Press the dial | Press it again |
+| --- | --- | --- |
+| Sitting on its preset | Next preset | The one after that |
+| Dialled off its preset | Back to the preset, stopped | Next preset |
+
+The restore comes first because it is wanted far more often: putting the clock back where it belongs is a thing you do constantly, and moving to a different preset is a thing you do occasionally. Nothing is lost either way — the press that would have advanced still advances, one press later — and the word on screen says which of the two it just did, `preset · 20m` against `next · 30m`.
+
+The same applies to **holding** the dial for the previous preset, and to **holding the screen**. A gesture that skipped the restore would be a way round it, and then the rule would be something to remember rather than something that just holds.
+
+It also gives the **one-preset** case something to do. It used to be the documented dead end — "with only one preset configured, the gesture lands back on the same one" — and now it is the way back from a dialled clock.
 
 ### Why the label shows the preset, not the clock
 
-The label tracks the *preset's* length rather than the live duration. So if you start a 20-minute countdown and add five minutes to it mid-flight, the label still reads `20m` — you can always see where it started. Adjusting a stopped countdown does change the preset, and then the label follows, because at that point you are editing it.
+The label tracks the *preset's* length rather than the live duration, so you can always see where this timer started: begin a 20-minute countdown, add five minutes to it mid-flight, and the label still reads `20m`.
+
+Once the two genuinely disagree it says so, reading `from 20m`. That matters more than it used to, because the disagreement is now permanent until you close it — an idle clock showing `23:00` under a label reading `20m`, with the settings agreeing with the label and not the clock, would otherwise just look broken.
 
 ## Try it without hardware
 
-`npm run mock` drives the whole thing from the keyboard with no Stream Deck attached, and `npm run demo` plays a scripted pass. It prints a labelled ASCII frame per step; the acceleration ladder shows up across four of them:
+`npm run mock` drives the whole thing from the keyboard with no Stream Deck attached, and `npm run demo` plays a scripted pass. It prints a labelled ASCII frame per step; the gears show up across five of them:
 
 | Step | Clock goes from | to |
 | --- | --- | --- |
-| one click → +1s | `20m` | `20m 1s` |
-| 8 slow clicks → +8s, still fine control | `20m 1s` | `20m 9s` |
-| a hard spin → minutes a tick | `20m 9s` | `24m 45s` |
-| keep winding → ten minutes a tick, half a day in one gesture | `24m 45s` | `3h 41m 21s` |
+| one click → +1s | `20:00` | `20:01` |
+| 8 slow clicks → +8s, still fine control however long it goes on | `20:01` | `20:09` |
+| a hard spin → minutes a tick | `20:09` | `27:42` |
+| keep winding → ten minutes a tick, half a day in one gesture | `27:42` | `8:27:42` |
+| slow right down → the coarse gear is **held**, at ten minutes a click | `8:27:42` | `9:07:42` |
+
+Through every one of those the preset list underneath reads `5m [20m] 30m 40m`, unchanged, and the label reads `from 20m`. The next two steps press the dial twice: once to land back on `20:00`, and once more to move on to `30m`.
 
 It also walks the gesture vocabulary and asserts the parts a person would otherwise have to check by eye — that a hold really does leave the clock stopped, that the pulse appears and then clears, and that the key's caption falls back from the gesture to the state:
 
@@ -130,13 +170,17 @@ It also walks the gesture vocabulary and asserts the parts a person would otherw
    pulse right after the tick: yes, half a second later: no
    ✓ pulses, then clears
 
-▸ hold the screen → next preset, LOADED BUT NOT STARTED
-   clock 1.5s apart: 10:00 then 10:00
-   ✓ stopped
+▸ press dial once → BACK to the preset it was dialled off
+   label while drifted: "from 20m", clock after one press: 20:00
+   ✓ restored, and the preset was never overwritten
+
+▸ …and starting a spent auto-repeat again is a FRESH run
+   label on restart: "2s", one lap later: "2s · ×1/2"
+   ✓ counter reset, and it repeats again
 
 ▸ key: one press → pauses
    caption right after: "pause", once the toast expires: "paused"
    ✓ gesture then state
 ```
 
-The ladder itself is `src/acceleration.ts` — a pure module that is handed the timestamp of each rotation rather than reading a clock, so every step and threshold above is asserted in `test/acceleration.test.ts` rather than described and hoped for. The gesture checks quoted above come from `tools/mock-host.mjs`, which drives the built plugin end to end.
+The gearbox itself is `src/acceleration.ts` — a pure module that is handed the timestamp of each rotation rather than reading a clock, so every rate and threshold above is asserted in `test/acceleration.test.ts` rather than described and hoped for. The gesture checks quoted above come from `tools/mock-host.mjs`, which drives the built plugin end to end.
