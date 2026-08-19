@@ -72,6 +72,9 @@ const INFO = {
 /** Latest touchscreen state, as reported by the plugin's setFeedback calls. */
 const screen = { title: "—", value: "—", label: "", finish: "", indicator: 0, ring: 0, colour: "", font: 0, opacity: 1, glyph: "", layout: "(default)", flash: false };
 
+/** How many times the plugin has raised Stream Deck's own "that failed" alert. */
+let alertCount = 0;
+
 /**
  * Latest key face, recovered from the SVG the plugin sends to setImage. The key draws its own text
  * rather than using setTitle, so everything it says is in that one image and can be read back here.
@@ -189,6 +192,10 @@ function handlePluginMessage(message) {
 			break;
 
 		case "setTitle":
+			break;
+
+		case "showAlert":
+			alertCount += 1;
 			break;
 
 		default:
@@ -564,12 +571,17 @@ async function runDemo() {
 			await wait(300);
 		}],
 
-		// Sound repeats. On Linux no player exists, so this proves it does not crash.
+		// Sound repeats. On Linux no player exists, so this proves it does not crash — and, since the
+		// sound genuinely cannot play here, that a failed alarm raises Stream Deck's own alert rather
+		// than finishing in a silence indistinguishable from not having finished at all.
 		["alarm set to play 3 times, 2s timer → runs out", async () => {
+			const before = alertCount;
 			applySettings({ presets: [2], presetIndex: 0, soundEnabled: true, soundRepeat: 3, showTitle: true });
 			await wait(300);
 			gestures.touch(false);
 			await wait(2600);
+			console.log(`\n   no audio player on this platform, so the alarm cannot sound: showAlert raised ${alertCount - before}x`);
+			console.log(`   ${alertCount > before ? "\u2713 a failed alert is reported, not swallowed" : "\u2717 silent failure"}`);
 		}],
 
 		// Auto-repeat, and the fact that it stops. A timer that loops for ever is a nuisance.

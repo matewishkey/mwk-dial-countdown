@@ -8,8 +8,12 @@
  * - **Anything shown inside the Stream Deck application is white.** The category icon and the action
  *   list icons must be a monochromatic `#FFFFFF` stroke on a transparent background, with no colour
  *   and no solid backing — Elgato's plugin guidelines are explicit, and a Marketplace submission was
- *   rejected on exactly this. `Encoder.Icon` counts: the manifest reference describes it as the image
- *   "displayed in the Stream Deck application in the circular canvas that represents the dial".
+ *   rejected on exactly this. `Encoder.Icon` is white too, which is a judgement call rather than a
+ *   quoted rule: the guidelines word the colour requirement as "action list icons", and this is not
+ *   one — it is sized like a key icon, 72/144. But the manifest reference calls it the image
+ *   "displayed in the Stream Deck application in the circular canvas that represents the dial", and
+ *   the reviewer asked for the icons "inside the Stream Deck app". White cannot fail that reading;
+ *   red might.
  * - **Anything shown on the hardware keeps the brand red.** A key's `States[].Image` is the face of
  *   the button on the deck itself, which the guidelines do not constrain and where the red is the
  *   whole point.

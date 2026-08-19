@@ -250,7 +250,18 @@ export abstract class CountdownAction<
 	protected refresh(instance: I, force = false): void {
 		if (instance.countdown.settle()) {
 			const { settings } = instance.countdown;
-			playSound(resolveSound(settings), settings.volume, settings.soundRepeat);
+			const played = playSound(resolveSound(settings), settings.volume, settings.soundRepeat);
+
+			// The alert sound is the only thing here that can fail outside the plugin's control: a
+			// custom file that has since been moved or renamed, or a platform with no player to hand
+			// it to. Elgato's guidelines ask for `showAlert` when an action was unsuccessful, and this
+			// is the case that most needs it — a timer that finishes in silence when it was asked to
+			// make a noise is indistinguishable from a timer that has not finished yet, which is the
+			// one thing an alarm must never be. A volume of zero is silence the user asked for, so it
+			// is not a failure.
+			if (!played && settings.volume > 0) {
+				instance.action.showAlert().catch((err) => streamDeck.logger.error("Failed to show alert", err));
+			}
 		}
 
 		instance.ticks += 1;
