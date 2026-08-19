@@ -8,6 +8,7 @@
 		"build": "rollup -c",
 		"watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.matewishkey.dial-countdown\"",
 		"test": "node --import ./test/ts-resolve.mjs --test \"test/*.test.ts\"",
+		"version:check": "node tools/check-version.mjs",
 		"mock": "node tools/mock-host.mjs",
 		"demo": "node tools/mock-host.mjs --demo"
 	},

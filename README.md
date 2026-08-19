@@ -94,14 +94,17 @@ npx streamdeck link com.matewishkey.dial-countdown.sdPlugin
 npm run watch                                       # rebuild + restart on save
 ```
 
-### Packaging
+### Packaging and releasing
 
 ```sh
+npm run version:check                               # package.json ↔ manifest.json ↔ tag
 npx streamdeck validate com.matewishkey.dial-countdown.sdPlugin
 npx streamdeck pack com.matewishkey.dial-countdown.sdPlugin
 ```
 
-**Bump `Version` in `manifest.json` to match the release tag.** It is what the Stream Deck application shows the user, and it sat at `0.1.0.0` through nine releases — so the app reported the same version whichever build was installed, which is the one question it is asked. `v1.0.0` ↔ `1.0.0.0`.
+**[docs/releasing.md](docs/releasing.md)** is the whole policy, and the one rule it turns on is this: *the version number describes the `.streamDeckPlugin` file and nothing else*. Repo-only work — tests, docs, tooling — lands in [CHANGELOG.md](CHANGELOG.md) under *Unreleased* and rides the next real release, because the number is what the Stream Deck application shows the user and every Marketplace version is a human review.
+
+The version lives in three places in three formats — `1.1.0`, `1.1.0.0`, `v1.1.0` — and they have drifted before: the manifest sat at `0.1.0.0` through nine releases, so the application reported the same version whichever build was installed, which is the one question it is asked. `npm run version:check` is what now stops that.
 
 ## How it fits together
 
@@ -121,6 +124,7 @@ npx streamdeck pack com.matewishkey.dial-countdown.sdPlugin
 | `src/plugin.ts` | Registers both actions and connects. |
 | `tools/mock-host.mjs` | A stand-in for the Stream Deck application. |
 | `tools/make-icons.mjs` | Draws every icon from `assets/mwk-mark.svg` — white for the app, red for the hardware. |
+| `tools/check-version.mjs` | Holds `package.json`, `manifest.json` and the git tag to the same version. |
 | `assets/mwk-mark.svg` | The brand's own mark, as supplied. The one source the artwork is generated from. |
 
 A few decisions worth knowing before changing things:
