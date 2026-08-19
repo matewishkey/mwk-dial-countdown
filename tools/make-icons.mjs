@@ -29,7 +29,7 @@
  */
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -42,10 +42,38 @@ const RED = "#E2342B";
 /** The one colour the Stream Deck application will accept from an icon. */
 const WHITE = "#FFFFFF";
 
-/** The mark, as published in the brand's own `mwk-mark.svg` — kept identical to src/render.ts. */
-const MARK_PATHS = ["M0 100 L23.09 0 L46.17 100 L69.26 0 L69.26 100", "M69.26 100 L118.03 0"];
-const MARK_WIDTH = 118.03;
-const MARK_HEIGHT = 100;
+/**
+ * The brand's own mark file, supplied as artwork rather than transcribed.
+ *
+ * Read rather than copied in, so the icons cannot drift from it. The old version of this file
+ * carried the path data as a literal with a comment promising it matched — a promise nothing
+ * checked. `test/mark.test.ts` holds `src/render.ts` to the same file, which is the copy that has
+ * to stay a literal because it is bundled into the plugin.
+ */
+const MARK_FILE = resolve(ROOT, "assets/mwk-mark.svg");
+const { paths: MARK_PATHS, width: MARK_WIDTH, height: MARK_HEIGHT, stroke: MARK_STROKE } = readMark();
+
+/**
+ * Pulls the geometry out of the mark file: the two stroked paths, the weight they are drawn at, and
+ * the extent of the artwork inside its padded viewBox. Throws rather than guessing — a silently
+ * mis-parsed mark would produce plausible-looking artwork that is subtly the wrong shape.
+ */
+function readMark() {
+	const svg = readFileSync(MARK_FILE, "utf8");
+
+	const paths = [...svg.matchAll(/\sd="([^"]+)"/g)].map((m) => m[1]);
+	const box = svg.match(/viewBox="(-?[\d.]+) (-?[\d.]+) ([\d.]+) ([\d.]+)"/);
+	const stroke = svg.match(/stroke-width="([\d.]+)"/);
+
+	if (paths.length !== 2 || box === null || stroke === null) {
+		throw new Error(`${MARK_FILE} is not the shape this expects: 2 paths, a viewBox and a stroke-width`);
+	}
+
+	// The viewBox is the artwork plus equal padding on every side, so the artwork's own extent is the
+	// box less twice the padding — and the padding is the box's own negative origin.
+	const [, x, y, w, h] = box.map(Number);
+	return { paths, width: w + x * 2, height: h + y * 2, stroke: Number(stroke[1]), pad: -x };
+}
 
 const round = (n) => Math.round(n * 100) / 100;
 
@@ -64,9 +92,9 @@ function strokes(colour, width) {
  * the action list and up again for a high-DPI display.
  */
 function bareMark(colour) {
-	const stroke = 9.5;
+	const stroke = MARK_STROKE;
 	// Half the stroke would only just clear the round caps; the extra 2 keeps the mark off the edge
-	// of the tile, which is what the application crops to.
+	// of the tile, which is what the application crops to. It reproduces the mark file's own padding.
 	const pad = stroke / 2 + 2;
 	return (
 		`<svg role="img" xmlns="http://www.w3.org/2000/svg" ` +

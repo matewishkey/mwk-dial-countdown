@@ -120,7 +120,8 @@ npx streamdeck pack com.matewishkey.dial-countdown.sdPlugin
 | `src/actions/key-countdown.ts` | Key events, and the key face. |
 | `src/plugin.ts` | Registers both actions and connects. |
 | `tools/mock-host.mjs` | A stand-in for the Stream Deck application. |
-| `tools/make-icons.mjs` | Draws every icon from the same mark the ring uses — white for the app, red for the hardware. |
+| `tools/make-icons.mjs` | Draws every icon from `assets/mwk-mark.svg` — white for the app, red for the hardware. |
+| `assets/mwk-mark.svg` | The brand's own mark, as supplied. The one source the artwork is generated from. |
 
 A few decisions worth knowing before changing things:
 
@@ -141,6 +142,8 @@ A few decisions worth knowing before changing things:
 **Frames are re-asserted every couple of seconds**, even when nothing has changed. Dropping unchanged frames assumes every frame sent arrives, and there is no way to ask the hardware what it is actually showing — so on a display that is static for long stretches, one lost frame would stay lost. This is not hypothetical: Stream Deck discards feedback sent alongside a layout switch, which left the ring showing the layout's fallback for an undrawn pixmap — the action's own red icon — until the dial was touched. The pixmap now defaults to a transparent pixel rather than to that icon, and the re-assert bounds any dropped frame to two seconds.
 
 **Awaiting `setFeedbackLayout` fixes nothing.** It is the obvious-looking cure for feedback lost to a layout switch, and it was tried and reverted. The SDK's `send` resolves once the command is written to the socket, not once Stream Deck has applied it, so awaiting it guarantees nothing that ordering on a single socket did not already give. The re-assert above is what actually bounds the problem.
+
+**The mark is read, not transcribed.** `assets/mwk-mark.svg` is the brand's own artwork file. `tools/make-icons.mjs` parses its paths, viewBox and stroke weight rather than carrying a copy, so the icons cannot drift from it. `src/render.ts` is the one place that still needs a literal — it is bundled into the plugin and has no filesystem to read at runtime — so `test/mark.test.ts` asserts that the mark it actually draws is path-for-path the artwork file. A comment promising two files match is a promise nothing checks; that test is the check.
 
 **Icons shown inside the Stream Deck application must be white.** The category icon and both action list icons are a monochromatic `#FFFFFF` stroke on a transparent background, with no colour and no solid backing — Elgato's guidelines require it, and a Marketplace submission was rejected on exactly this. `Encoder.Icon` is white too, which is a judgement call rather than a quoted rule — the guidelines word the colour requirement as "action list icons" and this is not one, but the manifest reference calls it the image "displayed in the Stream Deck application in the circular canvas that represents the dial". White cannot fail that reading; red might. A key's `States[].Image` is the face of the button on the deck itself and keeps the brand red. `tools/make-icons.mjs` is what draws both, so the rule lives in one place rather than in six hand-edited files.
 
