@@ -1,6 +1,6 @@
 {
 	"Name": "Dial Countdown",
-	"Version": "1.5.0.0",
+	"Version": "1.5.1.0",
 	"Author": "Mate Wish Key",
 	"Actions": [
 		{
@@ -67,8 +67,7 @@
 		}
 	],
 	"Nodejs": {
-		"Version": "24",
-		"Debug": "enabled"
+		"Version": "24"
 	},
 	"UUID": "com.matewishkey.dial-countdown",
 	"URL": "https://matewishkey.com/"

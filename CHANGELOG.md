@@ -11,6 +11,15 @@ this project that generally means they do not change the packaged plugin at all.
 
 Nothing yet.
 
+## [1.5.1] — 2026-08-20
+
+### Fixed
+
+- The plugin no longer ships with the Node debugger switched on. `manifest.json` carried
+  `Nodejs.Debug: "enabled"` from the project scaffold, which per Elgato's own manifest schema runs
+  the plugin under `--inspect` whenever the Stream Deck application is in debug mode. It had been
+  there since the first commit.
+
 ## [1.5.0] — 2026-08-20
 
 ### Changed
@@ -175,7 +184,8 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v1.5.0...HEAD
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v1.5.1...HEAD
+[1.5.1]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.5.1
 [1.5.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.5.0
 [1.4.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.4.0
 [1.3.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.3.0
