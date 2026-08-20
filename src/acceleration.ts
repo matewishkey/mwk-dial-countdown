@@ -3,57 +3,43 @@
  *
  * A dial reports `ticks` — one click of rotation — and a single tick's worth of time is a poor unit
  * for both jobs the dial has: trimming a countdown by a second, and winding one from five minutes to
- * twelve hours. So the step is not fixed. It sits in a **gear**, and the gear is chosen by how
- * *fast* the dial is being turned rather than by how long it has been turning.
+ * twelve hours. So the step is not fixed. It sits in a **gear**, and the gear is changed by **how far
+ * you have turned in one direction** — every {@link TICKS_PER_GEAR} clicks the same way is one gear up.
  *
- * That distinction is the whole design, and getting it the other way round is what made the first
- * version unusable. Counting ticks means *any* sustained turn escalates, so there was no way to
- * click out thirty seconds one second at a time — four clicks in and the dial was already moving
- * ten. Reading speed instead means a slow turn stays slow for as long as you care to keep turning,
- * and a deliberate flick of the wrist is what changes gear.
+ * Distance, not speed, and not elapsed time. Both of the other two were tried:
  *
- * A gear, once reached, is **held**. Textbook encoder acceleration recomputes its multiplier from
- * the current speed on every pulse, so the step collapses the instant you slow down — which is
- * exactly wrong here, because the reason to change up is to then dial *carefully* at the coarser
- * step. Reversing does not drop it either: overshooting and coming back is one gesture, and a
- * correction that landed in a different unit from the movement it was correcting would be useless.
- * Only letting go of the dial for {@link IDLE_RESET_MS} drops it back to the first gear.
+ * - **Counting ticks regardless of direction** was the first version, and it made fine control
+ *   impossible — you could not click out thirty seconds one second at a time, because winding back
+ *   and forth over a value counted towards escalating just as much as winding away from it.
+ * - **Measuring speed** replaced it, and read better on paper than in the hand. It meant the same
+ *   gesture did different things depending on how briskly you happened to make it, so the step you
+ *   got was never quite the step you predicted.
+ *
+ * Distance in one direction is the thing the hand already knows it is doing. Ten clicks up is a
+ * deliberate journey, and by then you have said you want to travel; ten clicks of hovering around a
+ * value is not, and must not escalate.
+ *
+ * Which is what the direction rule is for. **Turning back resets the count but keeps the gear.** The
+ * two halves matter separately: keeping the gear means a correction lands in the same unit as the
+ * movement it is correcting, and resetting the count means hovering — up a bit, back a bit, up a bit
+ * — sits at a steady step for as long as you like instead of climbing while you aim.
+ *
+ * A gear only comes down when the dial is let go of, for {@link IDLE_RESET_MS}.
  */
 
 /** Seconds per tick in each gear. */
 export const STEPS_SECONDS = [1, 10, 60, 600] as const;
 
 /**
- * Turning at least this fast — dial clicks per second — changes up a gear.
+ * Clicks in one direction that change up a gear.
  *
- * Twelve a second is a flick. A deliberate, watch-the-number turn runs at three to six, so the two
- * are told apart by how the hand already moves rather than by a rule anyone has to learn.
+ * Ten is a deliberate turn rather than a nudge, and it is few enough to reach the top of the ladder
+ * — thirty clicks — inside one sustained wind, which is what a twelve-hour timer needs.
  */
-export const UPSHIFT_TICKS_PER_SECOND = 12;
-
-/**
- * The least time between two changes of gear.
- *
- * A hard spin reports many rotations a second, and without this the whole ladder would be climbed
- * inside one flick. At this dwell a sustained spin walks up a gear at a time and reaches the top in
- * roughly a third of a second: deliberate, but not slow.
- */
-export const UPSHIFT_DWELL_MS = 120;
+export const TICKS_PER_GEAR = 10;
 
 /** No rotation for this long means the dial has been let go, and the gear drops back to the first. */
 export const IDLE_RESET_MS = 2_000;
-
-/**
- * Weight given to the newest sample when smoothing the rate.
- *
- * Starting the average from zero rather than seeding it with the first sample is deliberate: it
- * takes two quick clicks in a row to change up, so a single stray fast one cannot. The bias is
- * towards staying in the fine gear, which is the one that was impossible to stay in before.
- */
-const SMOOTHING = 0.5;
-
-/** Floor on the measured gap, since two rotations can share a millisecond and divide by zero. */
-const MIN_GAP_MS = 8;
 
 /** Step used when the dial is held down — an explicit request for minutes, not an earned one. */
 export const PRESSED_STEP_SECONDS = 60;
@@ -62,12 +48,13 @@ export class Accelerator {
 	/** Index into {@link STEPS_SECONDS}. */
 	#gear = 0;
 
-	/** Smoothed rotation rate, in ticks per second. */
-	#rate = 0;
+	/** Clicks so far in the current direction, towards the next gear. */
+	#count = 0;
+
+	/** Which way the dial is currently going: 1, -1, or 0 before it has gone anywhere. */
+	#direction = 0;
 
 	#lastAt: number | null = null;
-
-	#shiftedAt: number | null = null;
 
 	/** Which gear the dial is in, 0-based and index-aligned with {@link STEPS_SECONDS}. */
 	get gear(): number {
@@ -79,9 +66,9 @@ export class Accelerator {
 		return STEPS_SECONDS[this.#gear];
 	}
 
-	/** The smoothed rate the gear is chosen from, in ticks per second. */
-	get ticksPerSecond(): number {
-		return this.#rate;
+	/** Clicks banked towards the next gear. Reaches {@link TICKS_PER_GEAR} and changes up. */
+	get count(): number {
+		return this.#count;
 	}
 
 	/**
@@ -93,39 +80,66 @@ export class Accelerator {
 	 */
 	rotate(ticks: number, nowMs: number, pressed = false): number {
 		const gap = this.#lastAt === null ? Infinity : nowMs - this.#lastAt;
-
 		if (gap >= IDLE_RESET_MS) {
 			this.reset();
-		} else {
-			// Ticks arrive batched when the dial is spun hard, so a batch of three in the same gap is
-			// three times the rate of a single one — which is what makes a flick read as a flick.
-			const instant = (Math.abs(ticks) * 1000) / Math.max(gap, MIN_GAP_MS);
-			this.#rate += (instant - this.#rate) * SMOOTHING;
-
-			if (this.#shouldUpshift(nowMs)) {
-				this.#gear += 1;
-				this.#shiftedAt = nowMs;
-			}
 		}
-
 		this.#lastAt = nowMs;
 
-		// A held dial is an explicit coarse request and deliberately does not compound with the gear.
-		return ticks * (pressed ? PRESSED_STEP_SECONDS : this.stepSeconds);
+		// A held dial is an explicit coarse request. It neither compounds with the gear nor counts
+		// towards one: it is a different way of asking, so it leaves the ladder exactly as it found it.
+		if (pressed) {
+			return ticks * PRESSED_STEP_SECONDS;
+		}
+
+		const direction = Math.sign(ticks);
+		if (direction === 0) {
+			return 0;
+		}
+
+		// Turning back is a correction, not progress towards a coarser step. The count starts again;
+		// the gear does not, so the correction moves in the same unit as what it is correcting.
+		if (this.#direction !== 0 && direction !== this.#direction) {
+			this.#count = 0;
+		}
+		this.#direction = direction;
+
+		return direction * this.#spend(Math.abs(ticks));
 	}
 
 	/** Back to the first gear, e.g. when the dial is used for something other than turning. */
 	reset(): void {
 		this.#gear = 0;
-		this.#rate = 0;
+		this.#count = 0;
+		this.#direction = 0;
 		this.#lastAt = null;
-		this.#shiftedAt = null;
 	}
 
-	#shouldUpshift(nowMs: number): boolean {
-		if (this.#rate < UPSHIFT_TICKS_PER_SECOND || this.#gear >= STEPS_SECONDS.length - 1) {
-			return false;
+	/**
+	 * Converts a number of clicks into seconds, changing up as it goes.
+	 *
+	 * The dial batches its ticks when spun hard, so one event can carry more clicks than are left
+	 * before the next gear. Those are spent across the change rather than all at the old step — the
+	 * eleventh click is worth ten seconds whether it arrived on its own or in a batch of four, which
+	 * is the only version of "every ten clicks" that is true at every speed.
+	 */
+	#spend(clicks: number): number {
+		let remaining = clicks;
+		let seconds = 0;
+
+		while (remaining > 0) {
+			const top = this.#gear >= STEPS_SECONDS.length - 1;
+			const take = top ? remaining : Math.min(remaining, TICKS_PER_GEAR - this.#count);
+
+			seconds += take * STEPS_SECONDS[this.#gear];
+			this.#count += take;
+			remaining -= take;
+
+			if (!top && this.#count >= TICKS_PER_GEAR) {
+				this.#gear += 1;
+				this.#count = 0;
+			}
 		}
-		return this.#shiftedAt === null || nowMs - this.#shiftedAt >= UPSHIFT_DWELL_MS;
+
+		return seconds;
 	}
 }

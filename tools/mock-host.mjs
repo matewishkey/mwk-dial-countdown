@@ -353,6 +353,14 @@ function applySettings(patch) {
 	});
 }
 
+/** Long enough with the dial untouched that the gear drops back to the first — see IDLE_RESET_MS. */
+const IDLE_MS = 2_500;
+
+/** The magnitude of a step toast: "+10m" and "-10m" are the same step in opposite directions. */
+function size(toast) {
+	return String(toast).replace(/^[+-]/, "");
+}
+
 /** Spins the dial repeatedly, the way a wrist does — this is what builds acceleration. */
 async function spin(events, ticks, gapMs) {
 	for (let i = 0; i < events; i++) {
@@ -409,24 +417,47 @@ async function runDemo() {
 		["fresh install → defaults, and they get written back", async () => {}],
 		["press dial → 20m", async () => press(80)],
 
-		// Cadence: the step sits in a gear, and the gear is chosen by how FAST the dial is turned
-		// rather than by how long it has been turning. A deliberate turn never changes up on its own.
+		// Cadence: the step sits in a gear, and the gear is chosen by how FAR the dial has been turned
+		// in one direction — ten clicks the same way is one gear up. Not speed, and not elapsed time.
 		["one click → +1s", async () => gestures.rotate(1)],
-		["8 slow clicks → +8s, still fine control however long it goes on", async () => spin(8, 1, 400)],
-		["a hard spin → minutes a tick", async () => spin(6, 3, 50)],
-		["keep winding → ten minutes a tick, half a day in one gesture", async () => spin(16, 3, 45)],
+		["8 more slow clicks → still one second a click, whatever the pace", async () => spin(8, 1, 400)],
+		["carry on the same way → the tenth click changes up, so now ten seconds a click", async () => spin(6, 3, 50)],
+		["keep winding → a minute a click, then ten; half a day in one gesture", async () => spin(16, 3, 45)],
 
-		// The gear is HELD. This is what the old accelerator did not do: it recomputed the step from
-		// the current speed every tick, so it collapsed back to seconds the moment you slowed — which
-		// is exactly when you want the coarse step, to place the value you just wound to.
+		// Turning back is a correction, not progress. The step has to hold, or the correction lands in
+		// a different unit from the movement it is correcting.
 		[
-			"…now slow right down: the coarse gear is HELD, so you can place the value carefully",
+			"…turn back the other way → the step HOLDS at whatever it had reached",
 			async () => {
-				// One tick at a time, half a second apart — well under the rate that changes up, and
-				// well inside the time-out that drops back. The delta per click is the gear made visible.
-				await spin(4, 1, 500);
-				console.log(`\n   step per click after slowing right down: ${screen.finish} (first gear would be +1s)`);
-				console.log(`   ${screen.finish === "+10m" ? "\u2713 held" : "\u2717 collapsed back to a fine step"}`);
+				// One click each way, so the two toasts are comparable — a batched event carries more
+				// ticks and so a bigger total at the very same step.
+				await spin(1, 1, 120);
+				const forward = screen.finish;
+				await spin(1, -1, 120);
+				console.log(`\n   one click forward: ${forward}, one click back: ${screen.finish}`);
+				console.log(
+					`   ${size(forward) === size(screen.finish) ? "\u2713 same unit both ways" : "\u2717 the step changed under the correction"}`
+				);
+			}
+		],
+
+		// ...but the COUNT starts over, which is what makes hovering safe. Distance travelled here is
+		// large; distance in any one direction never reaches ten, so it must never escalate.
+		[
+			"…hover — nine up, nine back, over and over → it never runs away",
+			async () => {
+				await wait(IDLE_MS);
+				await spin(9, 1, 60);
+				const first = screen.finish;
+
+				for (let pass = 1; pass < 6; pass++) {
+					await spin(9, pass % 2 === 0 ? 1 : -1, 60);
+				}
+
+				console.log(`\n   first click: ${first}, after 54 clicks of hovering back and forth: ${screen.finish}`);
+				console.log(
+					`   ${size(screen.finish) === "1s" ? "\u2713 still one second a click" : `\u2717 hovering escalated to ${screen.finish}`}`
+				);
 			}
 		],
 

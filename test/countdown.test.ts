@@ -139,8 +139,8 @@ describe("what the dial changes, and what it leaves alone", () => {
 	it("survives being cycled away from and back, which is what made presets unusable", () => {
 		const { countdown } = fixture([300, 1200], 0);
 
-		countdown.adjust(60, false);
-		assert.equal(countdown.timer.durationMs, 360_000, "precondition: wound up by a minute");
+		countdown.adjust(5, false);
+		assert.equal(countdown.timer.durationMs, 305_000, "precondition: wound up by five clicks");
 
 		countdown.cyclePreset(1); // first press only puts it back on the preset
 		countdown.cyclePreset(1); // second press moves on
@@ -164,7 +164,7 @@ describe("pressing for the next preset", () => {
 		const { countdown } = fixture([300, 1200], 0);
 
 		countdown.toggle();
-		countdown.adjust(60, false);
+		countdown.adjust(5, false);
 		assert.equal(countdown.drifted, true, "precondition: dialled off the preset");
 
 		countdown.cyclePreset(1);
@@ -181,7 +181,7 @@ describe("pressing for the next preset", () => {
 	it("restores in whichever direction the press asked for, so holding is not a way round it", () => {
 		const { countdown } = fixture([300, 1200], 0);
 
-		countdown.adjust(60, false);
+		countdown.adjust(5, false);
 		countdown.cyclePreset(-1);
 		assert.equal(countdown.presetIndex, 0);
 		assert.equal(countdown.timer.durationMs, 300_000);
@@ -204,7 +204,7 @@ describe("pressing for the next preset", () => {
 	it("gives the one-preset case a way back, where before there was none", () => {
 		const { countdown } = fixture([600], 0);
 
-		countdown.adjust(60, false);
+		countdown.adjust(5, false);
 		countdown.cyclePreset(1);
 		assert.equal(countdown.timer.durationMs, 600_000, "with one preset the press has nowhere else to go");
 		assert.equal(countdown.toast, "preset · 10m");
@@ -457,7 +457,7 @@ describe("settings arriving from the inspector", () => {
 		const { countdown } = fixture();
 
 		countdown.toggle();
-		countdown.adjust(60, false);
+		countdown.adjust(5, false);
 		const dialled = countdown.timer.durationMs;
 		assert.equal(countdown.drifted, true, "precondition: dialled off the preset");
 
@@ -469,7 +469,7 @@ describe("settings arriving from the inspector", () => {
 	it("does reload when the selected preset's own length changed under it", () => {
 		const { countdown } = fixture();
 
-		countdown.adjust(60, false);
+		countdown.adjust(5, false);
 		assert.equal(countdown.applySettings({ presets: [900, 1200], presetIndex: 0 }), true);
 		assert.equal(countdown.timer.durationMs, 900_000, "editing the preset is exactly when a reload is right");
 		assert.equal(countdown.drifted, false);

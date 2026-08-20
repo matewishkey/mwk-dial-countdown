@@ -8,40 +8,45 @@ A dial reports *ticks* — one click of rotation. The obvious thing to do is map
 
 So the step is not fixed. It sits in a **gear**:
 
-| Gear | Step per tick | Feels like |
-| --- | --- | --- |
-| 1 | **1 second** | Trimming. One click, one second. |
-| 2 | **10 seconds** | Adjusting. A short turn moves half a minute. |
-| 3 | **1 minute** | Setting. A wrist-turn covers ten minutes. |
-| 4 | **10 minutes** | Winding. One sustained gesture reaches twelve hours. |
+| Gear | Step per click | Reached after | Feels like |
+| --- | --- | --- | --- |
+| 1 | **1 second** | — | Trimming. One click, one second. |
+| 2 | **10 seconds** | 10 clicks one way | Adjusting. A short turn moves half a minute. |
+| 3 | **1 minute** | 20 clicks one way | Setting. A wrist-turn covers ten minutes. |
+| 4 | **10 minutes** | 30 clicks one way | Winding. One sustained gesture reaches twelve hours. |
 
-The gear is chosen by **how fast you turn**, and once reached it is **held**. Both halves of that were wrong first time round, and the two mistakes compounded.
+**Every ten clicks in the same direction is one gear up.** Distance, not speed, and not elapsed time.
 
-### Speed, not distance
+### Why distance, after trying the other two
 
-The first version counted ticks. Four clicks inside a third of a second of each other and it changed up; fourteen and it changed up again. That reads well on paper and is unusable in the hand, because *any* sustained turn escalates — there was no way to click out thirty seconds one second at a time. You would get four seconds in and find the dial moving ten a click.
+This is the third design, and the first two are worth recording because each failed in a way the next one was built to avoid.
 
-Now the accelerator measures the **rate**: ticks per second, smoothed across the last few rotations. Turn at a deliberate three to six clicks a second and it stays on seconds for as long as you care to keep turning. Cross **12 clicks a second** — a flick of the wrist, not a turn — and it changes up.
+**Counting ticks in any direction** was first. Momentum went up as the dial turned and dropped after a third of a second of stillness. It made fine control impossible: winding *back and forth over* a value counted towards escalating exactly as much as winding *away* from it, so four clicks in the dial was already moving ten seconds and there was no way to click out thirty seconds one second at a time.
 
-Two details make that behave:
+**Measuring speed** replaced it — a flick of the wrist changed up, a deliberate turn never did. That reads better on paper than it works in the hand, because it means the same gesture does different things depending on how briskly you happen to make it. The step you got was never quite the step you predicted, and predicting it is the entire job.
 
-- **Ticks, not events.** A dial batches its ticks when spun hard, so one event can carry three or four. A batch of three in a given gap is three times the rate of a single one, which is what makes a flick read as a flick.
-- **It takes two quick clicks, not one.** The smoothed rate starts from zero, so a single fast click only carries half its weight. One stray fast click cannot change gear; two in a row can. The bias is deliberately towards staying in the fine gear, which is the one that was impossible to stay in before.
+**Distance in one direction** is the thing the hand already knows it is doing. Ten clicks up is a deliberate journey, and by then you have said you want to travel. Ten clicks of hovering around a value is not a journey, and must not escalate.
 
-A change of gear also has a **120 ms dwell** on it, so the whole ladder cannot be climbed inside one flick. A sustained hard spin walks up a gear at a time and reaches the top in about a third of a second.
+### Turning back keeps the gear and resets the count
 
-### Why the gear is held
+Both halves are load-bearing, and they do different jobs.
 
-Textbook rotary-encoder acceleration recomputes its multiplier from the current speed on every pulse, so the step collapses the moment you slow down. That is precisely backwards here. The reason to change up is to *then dial carefully at the coarser step* — you flick to get into minutes, and then you want to place the value a minute at a time. A step that falls back to seconds exactly when you slow down to aim is a step that only exists while you do not need it.
+- **The gear is kept**, so a correction moves in the same unit as the movement it is correcting. Overshooting at ten minutes a click and finding the way back is measured in seconds would be useless.
+- **The count starts over**, so hovering is safe. Nine clicks up, nine back, nine up — a lot of travel, but never ten in one direction, so the step never moves. That is what makes it possible to sit on a value and tune it.
 
-So the gear only comes down when you **let go of the dial for two seconds**. In particular:
+Which means the ladder is only ever climbed on purpose, by committing to a direction and staying with it. The demo hovers for 54 clicks and stays on one second a click.
 
-- **Slowing down does not drop it.** Crawl along at three clicks a second in fourth gear and you get ten minutes a click, all day.
-- **Reversing does not drop it either.** Overshooting and coming back is one continuous gesture, and a correction that landed in a different unit from the movement it was correcting would be useless. Direction is not part of the calculation at all.
+### Coming back down
+
+A gear only drops when the dial is **let go of for two seconds**. There is no other way down — reversing deliberately does not do it, and that is the point. Two seconds is enough to think without losing your place, and short enough that starting a new adjustment starts it fresh.
+
+### Batched ticks
+
+A dial batches its ticks when spun hard, so one event can carry more clicks than are left before the next gear. Those are spent *across* the change rather than all at the old step: a batch of twelve from a standing start is ten clicks at a second and two at ten, not twelve at a second. The eleventh click is worth ten seconds however it arrived, which is the only version of "every ten clicks" that is true at every speed.
 
 ### Holding the dial
 
-Holding the dial down while turning is a **flat one minute per tick**, regardless of gear. It is an explicit request for a coarse step, and deliberately does not compound with the gear — otherwise the one gesture meant to be predictable would be the least predictable one.
+Holding the dial down while turning is a **flat one minute per click**, regardless of gear. It is an explicit request for a coarse step, and deliberately neither compounds with the gear nor counts towards one — it is a different way of asking, so it leaves the ladder exactly as it found it.
 
 ### What a rotation actually changes
 
@@ -151,15 +156,16 @@ Once the two genuinely disagree it says so, reading `from 20m`. That matters mor
 
 ## Try it without hardware
 
-`npm run mock` drives the whole thing from the keyboard with no Stream Deck attached, and `npm run demo` plays a scripted pass. It prints a labelled ASCII frame per step; the gears show up across five of them:
+`npm run mock` drives the whole thing from the keyboard with no Stream Deck attached, and `npm run demo` plays a scripted pass. It prints a labelled ASCII frame per step; the gears show up across six of them:
 
 | Step | Clock goes from | to |
 | --- | --- | --- |
 | one click → +1s | `20:00` | `20:01` |
-| 8 slow clicks → +8s, still fine control however long it goes on | `20:01` | `20:09` |
-| a hard spin → minutes a tick | `20:09` | `27:42` |
-| keep winding → ten minutes a tick, half a day in one gesture | `27:42` | `8:27:42` |
-| slow right down → the coarse gear is **held**, at ten minutes a click | `8:27:42` | `9:07:42` |
+| 8 more slow clicks → still one second a click, whatever the pace | `20:01` | `20:09` |
+| carry on the same way → the tenth click changes up, so ten seconds a click | `20:09` | `28:50` |
+| keep winding → a minute a click, then ten; half a day in one gesture | `28:50` | `8:01:50` |
+| turn back → the step **holds** at ten minutes a click | `+10m` | `-10m` |
+| hover, nine up and nine back, 54 clicks of it → never runs away | `+1s` | `-1s` |
 
 Through every one of those the preset list underneath reads `5m [20m] 30m 40m`, unchanged, and the label reads `from 20m`. The next two steps press the dial twice: once to land back on `20:00`, and once more to move on to `30m`.
 
@@ -170,9 +176,9 @@ It also walks the gesture vocabulary and asserts the parts a person would otherw
    pulse right after the tick: yes, half a second later: no
    ✓ pulses, then clears
 
-▸ press dial once → BACK to the preset it was dialled off
-   label while drifted: "from 20m", clock after one press: 20:00
-   ✓ restored, and the preset was never overwritten
+▸ hover — nine up, nine back, over and over → it never runs away
+   first click: +1s, after 54 clicks of hovering back and forth: -1s
+   ✓ still one second a click
 
 ▸ …and starting a spent auto-repeat again is a FRESH run
    label on restart: "2s", one lap later: "2s · ×1/2"

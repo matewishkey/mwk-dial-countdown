@@ -9,8 +9,22 @@ this project that generally means they do not change the packaged plugin at all.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [1.2.0] — 2026-08-20
+
 ### Changed
 
+- **The dial changes gear on distance, not speed.** Every **ten clicks in the same direction** is one
+  gear up: 1 second, then 10, then a minute, then ten. The same turn now does the same thing however
+  briskly you make it — where before the step depended on how fast your wrist happened to move, which
+  meant it was never quite the step you predicted.
+- **Turning back keeps the step but starts the ten over.** A correction moves in the same unit as the
+  movement it is correcting, and hovering — nine clicks up, nine back, over and over — never reaches
+  ten in one direction, so it never escalates. The ladder is only ever climbed on purpose. Letting go
+  of the dial for two seconds still drops it back to seconds.
+- A batch of clicks from a hard spin is spent *across* a change of gear rather than all at the old
+  step, so the eleventh click is worth ten seconds however it arrived.
 - The icons are now generated from `assets/mwk-mark.svg`, the brand's own artwork file, rather than
   from path data copied into the build script. The artwork is unchanged — the generated files are
   identical, verified at 0 differing pixels — but they can no longer drift from the source.
@@ -88,7 +102,8 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v1.1.0...HEAD
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v1.2.0...HEAD
+[1.2.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.2.0
 [1.1.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.1.0
 [1.0.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.0.0
 [0.11.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v0.11.0
