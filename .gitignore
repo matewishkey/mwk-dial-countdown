@@ -1,5 +1,5 @@
 node_modules/
 *.streamDeckPlugin
-com.matewishkey.dial-countdown.sdPlugin/bin/
+com.matewishkey.dial-countdown-v2.sdPlugin/bin/
 logs/
 *.log

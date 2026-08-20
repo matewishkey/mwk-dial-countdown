@@ -21,7 +21,7 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const PLUGIN_UUID = "com.matewishkey.dial-countdown";
+const PLUGIN_UUID = "com.matewishkey.dial-countdown-v2";
 const ACTION_UUID = `${PLUGIN_UUID}.countdown`;
 const KEY_ACTION_UUID = `${PLUGIN_UUID}.key`;
 const PLUGIN_DIR = resolve(ROOT, `${PLUGIN_UUID}.sdPlugin`);

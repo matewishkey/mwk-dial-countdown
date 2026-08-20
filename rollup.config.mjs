@@ -6,7 +6,7 @@ import path from "node:path";
 import url from "node:url";
 
 const isWatching = !!process.env.ROLLUP_WATCH;
-const sdPlugin = "com.matewishkey.dial-countdown.sdPlugin";
+const sdPlugin = "com.matewishkey.dial-countdown-v2.sdPlugin";
 
 /**
  * @type {import('rollup').RollupOptions}

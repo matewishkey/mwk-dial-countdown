@@ -33,7 +33,7 @@ type KeyInstance = Instance<Key> & {
 	longPressFired: boolean;
 };
 
-@action({ UUID: "com.matewishkey.dial-countdown.key" })
+@action({ UUID: "com.matewishkey.dial-countdown-v2.key" })
 export class KeyCountdown extends CountdownAction<Key, KeyInstance> {
 	protected readonly controller = "Keypad" as const;
 

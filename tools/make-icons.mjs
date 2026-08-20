@@ -34,7 +34,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const IMGS = resolve(ROOT, "com.matewishkey.dial-countdown.sdPlugin/imgs");
+const IMGS = resolve(ROOT, "com.matewishkey.dial-countdown-v2.sdPlugin/imgs");
 
 /** Brand red, as `THEMES.mwk.running` in src/render.ts. Hardware only. */
 const RED = "#E2342B";

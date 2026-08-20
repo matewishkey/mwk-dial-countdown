@@ -11,6 +11,22 @@ this project that generally means they do not change the packaged plugin at all.
 
 Nothing yet.
 
+## [2.0.0] — 2026-08-20
+
+### Changed
+
+- **The plugin's identifier has changed**, from `com.matewishkey.dial-countdown` to
+  `com.matewishkey.dial-countdown-v2`, along with both action identifiers under it.
+
+  **If you had an earlier version installed, its buttons will not carry over.** Stream Deck resolves a
+  configured button to an action by identifier, so it now sees an action that no longer exists. Remove
+  the old plugin from Stream Deck's preferences, install this one, and place the actions again. Your
+  presets and appearance settings belong to the old buttons and do not migrate.
+
+  This is not a change anybody wanted. Deleting a Marketplace listing in order to re-upload it from
+  scratch leaves the old identifier permanently reserved, and the dashboard then refuses it — so the
+  only way back onto Marketplace was a new one. Nothing else about the plugin changed.
+
 ## [1.5.1] — 2026-08-20
 
 ### Fixed
@@ -184,7 +200,8 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v1.5.1...HEAD
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v2.0.0...HEAD
+[2.0.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v2.0.0
 [1.5.1]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.5.1
 [1.5.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.5.0
 [1.4.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.4.0

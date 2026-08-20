@@ -79,7 +79,7 @@ Stream Deck runs on macOS and Windows only, so the plugin cannot be *run* on Lin
 
 ```sh
 npm install
-npm run build      # bundle into com.matewishkey.dial-countdown.sdPlugin/bin
+npm run build      # bundle into com.matewishkey.dial-countdown-v2.sdPlugin/bin
 npm test           # 127 unit tests
 npm run demo       # scripted gesture pass, prints one frame per step
 npm run mock       # the same harness, driven from the keyboard
@@ -93,7 +93,7 @@ The plugin process is launched with its `.sdPlugin` directory as the working dir
 
 ```sh
 npx streamdeck dev                                  # enable developer mode, once
-npx streamdeck link com.matewishkey.dial-countdown.sdPlugin
+npx streamdeck link com.matewishkey.dial-countdown-v2.sdPlugin
 npm run watch                                       # rebuild + restart on save
 ```
 
@@ -101,8 +101,8 @@ npm run watch                                       # rebuild + restart on save
 
 ```sh
 npm run version:check                               # package.json ↔ manifest.json ↔ tag
-npx streamdeck validate com.matewishkey.dial-countdown.sdPlugin
-npx streamdeck pack com.matewishkey.dial-countdown.sdPlugin
+npx streamdeck validate com.matewishkey.dial-countdown-v2.sdPlugin
+npx streamdeck pack com.matewishkey.dial-countdown-v2.sdPlugin
 ```
 
 **[docs/releasing.md](docs/releasing.md)** is the whole policy, and the one rule it turns on is this: *the version number describes the `.streamDeckPlugin` file and nothing else*. Repo-only work — tests, docs, tooling — lands in [CHANGELOG.md](CHANGELOG.md) under *Unreleased* and rides the next real release, because the number is what the Stream Deck application shows the user and every Marketplace version is a human review.

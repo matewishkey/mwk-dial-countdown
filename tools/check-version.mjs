@@ -27,7 +27,7 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const read = (path) => JSON.parse(readFileSync(resolve(ROOT, path), "utf8"));
 
 const pkg = read("package.json").version;
-const manifest = read("com.matewishkey.dial-countdown.sdPlugin/manifest.json").Version;
+const manifest = read("com.matewishkey.dial-countdown-v2.sdPlugin/manifest.json").Version;
 const tag = process.argv[2];
 
 const problems = [];

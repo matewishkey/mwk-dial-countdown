@@ -1,11 +1,11 @@
 {
 	"Name": "Dial Countdown",
-	"Version": "1.5.1.0",
+	"Version": "2.0.0.0",
 	"Author": "Mate Wish Key",
 	"Actions": [
 		{
 			"Name": "Countdown",
-			"UUID": "com.matewishkey.dial-countdown.countdown",
+			"UUID": "com.matewishkey.dial-countdown-v2.countdown",
 			"Icon": "imgs/actions/timer/icon",
 			"Tooltip": "A countdown timer on a dial. Tap the screen to pause or resume, tap twice to reset it to full, hold for the next preset. Turn the dial to adjust; press it to swap between one-second and one-minute steps, or hold it for one hour.",
 			"PropertyInspectorPath": "ui/dial-countdown.html",
@@ -32,7 +32,7 @@
 		},
 		{
 			"Name": "Countdown (Key)",
-			"UUID": "com.matewishkey.dial-countdown.key",
+			"UUID": "com.matewishkey.dial-countdown-v2.key",
 			"Icon": "imgs/actions/key/icon",
 			"Tooltip": "The same countdown timer on an ordinary key. Press to pause or resume, press twice to reset it to full, hold to load the next preset.",
 			"PropertyInspectorPath": "ui/dial-countdown.html",
@@ -69,6 +69,6 @@
 	"Nodejs": {
 		"Version": "24"
 	},
-	"UUID": "com.matewishkey.dial-countdown",
+	"UUID": "com.matewishkey.dial-countdown-v2",
 	"URL": "https://matewishkey.com/"
 }

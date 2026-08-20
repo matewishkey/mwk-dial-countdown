@@ -1,12 +1,12 @@
 {
 	"name": "mwk-dial-countdown",
-	"version": "1.5.1",
+	"version": "2.0.0",
 	"private": true,
 	"description": "Stream Deck countdown timer for dials and keys, with presets, tap-to-pause and double-tap-to-reset.",
 	"type": "module",
 	"scripts": {
 		"build": "rollup -c",
-		"watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.matewishkey.dial-countdown\"",
+		"watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.matewishkey.dial-countdown-v2\"",
 		"test": "node --import ./test/ts-resolve.mjs --test \"test/*.test.ts\"",
 		"version:check": "node tools/check-version.mjs",
 		"mock": "node tools/mock-host.mjs",
