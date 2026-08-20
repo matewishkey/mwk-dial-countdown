@@ -31,6 +31,8 @@ type Dial = DialAction<DialCountdownSettings>;
 type DialInstance = Instance<Dial> & {
 	longPressHandle: NodeJS.Timeout | null;
 	longPressFired: boolean;
+	/** Set when the dial is turned while held, so the release is not also read as a press. */
+	turnedWhileDown: boolean;
 	lastLayout: string | null;
 };
 
@@ -43,7 +45,7 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 	}
 
 	protected extras(): Omit<DialInstance, keyof Instance<Dial>> {
-		return { longPressHandle: null, longPressFired: false, lastLayout: null };
+		return { longPressHandle: null, longPressFired: false, turnedWhileDown: false, lastLayout: null };
 	}
 
 	protected override attach(instance: DialInstance): void {
@@ -55,12 +57,13 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 	}
 
 	/**
-	 * Turning adjusts time, and every tick is acknowledged by a pulse of the ring — there is no
+	 * Turning adjusts time, and every click is acknowledged by a pulse of the ring — there is no
 	 * haptic feedback to be had on this hardware, so the ring answering each click is what tells you
 	 * the dial is being heard.
 	 *
-	 * Nothing is saved. Turning changes the clock, never the preset behind it, so a rotation leaves
-	 * the stored settings untouched by design and there is no write to schedule.
+	 * Nothing is saved, because nothing worth saving changed: turning moves the clock, never the
+	 * preset behind it, and never the step. A rotation while the dial is held is still just a
+	 * rotation — it only cancels the press, so that letting go afterwards does not also change gear.
 	 */
 	override onDialRotate(ev: DialRotateEvent<DialCountdownSettings>): void {
 		const instance = this.instanceFor(ev.action.id);
@@ -68,20 +71,21 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 			return;
 		}
 
-		// A rotation is an adjustment, not a preset change — cancel the pending long press so a
-		// press-and-turn does not move the preset out from under the value being set.
-		this.#cancelLongPress(instance);
+		if (ev.payload.pressed) {
+			instance.turnedWhileDown = true;
+			this.#cancelLongPress(instance);
+		}
 
-		instance.countdown.adjust(ev.payload.ticks, ev.payload.pressed);
+		instance.countdown.adjust(ev.payload.ticks);
 		this.acknowledge(instance);
 	}
 
 	/**
 	 * Starts the clock that decides whether this press is a short one or a long one.
 	 *
-	 * The dial press cycles presets rather than starting the timer: pressing a dial in is a fiddly,
-	 * two-handed movement compared with tapping the screen above it, so the screen owns the gestures
-	 * that get used constantly and the dial owns the one that does not.
+	 * The dial sets the step. Preset cycling lives on the touchscreen, where the hand already is when
+	 * it is reading the clock — pressing a dial in is a fiddly, two-handed movement by comparison, so
+	 * it gets the job you do occasionally and deliberately rather than the one you do constantly.
 	 */
 	override onDialDown(ev: DialDownEvent<DialCountdownSettings>): void {
 		const instance = this.instanceFor(ev.action.id);
@@ -90,31 +94,36 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 		}
 
 		instance.longPressFired = false;
+		instance.turnedWhileDown = false;
 		instance.longPressHandle = setTimeout(() => {
 			instance.longPressFired = true;
 			instance.longPressHandle = null;
-			this.#cyclePreset(instance, -1);
+			// Fires while the finger is still down: telling someone they have held long enough only
+			// once they have let go is feedback that arrives after the fact.
+			instance.countdown.coarsenStep();
+			this.acknowledge(instance);
 		}, LONG_PRESS_MS);
 	}
 
-	/** A release that beat the long-press threshold moves to the next preset. */
+	/** A release that beat the long-press threshold swaps the step between seconds and minutes. */
 	override onDialUp(ev: DialUpEvent<DialCountdownSettings>): void {
 		const instance = this.instanceFor(ev.action.id);
 		if (instance === undefined) {
 			return;
 		}
 
-		const wasLongPress = instance.longPressFired;
+		const acted = instance.longPressFired || instance.turnedWhileDown;
 		this.#cancelLongPress(instance);
 
-		if (!wasLongPress) {
-			this.#cyclePreset(instance, 1);
+		if (!acted) {
+			instance.countdown.cycleStep();
+			this.acknowledge(instance);
 		}
 	}
 
 	/**
 	 * Every gesture the screen has: one tap pauses or resumes, two reset the clock to full, and a held
-	 * tap loads the next preset without starting it.
+	 * tap puts the clock right or loads the next preset.
 	 *
 	 * The hardware reports a tap and whether it was held, but never that two taps were a pair — that
 	 * is worked out by the resolver, which is why a single tap acts a quarter of a second after the
@@ -127,12 +136,6 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 		}
 
 		instance.taps.press(ev.payload.hold);
-	}
-
-	#cyclePreset(instance: DialInstance, step: number): void {
-		instance.countdown.cyclePreset(step);
-		this.scheduleSave(instance);
-		this.acknowledge(instance);
 	}
 
 	#cancelLongPress(instance: DialInstance): void {
@@ -181,9 +184,11 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 		const toast = countdown.toast;
 		const title = settings.showTitle ? `${label}${suffixFor(countdown, status)}` : "";
 
-		// The bottom line is the acknowledgement's while it lasts, and the finish time's otherwise:
-		// there is one line spare, and what just happened matters more for a second than when it ends.
-		const footer = toast || finishText(countdown, remainingMs, status);
+		// One spare line, three claimants, in order of how long they matter for. What you just did wins
+		// for a second. Then the finish time, which is the useful thing on a running clock. Then the
+		// dial's step — last because it is only there at all when it is not the default, but it has to
+		// be somewhere: a chosen step never expires, so nothing else would ever remind you of it.
+		const footer = toast || finishText(countdown, remainingMs, status) || countdown.stepLabel;
 
 		const signature = `${instance.lastLayout}|${title}|${value}|${status}|${dimmed}|${flash}|${footer}|${settings.showLogo}|${settings.theme}`;
 		if (!force && signature === instance.last) {

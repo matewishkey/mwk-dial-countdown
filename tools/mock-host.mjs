@@ -353,9 +353,6 @@ function applySettings(patch) {
 	});
 }
 
-/** Long enough with the dial untouched that the gear drops back to the first — see IDLE_RESET_MS. */
-const IDLE_MS = 2_500;
-
 /** The magnitude of a step toast: "+10m" and "-10m" are the same step in opposite directions. */
 function size(toast) {
 	return String(toast).replace(/^[+-]/, "");
@@ -415,122 +412,115 @@ const wait = (ms) => new Promise((done) => setTimeout(done, ms));
 async function runDemo() {
 	const steps = [
 		["fresh install → defaults, and they get written back", async () => {}],
-		["press dial → 20m", async () => press(80)],
+		["hold the screen → 20m; preset cycling lives on the touchscreen now", async () => {
+			gestures.touch(true);
+			await wait(400);
+		}],
 
-		// Cadence: you step in the largest unit you have already travelled. Move ten seconds and you
-		// move in tens of seconds; move a minute and you move in minutes. Distance, not speed.
+		// The step is CHOSEN, not inferred. Turning never changes it — which is the one thing three
+		// earlier designs (momentum, then velocity, then distance travelled) each got wrong.
 		["one click → +1s", async () => gestures.rotate(1)],
-		["8 more slow clicks → still one second a click; nine seconds is short of ten", async () => spin(8, 1, 400)],
 		[
-			"the tenth click reaches ten seconds travelled → so now ten seconds a click",
+			"turn as much as you like, however fast → still a second a click",
 			async () => {
+				await spin(30, 1, 25);
+				await spin(20, -1, 300);
+				await spin(12, 3, 40);
+				// One last single click, so the toast reports the step rather than a batch's total —
+				// a three-tick event says "+3s" at the very same one-second step.
 				await spin(1, 1, 200);
-				const tenth = screen.finish;
-				await spin(1, 1, 200);
-				console.log(`\n   tenth click: ${tenth}, eleventh: ${screen.finish}`);
-				console.log(
-					`   ${tenth === "+1s" && screen.finish === "+10s" ? "\u2713 the click that gets you there is the last fine one" : "\u2717 changed at the wrong click"}`
-				);
-			}
-		],
-		["five more → a minute travelled, so a minute a click", async () => spin(5, 1, 120)],
-		["nine more → ten minutes travelled, so ten minutes a click; twelve hours is in reach", async () => spin(9, 1, 100)],
-
-		// Turning back is a correction, not progress. The step has to hold, or the correction lands in
-		// a different unit from the movement it is correcting.
-		[
-			"…turn back the other way → the step HOLDS at whatever it had reached",
-			async () => {
-				// One click each way, so the two toasts are comparable — a batched event carries more
-				// ticks and so a bigger total at the very same step.
-				await spin(1, 1, 120);
-				const forward = screen.finish;
-				await spin(1, -1, 120);
-				console.log(`\n   one click forward: ${forward}, one click back: ${screen.finish}`);
-				console.log(
-					`   ${size(forward) === size(screen.finish) ? "\u2713 same unit both ways" : "\u2717 the step changed under the correction"}`
-				);
+				console.log(`\n   after 87 clicks at three different speeds, the step is ${size(screen.finish)}`);
+				console.log(`   ${size(screen.finish) === "1s" ? "\u2713 unchanged, as chosen" : `\u2717 it drifted to ${screen.finish}`}`);
 			}
 		],
 
-		// The word on screen is a readout of the NEXT click, not a note about the last one — so it has
-		// to last exactly as long as it stays true. It used to fade at 900ms while the gear ran on to
-		// 2s, which read as "the dial has gone back to seconds" when it had not.
 		[
-			"…the step readout lasts exactly as long as the gear, and they go together",
+			"press the dial → a minute a click, and it says so",
 			async () => {
-				await spin(1, -1, 100);
+				await wait(1200);
+				await press(80);
+				await wait(400);
 				const said = screen.finish;
-				await wait(1_200);
-				const midway = screen.finish;
-				await wait(1_100);
-				console.log(`\n   step: "${said}", 1.2s later: "${midway}", 2.3s later: "${screen.finish}"`);
-				console.log(
-					`   ${said !== "" && midway === said && screen.finish === "" ? "\u2713 readable while it is true, gone when it is not" : "\u2717 the word and the gear are out of step"}`
-				);
+				await spin(1, 1, 200);
+				console.log(`\n   press said "${said}", and the next click was ${screen.finish}`);
+				console.log(`   ${said === "step · 1m" && screen.finish === "+1m" ? "\u2713 pressed, and a click is a minute" : "\u2717 the press did not take"}`);
 			}
 		],
 
-		// ...and the DISTANCE starts over on a reversal, which is what makes hovering safe. Travel here
-		// is large; travel in any one direction never reaches ten seconds, so it must never escalate.
+		// A chosen step has no time-out, which is what makes it predictable and also what makes it
+		// easy to forget. So it stays on screen for as long as it is set.
 		[
-			"…hover — nine up, nine back, over and over → it never runs away",
+			"…and it STAYS — no time-out, and the screen says so while it is set",
 			async () => {
-				await wait(IDLE_MS);
-				await spin(9, 1, 60);
-				const first = screen.finish;
+				await wait(2500);
+				const idle = screen.finish;
+				await spin(1, 1, 200);
+				console.log(`\n   2.5s untouched, the screen reads "${idle}"; the next click was ${screen.finish}`);
+				console.log(`   ${idle === "step · 1m" && screen.finish === "+1m" ? "\u2713 still set, and still saying so" : "\u2717 it expired"}`);
+			}
+		],
 
-				for (let pass = 1; pass < 6; pass++) {
-					await spin(9, pass % 2 === 0 ? 1 : -1, 60);
-				}
+		[
+			"hold the dial → an hour a click",
+			async () => {
+				await press(900);
+				await wait(400);
+				const said = screen.finish;
+				await spin(1, 1, 200);
+				console.log(`\n   hold said "${said}", and the next click was ${screen.finish}`);
+				console.log(`   ${said === "step · 1h" && screen.finish === "+1h" ? "\u2713 held, and a click is an hour" : "\u2717 the hold did not take"}`);
+			}
+		],
 
-				console.log(`\n   first click: ${first}, after 54 clicks of hovering back and forth: ${screen.finish}`);
-				console.log(
-					`   ${size(screen.finish) === "1s" ? "\u2713 still one second a click" : `\u2717 hovering escalated to ${screen.finish}`}`
-				);
+		[
+			"press again → back to seconds, not to minutes",
+			async () => {
+				await press(80);
+				await wait(400);
+				await spin(1, 1, 200);
+				console.log(`\n   one press after an hour a click, and the next click was ${screen.finish}`);
+				console.log(`   ${screen.finish === "+1s" ? "\u2713 straight back to the finest step" : "\u2717 landed somewhere else"}`);
 			}
 		],
 
 		// Turning never writes to the preset list. The label says so — "from 20m" — for as long as the
-		// two disagree, and the first press of the dial is what closes the gap rather than moving on.
+		// two disagree, and a hold of the SCREEN is what closes the gap.
 		[
-			"press dial once → BACK to the preset it was dialled off, not on to the next one",
+			"hold the screen → puts the dialled clock back on its preset, rather than moving on",
 			async () => {
-				await wait(2500);
 				const drifted = screen.label;
-				await press(80);
-				await wait(300);
-				console.log(`\n   label while drifted: "${drifted}", clock after one press: ${screen.value}`);
+				gestures.touch(true);
+				await wait(400);
+				console.log(`\n   label while drifted: "${drifted}", clock after one hold: ${screen.value}`);
 				console.log(
 					`   ${drifted.startsWith("from ") && screen.value === "20:00" ? "\u2713 restored, and the preset was never overwritten" : "\u2717 the preset did not survive being dialled"}`
 				);
 			}
 		],
 		[
-			"…press dial again → NOW it moves on, because there is nothing left to put back",
+			"…hold again → NOW it moves on, because there is nothing left to put back",
 			async () => {
-				await press(80);
-				await wait(300);
+				gestures.touch(true);
+				await wait(400);
 			}
 		],
 
-		// Reported from the hardware: reaching for the dial mid-run used to throw you onto the next
-		// preset. A running clock is not sitting on its preset either, so the press puts it right first.
+		// Reported from the hardware: a running clock is not sitting on its preset either, so the hold
+		// puts it right before it moves on.
 		[
-			"start it running, then press the dial → STOPS and restores; it does not jump to the next preset",
+			"start it running, then hold the screen → STOPS and restores; it does not jump to the next preset",
 			async () => {
 				gestures.touch(false);
 				await wait(700);
 				await wait(1200);
 				const running = screen.value;
 
-				await press(80);
+				gestures.touch(true);
 				await wait(400);
 				const after = screen.value;
-				const settled = screen.label;
 
 				await wait(1500);
-				console.log(`\n   running at ${running}, one press later ${after} (label "${settled}"), 1.5s on ${screen.value}`);
+				console.log(`\n   running at ${running}, one hold later ${after}, 1.5s on ${screen.value}`);
 				console.log(
 					`   ${after === "30:00" && screen.value === after ? "\u2713 stopped and back to full, on the same preset" : "\u2717 moved on, or did not stop"}`
 				);

@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { Countdown } from "../src/countdown.ts";
-import { IDLE_RESET_MS } from "../src/acceleration.ts";
 import { FLASH_MS, formatDelta, TOAST_MS } from "../src/feedback.ts";
 import { normaliseSettings } from "../src/settings.ts";
 
@@ -114,14 +113,14 @@ describe("what the dial changes, and what it leaves alone", () => {
 		// preset as 23 — and cycling away saved it there.
 		const { countdown } = fixture();
 
-		countdown.adjust(1, false);
+		countdown.adjust(1);
 		assert.equal(countdown.timer.durationMs, 301_000, "the clock in front of you does move");
 		assert.equal(countdown.presets[0], 300, "the configured preset does not");
 		assert.equal(countdown.toast, "+1s");
 
 		countdown.reset();
 		countdown.toggle();
-		countdown.adjust(-1, false);
+		countdown.adjust(-1);
 		assert.equal(countdown.presets[0], 300, "and a running nudge leaves it alone as it always did");
 		assert.equal(countdown.toast, "-1s");
 	});
@@ -130,14 +129,14 @@ describe("what the dial changes, and what it leaves alone", () => {
 		const { countdown } = fixture();
 		assert.equal(countdown.drifted, false);
 
-		countdown.adjust(1, false);
+		countdown.adjust(1);
 		assert.equal(countdown.drifted, true, "the gap is otherwise invisible — the settings still say 5m");
 	});
 
 	it("survives being cycled away from and back, which is what made presets unusable", () => {
 		const { countdown } = fixture([300, 1200], 0);
 
-		countdown.adjust(5, false);
+		countdown.adjust(5);
 		assert.equal(countdown.timer.durationMs, 305_000, "precondition: wound up by five clicks");
 
 		countdown.cyclePreset(1); // first press only puts it back on the preset
@@ -148,12 +147,12 @@ describe("what the dial changes, and what it leaves alone", () => {
 		assert.equal(countdown.persistable.presets[0], 300, "and that is what gets saved");
 	});
 
-	it("reports the step it is in, not the raw tick count", () => {
+	it("reports the change, not the raw click count", () => {
 		const { countdown } = fixture();
 
-		// A held dial is a flat minute a tick, which is the one step that needs no winding up to reach.
-		countdown.adjust(3, true);
-		assert.equal(countdown.toast, "+3m");
+		countdown.cycleStep();
+		countdown.adjust(3);
+		assert.equal(countdown.toast, "+3m", "three clicks at a minute each");
 	});
 });
 
@@ -162,7 +161,7 @@ describe("pressing for the next preset", () => {
 		const { countdown } = fixture([300, 1200], 0);
 
 		countdown.toggle();
-		countdown.adjust(5, false);
+		countdown.adjust(5);
 		assert.equal(countdown.drifted, true, "precondition: dialled off the preset");
 
 		countdown.cyclePreset(1);
@@ -179,7 +178,7 @@ describe("pressing for the next preset", () => {
 	it("restores in whichever direction the press asked for, so holding is not a way round it", () => {
 		const { countdown } = fixture([300, 1200], 0);
 
-		countdown.adjust(5, false);
+		countdown.adjust(5);
 		countdown.cyclePreset(-1);
 		assert.equal(countdown.presetIndex, 0);
 		assert.equal(countdown.timer.durationMs, 300_000);
@@ -239,7 +238,7 @@ describe("pressing for the next preset", () => {
 		const idleStates: Array<() => void> = [
 			() => countdown.reset(),
 			() => countdown.cyclePreset(1),
-			() => countdown.adjust(1, false),
+			() => countdown.adjust(1),
 			() => countdown.applySettings({ presets: [900], presetIndex: 0 })
 		];
 
@@ -260,7 +259,7 @@ describe("pressing for the next preset", () => {
 	it("gives the one-preset case a way back, where before there was none", () => {
 		const { countdown } = fixture([600], 0);
 
-		countdown.adjust(5, false);
+		countdown.adjust(5);
 		countdown.cyclePreset(1);
 		assert.equal(countdown.timer.durationMs, 600_000, "with one preset the press has nowhere else to go");
 		assert.equal(countdown.toast, "preset · 10m");
@@ -327,7 +326,7 @@ describe("the lap counter", () => {
 		exhaust(fixtureState);
 		assert.equal(fixtureState.countdown.cycles, 2, "precondition");
 
-		fixtureState.countdown.adjust(1, false);
+		fixtureState.countdown.adjust(1);
 		assert.equal(fixtureState.countdown.timer.status, "idle", "adjusting a finished clock puts it back to full");
 		assert.equal(fixtureState.countdown.cycles, 0, "which ends that run, count and all");
 	});
@@ -387,32 +386,61 @@ describe("elapsing", () => {
 	});
 });
 
-describe("the step readout", () => {
-	it("stays up for exactly as long as the gear it is reporting", () => {
-		// The bug this guards: the word faded after 900ms while the gear ran on for another 1.1
-		// seconds, which invited the reasonable and wrong conclusion that the dial was back to
-		// seconds. `+10s` is not a note about the last click, it is a statement about the next one.
-		const { countdown, advance } = fixture();
+describe("the step the dial is set to", () => {
+	it("swaps between seconds and minutes on a press, and says which", () => {
+		const { countdown } = fixture();
 
-		countdown.adjust(1, false);
+		assert.equal(countdown.stepLabel, "", "the default is silent — a permanent `1s` would be noise");
+		countdown.adjust(1);
 		assert.equal(countdown.toast, "+1s");
 
-		advance(TOAST_MS);
-		assert.equal(countdown.toast, "+1s", "an ordinary toast would have gone by now; this one must not");
+		countdown.cycleStep();
+		assert.equal(countdown.toast, "step · 1m");
+		assert.equal(countdown.stepLabel, "step · 1m", "and it stays on screen, because it never expires");
 
-		advance(IDLE_RESET_MS - TOAST_MS - 1);
-		assert.equal(countdown.toast, "+1s", "still true right up to the moment the gear drops");
+		countdown.adjust(1);
+		assert.equal(countdown.toast, "+1m", "a click is now worth a minute");
 
-		advance(1);
-		assert.equal(countdown.toast, "", "and gone at the instant it stops being true");
+		countdown.cycleStep();
+		assert.equal(countdown.stepLabel, "", "and back again");
 	});
 
-	it("leaves every other acknowledgement to its ordinary moment", () => {
-		const { countdown, advance } = fixture();
+	it("goes to an hour on a hold, and back to seconds from there on a press", () => {
+		const { countdown } = fixture();
+
+		countdown.coarsenStep();
+		assert.equal(countdown.stepLabel, "step · 1h");
+		countdown.adjust(1);
+		assert.equal(countdown.toast, "+1h");
+
+		countdown.cycleStep();
+		assert.equal(countdown.stepLabel, "", "coming back from a coarse step, you want the finest one");
+	});
+
+	it("never changes on its own, however far or fast or long the dial is turned", () => {
+		// This is the whole point, and what three earlier designs each got wrong in their own way.
+		const { countdown, advance } = fixture([24 * 60 * 60]);
+
+		for (let i = 0; i < 200; i++) {
+			countdown.adjust(i % 7 === 0 ? -3 : 1);
+			advance(i % 5);
+		}
+		assert.equal(countdown.toast, "+1s", "still a second a click after two hundred of them");
+		assert.equal(countdown.stepLabel, "");
+	});
+
+	it("survives a preset change, a reset and a run — it is a mode, not a side effect", () => {
+		const { countdown } = fixture([300, 1200], 0);
+
+		countdown.coarsenStep();
+		countdown.cyclePreset(1);
+		assert.equal(countdown.stepLabel, "step · 1h", "loading a preset must not silently un-choose it");
+
+		countdown.reset();
+		assert.equal(countdown.stepLabel, "step · 1h");
 
 		countdown.toggle();
-		advance(TOAST_MS);
-		assert.equal(countdown.toast, "", "`start` is over as soon as it has been read");
+		assert.equal(countdown.stepLabel, "step · 1h");
 	});
 });
 
@@ -542,7 +570,7 @@ describe("settings arriving from the inspector", () => {
 		const { countdown } = fixture();
 
 		countdown.toggle();
-		countdown.adjust(5, false);
+		countdown.adjust(5);
 		const dialled = countdown.timer.durationMs;
 		assert.equal(countdown.drifted, true, "precondition: dialled off the preset");
 
@@ -554,7 +582,7 @@ describe("settings arriving from the inspector", () => {
 	it("does reload when the selected preset's own length changed under it", () => {
 		const { countdown } = fixture();
 
-		countdown.adjust(5, false);
+		countdown.adjust(5);
 		assert.equal(countdown.applySettings({ presets: [900, 1200], presetIndex: 0 }), true);
 		assert.equal(countdown.timer.durationMs, 900_000, "editing the preset is exactly when a reload is right");
 		assert.equal(countdown.drifted, false);
@@ -563,7 +591,7 @@ describe("settings arriving from the inspector", () => {
 	it("hands back the selected preset alongside the rest, so cycling is remembered", () => {
 		const { countdown } = fixture();
 
-		countdown.adjust(5, false);
+		countdown.adjust(5);
 		countdown.cyclePreset(1); // puts the dialled clock back on its preset
 		countdown.cyclePreset(1); // and then moves on
 

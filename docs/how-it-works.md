@@ -2,61 +2,47 @@
 
 A few things in this plugin are worth explaining properly, because each does more than it looks like it does: **turning the dial**, **the three press gestures**, **the key**, **why the screen redraws when nothing has changed**, and **presets**.
 
-## The dial changes gear
+## The dial's step is chosen, not guessed
 
 A dial reports *ticks* — one click of rotation. The obvious thing to do is map one tick to a fixed amount of time, and that is exactly what makes most timer plugins annoying: pick a step small enough to trim thirty seconds off a countdown and setting a two-hour one takes a minute of winding. Pick a step big enough for two hours and you can no longer nudge.
 
-So the step is not fixed. It sits in a **gear**, and the rule for changing gear is one line:
+The answer here is not a cleverer guess. It is to stop guessing.
 
-> **You step in the largest unit you have already travelled.**
+| Gesture | Step |
+| --- | --- |
+| — | **1 second** a click |
+| **Press the dial** | **1 minute** a click, and press again for seconds |
+| **Hold the dial** | **1 hour** a click |
 
-Move ten seconds and you are moving in tens of seconds. Move a minute and you are moving in minutes. Move ten minutes and you are moving in ten-minute steps.
+**Turning never changes the step.** However far you turn, however fast, however long you keep going, a click is worth exactly what the last press said it was worth.
 
-| Gear | Step per click | Unlocked by travelling | Clicks it takes |
-| --- | --- | --- | --- |
-| 1 | **1 second** | — | — |
-| 2 | **10 seconds** | 10 seconds | 10 |
-| 3 | **1 minute** | 1 minute | 5 more |
-| 4 | **10 minutes** | 10 minutes | 9 more |
+### Three designs that tried to infer it
 
-The thresholds are not a second table to look up — they *are* the steps. `10` means both "ten seconds a click" and "unlocked once you have moved ten seconds", which is what makes the behaviour describable in a sentence instead of memorised from a table.
+This is the fourth, and the first three are worth recording because they failed in different ways and the pattern only shows up across all of them.
 
-It also makes the ladder **easier to climb the further up it you are**: ten clicks to the first change, five to the next, nine to the last. Twenty-four clicks takes you from one second a click to twelve hours in reach — and that is right, because by the twentieth click you have said plainly that you want to travel.
+**Momentum** counted ticks in any direction, escalating as you turned and dropping back after a third of a second of stillness. Winding *back and forth over* a value counted towards escalating exactly as much as winding *away* from it, so there was no way to click out thirty seconds one second at a time.
 
-### Distance, after trying the other two
+**Velocity** changed up when the wrist moved briskly. That reads better on paper than it works in the hand: the same gesture did different things depending on how quickly you happened to make it, so the step you got was never the step you predicted.
 
-This is the third design, and the first two are worth recording because each failed in a way the next was built to avoid.
+**Distance travelled** — you step in the largest unit you have already moved — was predictable in principle, and genuinely better. But it still changed the step underneath the hand that was using it, and it still had to be explained.
 
-**Counting ticks in any direction** was first. Momentum rose as the dial turned and dropped after a third of a second of stillness. It made fine control impossible: winding *back and forth over* a value counted towards escalating exactly as much as winding *away* from it, so four clicks in the dial was already moving ten seconds and there was no way to click out thirty seconds one second at a time.
+All three were attempts to work out which step you wanted from how you were turning. The dial already had a press and a hold going spare, because preset cycling belongs on the touchscreen where your hand already is. So the step gets **said** instead of inferred: three values, two gestures, and a turn that does the same thing every single time.
 
-**Measuring speed** replaced it — a flick of the wrist changed up, a deliberate turn never did. That reads better on paper than it works in the hand, because it means the same gesture does different things depending on how briskly you happen to make it. The step you got was never quite the step you predicted, and predicting it is the entire job.
+### No time-out, and therefore a label
 
-**Distance travelled** is neither. It does not care how fast you turn or how long you take, only how far you have got — which is the thing you can already see on the clock in front of you.
+A step you set stays set until you set another one. Nothing expires it — not a pause, not loading a preset, not a reset, not the timer running out. That is the whole point, because a mode that expires is a mode you have to keep re-checking.
 
-### Turning back keeps the gear and resets the distance
+It is also what makes such a mode easy to forget, so any step other than the default says so on screen for as long as it is set: `step · 1m` on the bottom line. The default stays silent — a permanent `1s` on every timer whose dial has never been pressed would be noise.
 
-Both halves are load-bearing, and they do different jobs.
+That bottom line has three claimants, in order of how long they matter for: the acknowledgement of what you just did, then the finish time on a running clock, then the step.
 
-- **The gear is kept**, so a correction moves in the same unit as the movement it is correcting. Overshooting at ten minutes a click and finding the way back measured in seconds would be useless.
-- **The distance starts over**, so hovering is safe. Nine clicks up, nine back, nine up — a lot of travel, but never ten seconds in one direction, so the step never moves. That is what makes it possible to sit on a value and tune it.
+### Coming back from an hour
 
-The ladder is therefore only ever climbed on purpose, by committing to a direction and staying with it. The demo hovers for 54 clicks and never leaves the first gear.
+A press from an hour a click lands on **seconds**, not minutes. Coming down from a coarse step you almost always want the finest one — and a press that landed on minutes would leave no single gesture that gets you back to seconds at all.
 
-### Coming back down, and how you know
+### Turning while the dial is held
 
-A gear only drops when the dial is **let go of for two seconds**. There is no other way down: reversing deliberately does not do it.
-
-The word on screen is what tells you where you are. `+10s` is not a note about the click you just made — it is a **readout of what the next click will do**, and it stays up for exactly as long as that is true. When it disappears, the gear has gone with it and you are back to seconds.
-
-That is one constant, `IDLE_RESET_MS`, used in both places. It has been two: the word faded after 900 ms while the gear ran on for another 1.1 seconds, which invited the reasonable and entirely wrong conclusion that the dial had already reset. Every other acknowledgement — `pause`, `reset`, `next · 20m` — keeps the ordinary 900 ms, because those really are notes about something that has finished happening.
-
-### Batched ticks
-
-A dial batches its ticks when spun hard, so one event can carry more clicks than are left before the next gear. Those are spent *across* the change rather than all at the old step: a batch of twelve from a standing start is ten clicks at a second and two at ten, not twelve at a second. The click that carries you past ten seconds is worth ten seconds however it arrived, which is the only reading of the rule that holds at every speed — and it stops a hard spin being quietly cheaper than a slow one.
-
-### Holding the dial
-
-Holding the dial down while turning is a **flat one minute per click**, regardless of gear. It is an explicit request for a coarse step, and deliberately neither compounds with the gear nor counts towards one — it is a different way of asking, so it leaves the ladder exactly as it found it.
+Nothing special: it is a rotation at the current step. It does cancel the press, so letting go afterwards does not also change the step — a turn and a press are two different instructions, and one gesture should not quietly be both.
 
 ### What a rotation actually changes
 
@@ -145,9 +131,9 @@ It used to, and that is covered above under *What a rotation actually changes*. 
 
 Because the dial no longer writes back, a countdown wound from 20 minutes to 23 has nothing that returns it to 20 — the property inspector still says 20, the clock says 23, and there is no gesture that closes the gap. That gap is the direct cost of the change above, so the change has to pay for it.
 
-The press of the dial pays for it. **If the clock is not sitting stopped and full on its preset, the first press puts it there. Only a press with nothing left to put right moves on.**
+Holding the screen pays for it. **If the clock is not sitting stopped and full on its preset, the first hold puts it there. Only a hold with nothing left to put right moves on.**
 
-| The clock is… | Press the dial | Press it again |
+| The clock is… | Hold the screen | Hold it again |
 | --- | --- | --- |
 | Stopped and full on its preset | Next preset | The one after that |
 | Running | Stopped, back to full | Next preset |
@@ -156,11 +142,11 @@ The press of the dial pays for it. **If the clock is not sitting stopped and ful
 
 The restore comes first because it is wanted far more often: putting the clock back where it belongs is a thing you do constantly, and moving to a different preset is a thing you do occasionally. Nothing is lost either way — the press that would have advanced still advances, one press later — and the word on screen says which of the two it just did, `preset · 20m` against `next · 30m`.
 
-**This rule was too narrow at first**, and the correction is worth recording. It originally fired only on the last row of that table: the dial had wound the clock off its preset, and nothing else counted. The reasoning was that a *running* timer already has a reset of its own, the double tap, so spending the press on one would be redundant.
+**This rule was too narrow at first**, and the correction is worth recording. It originally fired only on the last row of that table: the dial had wound the clock off its preset, and nothing else counted. The reasoning was that a *running* timer already has a reset of its own, the double tap, so spending the gesture on one would be redundant.
 
-In the hand that was wrong twice over. The double tap is on the **touchscreen**, and the press is on the **dial** — reaching for one does not put the other under your finger. And being thrown onto the next preset because you touched the dial mid-run is precisely the surprise the restore exists to prevent. A running clock is not sitting on its preset either, whatever its duration says.
+In the hand that was wrong. Being thrown onto the next preset because you reached for the control mid-run is precisely the surprise the restore exists to prevent, and a running clock is not sitting on its preset either, whatever its duration says.
 
-The same applies to **holding** the dial for the previous preset, and to **holding the screen**. A gesture that skipped the restore would be a way round it, and then the rule would be something to remember rather than something that just holds.
+This is the touchscreen's job, on both controls: the screen above a dial, and the key itself. The dial's own press and hold set the step instead — see above.
 
 It also gives the **one-preset** case something to do. It used to be the documented dead end — "with only one preset configured, the gesture lands back on the same one" — and now it is a reset.
 
@@ -174,19 +160,15 @@ It says so for that reason and no other. A timer that is merely *running* has no
 
 ## Try it without hardware
 
-`npm run mock` drives the whole thing from the keyboard with no Stream Deck attached, and `npm run demo` plays a scripted pass. It prints a labelled ASCII frame per step; the gears show up across seven of them:
+`npm run mock` drives the whole thing from the keyboard with no Stream Deck attached, and `npm run demo` plays a scripted pass. It prints a labelled ASCII frame per step; the dial's step shows up across five of them:
 
-| Step | Clock goes from | to |
-| --- | --- | --- |
-| one click → +1s | `20:00` | `20:01` |
-| 8 more slow clicks → still a second a click; nine is short of ten | `20:01` | `20:09` |
-| the tenth click reaches ten seconds travelled → ten seconds a click | `20:09` | `20:20` |
-| five more → a minute travelled, so a minute a click | `20:20` | `22:00` |
-| nine more → ten minutes travelled, so ten minutes a click | `22:00` | `40:00` |
-| turn back → the step **holds** at ten minutes a click | `+10m` | `-10m` |
-| hover, nine up and nine back, 54 clicks of it → never runs away | `+1s` | `-1s` |
-
-Twenty minutes of travel in twenty-four clicks, and the step at every point is the largest unit already covered.
+| Step | What it shows |
+| --- | --- |
+| 87 clicks at three different speeds | still `+1s` — turning cannot change the step |
+| press the dial | `step · 1m`, and the next click is `+1m` |
+| 2.5 seconds untouched | still reads `step · 1m` — nothing expires it |
+| hold the dial | `step · 1h`, and the next click is `+1h` |
+| press again | `+1s` — back to the finest step, not the middle one |
 
 Through every one of those the preset list underneath reads `5m [20m] 30m 40m`, unchanged, and the label reads `from 20m`. The next two steps press the dial twice: once to land back on `20:00`, and once more to move on to `30m`.
 
@@ -197,17 +179,17 @@ It also walks the gesture vocabulary and asserts the parts a person would otherw
    pulse right after the tick: yes, half a second later: no
    ✓ pulses, then clears
 
-▸ the tenth click reaches ten seconds travelled → so now ten seconds a click
-   tenth click: +1s, eleventh: +10s
-   ✓ the click that gets you there is the last fine one
+▸ turn as much as you like, however fast → still a second a click
+   after 87 clicks at three different speeds, the step is 1s
+   ✓ unchanged, as chosen
 
-▸ the step readout lasts exactly as long as the gear, and they go together
-   step: "-10m", 1.2s later: "-10m", 2.3s later: ""
-   ✓ readable while it is true, gone when it is not
+▸ …and it STAYS — no time-out, and the screen says so while it is set
+   2.5s untouched, the screen reads "step · 1m"; the next click was +1m
+   ✓ still set, and still saying so
 
-▸ hover — nine up, nine back, over and over → it never runs away
-   first click: +1s, after 54 clicks of hovering back and forth: -1s
-   ✓ still one second a click
+▸ press again → back to seconds, not to minutes
+   one press after an hour a click, and the next click was +1s
+   ✓ straight back to the finest step
 
 ▸ …and starting a spent auto-repeat again is a FRESH run
    label on restart: "2s", one lap later: "2s · ×1/2"
@@ -218,4 +200,4 @@ It also walks the gesture vocabulary and asserts the parts a person would otherw
    ✓ gesture then state
 ```
 
-The gearbox itself is `src/acceleration.ts` — a pure module that is handed the timestamp of each rotation rather than reading a clock, so every rate and threshold above is asserted in `test/acceleration.test.ts` rather than described and hoped for. The gesture checks quoted above come from `tools/mock-host.mjs`, which drives the built plugin end to end.
+The step selector itself is `src/step.ts` — a pure module with no clock in it at all, so everything above is asserted in `test/step.test.ts` rather than described and hoped for. The gesture checks quoted above come from `tools/mock-host.mjs`, which drives the built plugin end to end.

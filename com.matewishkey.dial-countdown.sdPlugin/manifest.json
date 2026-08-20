@@ -1,13 +1,13 @@
 {
 	"Name": "Dial Countdown",
-	"Version": "1.4.0.0",
+	"Version": "1.5.0.0",
 	"Author": "Mate Wish Key",
 	"Actions": [
 		{
 			"Name": "Countdown",
 			"UUID": "com.matewishkey.dial-countdown.countdown",
 			"Icon": "imgs/actions/timer/icon",
-			"Tooltip": "A countdown timer on a dial. Tap the screen to pause or resume, tap twice to reset it to full, hold to load the next preset, and turn to adjust — you step in the largest unit you have already travelled.",
+			"Tooltip": "A countdown timer on a dial. Tap the screen to pause or resume, tap twice to reset it to full, hold for the next preset. Turn the dial to adjust; press it to swap between one-second and one-minute steps, or hold it for one hour.",
 			"PropertyInspectorPath": "ui/dial-countdown.html",
 			"Controllers": [
 				"Encoder"
@@ -17,10 +17,10 @@
 				"layout": "layouts/ring.json",
 				"StackColor": "#E2342B",
 				"TriggerDescription": {
-					"Rotate": "Adjust time",
-					"Push": "Back to preset, then next",
+					"Rotate": "Adjust the clock",
+					"Push": "Step: 1s / 1m — hold for 1h",
 					"Touch": "Pause / resume · twice resets",
-					"LongTouch": "Back to preset, then next"
+					"LongTouch": "Put the clock right, then next preset"
 				}
 			},
 			"States": [
@@ -50,7 +50,7 @@
 	"Category": "Dial Countdown",
 	"CategoryIcon": "imgs/plugin/category-icon",
 	"CodePath": "bin/plugin.js",
-	"Description": "Countdown timers for the Stream Deck + dials and for ordinary keys. Tap to pause or resume, tap twice to reset, hold for the next preset — and on a dial, turn to adjust, with a step that grows to match the distance already travelled.",
+	"Description": "Countdown timers for the Stream Deck + dials and for ordinary keys. Tap to pause or resume, tap twice to reset, hold for the next preset — and on a dial, turn to adjust, with a step you set yourself: press for one-second or one-minute clicks, hold for one hour.",
 	"Icon": "imgs/plugin/marketplace",
 	"SDKVersion": 3,
 	"Software": {

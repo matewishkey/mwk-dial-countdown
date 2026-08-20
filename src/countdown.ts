@@ -9,7 +9,7 @@
  * test with an injected clock.
  */
 
-import { Accelerator, IDLE_RESET_MS } from "./acceleration";
+import { Selector, type Step } from "./step";
 import { type Acknowledgement, formatDelta, isFlashing, toastText } from "./feedback";
 import type { Gesture } from "./gestures";
 import { normaliseSettings, type DialCountdownSettings, type Preset } from "./settings";
@@ -23,7 +23,7 @@ type Clock = () => number;
 export class Countdown {
 	readonly timer: Timer;
 
-	readonly #accelerator = new Accelerator();
+	readonly #selector = new Selector();
 
 	#presets: Preset[];
 
@@ -108,6 +108,18 @@ export class Countdown {
 	 */
 	get onPreset(): boolean {
 		return !this.drifted && this.timer.status === "idle";
+	}
+
+	/**
+	 * The dial's current step, when it is worth saying — `1m`, `1h`, or `""` for the default.
+	 *
+	 * A chosen step has no time-out, which is what makes it predictable and also what makes it easy to
+	 * forget. So any step other than the default says so on screen for as long as it is set. The
+	 * default stays silent: a permanent label reading `1s` would be noise on every timer that has
+	 * never had its dial pressed.
+	 */
+	get stepLabel(): string {
+		return this.#selector.step === "second" ? "" : `step · ${this.#selector.label}`;
 	}
 
 	/** The word acknowledging the last gesture, or `""` once it has had its time. */
@@ -216,7 +228,6 @@ export class Countdown {
 		this.timer.reset();
 		this.#cycles = 0;
 		this.#alerted = false;
-		this.#accelerator.reset();
 		this.#say("reset");
 	}
 
@@ -257,25 +268,21 @@ export class Countdown {
 		this.timer.setDuration(this.#loadedSeconds * 1000);
 		this.#alerted = false;
 		this.#cycles = 0;
-		this.#accelerator.reset();
 		this.#say(`${word} · ${formatPresetLabel(this.presetSeconds * 1000)}`);
 	}
 
 	/**
 	 * Turning adjusts the clock, and nothing else.
 	 *
-	 * It used to write the new length straight back into the preset, on the reasoning that the dial
-	 * is the preset editor. In practice that made the presets unusable: winding a 20 minute timer up
-	 * to 23 for one call silently redefined "20 minutes" as 23, and cycling away saved it there. A
-	 * preset is a setting, and a setting is changed where settings are changed. What the dial changes
-	 * is the clock in front of you — the same thing it has always done to a *running* countdown, now
-	 * true of a stopped one as well.
-	 *
-	 * The step sits in a gear chosen by how fast the dial is turned; see `./acceleration`.
+	 * Two things it deliberately does not do. It does not touch the preset behind the clock — winding
+	 * a 20 minute timer up to 23 for one call must not silently redefine "20 minutes" as 23, and a
+	 * preset the dial rewrites is not a preset but a last-used value. And it does not change the step:
+	 * however far or fast you turn, a click is worth whatever the last press of the dial said. See
+	 * `./step` for why that took four attempts to get to.
 	 */
-	adjust(ticks: number, pressed: boolean): void {
+	adjust(ticks: number): void {
 		const before = this.timer.status;
-		const deltaSeconds = this.#accelerator.rotate(ticks, this.#now(), pressed);
+		const deltaSeconds = this.#selector.delta(ticks);
 
 		// Adjusting an expired timer puts it back to a full, stopped clock, which ends that run.
 		if (before === "elapsed") {
@@ -284,13 +291,22 @@ export class Countdown {
 
 		this.timer.adjust(deltaSeconds * 1000);
 		this.#alerted = false;
+		this.#say(formatDelta(deltaSeconds));
+	}
 
-		// Said for as long as the gear lasts, not for the usual moment. `+10s` is a readout of what the
-		// *next* click will do, not a note about the last one — so it has to be on screen for exactly
-		// as long as it stays true. It used to fade after 900ms while the gear ran on for another 1.1
-		// seconds, which invited the reasonable and wrong conclusion that the dial had gone back to
-		// seconds. Now the word going is what tells you it has.
-		this.#say(formatDelta(deltaSeconds), IDLE_RESET_MS);
+	/** A press of the dial: swap the step between seconds and minutes. */
+	cycleStep(): Step {
+		return this.#sayStep(this.#selector.toggle());
+	}
+
+	/** A hold of the dial: an hour a click. */
+	coarsenStep(): Step {
+		return this.#sayStep(this.#selector.coarsen());
+	}
+
+	#sayStep(step: Step): Step {
+		this.#say(`step · ${this.#selector.label}`);
+		return step;
 	}
 
 	/**
@@ -321,7 +337,7 @@ export class Countdown {
 		return alert;
 	}
 
-	#say(text: string, ttlMs?: number): void {
-		this.#ack = { text, at: this.#now(), ttlMs };
+	#say(text: string): void {
+		this.#ack = { text, at: this.#now() };
 	}
 }

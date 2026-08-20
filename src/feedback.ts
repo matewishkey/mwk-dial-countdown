@@ -27,27 +27,19 @@ export function formatDelta(seconds: number): string {
 }
 
 /**
- * A word, when it was said, and how long it has.
+ * A word, and when it was said.
  *
  * Held as a timestamp rather than a countdown so it expires on its own: the render loop compares it
  * against the clock it already has, and nothing has to be ticked down or cleaned up.
- *
- * `ttlMs` exists because one of these words is not a notification but a **readout**. `+10s` does not
- * merely report what the last click did — it states what the *next* click will do, for as long as
- * the dial stays in that gear. So a rotation is said for as long as the gear lasts, and the moment
- * it disappears is the moment the dial is back to seconds. Everything else keeps {@link TOAST_MS}:
- * `pause` is over as soon as it has been read.
  */
 export type Acknowledgement = {
 	text: string;
 	at: number;
-	/** How long this one stays up. Defaults to {@link TOAST_MS}. */
-	ttlMs?: number;
 };
 
 /** The word to show, or `""` once it has had its time. */
 export function toastText(ack: Acknowledgement | null, nowMs: number): string {
-	if (ack === null || nowMs - ack.at >= (ack.ttlMs ?? TOAST_MS)) {
+	if (ack === null || nowMs - ack.at >= TOAST_MS) {
 		return "";
 	}
 	return ack.text;

@@ -32,12 +32,11 @@ And on a dial, the encoder as well:
 
 | Gesture | Does |
 | --- | --- |
-| Press dial | Put the clock right, then the next preset |
-| Hold dial | Put the clock right, then the previous preset |
-| Turn | Adjust the clock — 1s, 10s, 1min or 10min a click, depending on the gear |
-| Press + turn | A flat 1 minute a tick |
+| Turn | Adjust the clock, at whatever step is set |
+| Press dial | Swap the step between 1 second and 1 minute a click |
+| Hold dial | 1 hour a click |
 
-The screen owns the gestures used constantly, because pressing a dial in is a fiddly, two-handed movement next to tapping the screen directly above it; the dial owns preset cycling, which is used far less often.
+The screen owns everything to do with the timer, because tapping it is where your hand already is when you are reading the clock. Pressing a dial in is a fiddly, two-handed movement by comparison, so the dial owns the thing you set occasionally and deliberately: how much time one click is worth.
 
 A single tap acts a quarter of a second after your finger lifts, not the instant it does — that is the window in which a second tap would make it a reset. There is no way to have both an instant pause and a double tap, and a reset that briefly flashes "paused" first would be worse than the wait.
 
@@ -45,15 +44,13 @@ Neither the reset nor the hold starts anything. Putting a clock back to the top 
 
 Holding **loads** the next preset rather than running it. Choosing what to time is not the same as starting it.
 
-And it puts things right before it moves on: if the clock is running, paused, finished, or dialled off its preset, the first press or hold stops it and returns it to full — only a press with nothing left to put right moves to another preset.
+And it puts things right before it moves on: if the clock is running, paused, finished, or dialled off its preset, the first hold stops it and returns it to full — only a hold with nothing left to put right moves to another preset.
 
-Turning **never edits a preset** — running or stopped, it moves the clock in front of you and leaves the configuration alone. While the two disagree the label says so, reading `from 20m`, and the next press of the dial puts the clock back rather than moving on. Press again and it moves on as usual.
+Turning **never edits a preset** — running or stopped, it moves the clock in front of you and leaves the configuration alone. While the two disagree the label says so, reading `from 20m`, and holding the screen puts the clock back.
 
-The step follows one rule: **you step in the largest unit you have already travelled.** Move ten seconds and you move in tens of seconds; move a minute and you move in minutes; move ten minutes and you move in ten-minute steps. Distance, not speed — the same turn does the same thing however briskly you make it. Ten clicks to the first change, five to the next, nine to the last.
+**The step is chosen, not guessed.** A click is one second; press the dial for one minute, hold it for one hour, press again for seconds. Turning never changes it — however far, however fast, however long, a click is worth what the last press said.
 
-Turning back **keeps the gear but starts the distance over**, which is what makes hovering safe. A correction moves in the same unit as the movement it corrects, and nine clicks up followed by nine back — however many times — never covers ten seconds in one direction, so it never escalates. The ladder is only ever climbed on purpose.
-
-Letting go of the dial for two seconds drops it back to seconds, and the step readout on screen is what tells you: `+10s` states what the *next* click will do, and stays up for exactly as long as that is true.
+A step you set **stays set**; nothing expires it. That is what makes it predictable, and also what makes it easy to forget, so any step other than the default says so on the bottom line for as long as it is set.
 
 ## Feedback
 
@@ -62,7 +59,7 @@ There is no haptic feedback to be had on this hardware — the SDK exposes no su
 - **The ring pulses** on every gesture and every tick of the dial. It says only that *something* registered, which is the part you catch without reading — you cannot read a word per tick, but you can see the ring answer every one of them.
 - **A line names the action** — `+10s`, `start`, `pause`, `resume`, `reset`, `preset · 20m`, `next · 20m` — for about a second, then gives way to the finish time on a dial, or to the preset's length on a key.
 
-**[How the dial and the presets work →](docs/how-it-works.md)** — the gearbox and the preset model, and the two designs that came before this one.
+**[How the dial and the presets work →](docs/how-it-works.md)** — the step model and the presets, and the three designs that came before this one.
 
 ## Features
 
@@ -118,7 +115,7 @@ The version lives in three places in three formats — `1.1.0`, `1.1.0.0`, `v1.1
 | --- | --- |
 | `src/timer.ts` | The countdown state machine. No Stream Deck imports and an injectable clock, so it is tested directly. |
 | `src/settings.ts` | The settings shape, and the only place they are read. |
-| `src/acceleration.ts` | The gearbox: you step in the largest unit already travelled; turning back resets the distance. |
+| `src/step.ts` | How much time one click is worth. Set by pressing the dial, never inferred from turning. |
 | `src/render.ts` | Draws the countdown ring, and the whole key face, as SVG. |
 | `src/sound.ts` | Hands a sound file to the platform's own player. |
 | `src/gestures.ts` | Turns raw presses into `toggle` / `reset` / `next`, double taps included. |

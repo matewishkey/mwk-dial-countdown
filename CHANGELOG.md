@@ -11,6 +11,35 @@ this project that generally means they do not change the packaged plugin at all.
 
 Nothing yet.
 
+## [1.5.0] — 2026-08-20
+
+### Changed
+
+- **You set the dial's step; turning never changes it.** A click is one second. **Press the dial** to
+  swap between one-second and one-minute clicks, or **hold it** for one hour a click. However far you
+  turn, however fast, however long you keep going, a click is worth exactly what the last press said.
+
+  This replaces the automatic ladder, which is the fourth design for this and the first that does not
+  try to infer the step from how you are turning. Momentum escalated when you hovered over a value;
+  velocity did different things depending on how briskly your wrist moved; distance travelled was
+  predictable but still changed the step underneath the hand using it.
+- **A step you set stays set.** Nothing expires it — not a pause, not loading a preset, not a reset.
+  Because that also makes it easy to forget, any step other than the default now says so on the
+  bottom line for as long as it is set, as `step · 1m`.
+- **The dial's press and hold now set the step**, so preset cycling is the touchscreen's job alone —
+  tap and hold the screen above the dial, or the key itself. Pressing a dial in is a fiddly,
+  two-handed movement next to tapping the screen your hand is already at.
+- A press from one hour a click lands on **seconds**, not minutes: coming down from a coarse step you
+  almost always want the finest one, and landing on minutes would leave no single gesture back to
+  seconds.
+- **Press-and-turn no longer means a flat minute.** It is an ordinary rotation at the step you have
+  set. It cancels the press, so letting go afterwards does not also change the step.
+
+### Removed
+
+- **Selecting the previous preset.** It lived on the dial's hold, which now sets the hour step.
+  Holding the screen still cycles forward through the presets.
+
 ## [1.4.0] — 2026-08-20
 
 ### Changed
@@ -146,7 +175,8 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v1.4.0...HEAD
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v1.5.0...HEAD
+[1.5.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.5.0
 [1.4.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.4.0
 [1.3.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.3.0
 [1.2.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.2.0
