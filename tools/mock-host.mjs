@@ -749,17 +749,22 @@ async function runDemo() {
 	];
 
 	for (const [label, run] of steps) {
+		// The heading goes first, so whatever the step prints lands underneath its own heading rather
+		// than under the previous step's frame. Getting this the wrong way round made the transcript
+		// quoted in docs/how-it-works.md one this tool never actually emitted.
+		heading(label);
 		await run();
 		// Long enough for the plugin's reply to land, the 250ms render loop to turn over, and the
 		// 400ms settings debounce to flush — otherwise a frame shows state that is merely in flight.
 		await wait(600);
-		frame(label);
+		frame();
 	}
 
 	for (const [label, run] of keySteps) {
+		heading(label);
 		await run();
 		await wait(600);
-		keyFrame(label);
+		keyFrame();
 	}
 
 	console.log("\nScripted pass complete.\n");
@@ -868,9 +873,9 @@ function draw() {
 		"",
 		...keyLines(),
 		"",
-		dim("   ←/→ adjust   shift+←/→ ×5   ↑/↓ press+turn 60s"),
-		dim("   t tap: pause/resume   d double tap: reset   y hold: next preset"),
-		dim("   space press dial: next preset   r hold dial: previous"),
+		dim("   ←/→ adjust   shift+←/→ ×5   ↑/↓ press+turn (an ordinary turn; cancels the press)"),
+		dim("   t tap: pause/resume   d double tap: reset   y hold: put right, then next preset"),
+		dim("   space press dial: step 1s/1m   r hold dial: step 1h"),
 		dim("   k press key   j double press key   l hold key   ctrl+c quit")
 	];
 
@@ -878,14 +883,17 @@ function draw() {
 }
 
 /** Appends a labelled frame instead of repainting, so a scripted pass reads as a transcript. */
-function frame(label) {
+/** Announces the step about to run, so its own output appears beneath it. */
+function heading(label) {
 	console.log(`\n▸ ${label}`);
+}
+
+function frame() {
 	console.log(screenLines().join("\n"));
 }
 
 /** Same, for a step whose point is what the key did. */
-function keyFrame(label) {
-	console.log(`\n▸ ${label}`);
+function keyFrame() {
 	console.log(keyLines().join("\n"));
 }
 

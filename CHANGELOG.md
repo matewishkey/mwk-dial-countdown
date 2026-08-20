@@ -11,6 +11,15 @@ this project that generally means they do not change the packaged plugin at all.
 
 Nothing yet.
 
+## [2.0.1] — 2026-08-20
+
+### Fixed
+
+- The property inspector's help text contradicted itself about the dial. One paragraph still said
+  "the next press of the dial puts it back", from before the dial's press was given over to setting
+  the step; the paragraph directly beneath it described the current behaviour. Putting the clock back
+  on its preset is the touchscreen hold.
+
 ## [2.0.0] — 2026-08-20
 
 ### Changed
@@ -200,7 +209,8 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v2.0.0...HEAD
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v2.0.1...HEAD
+[2.0.1]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v2.0.1
 [2.0.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v2.0.0
 [1.5.1]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.5.1
 [1.5.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.5.0

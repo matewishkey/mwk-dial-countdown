@@ -176,26 +176,22 @@ It also walks the gesture vocabulary and asserts the parts a person would otherw
 
 ```
 ▸ every gesture pulses the ring — on immediately, off again within a few frames
+
    pulse right after the tick: yes, half a second later: no
    ✓ pulses, then clears
 
-▸ turn as much as you like, however fast → still a second a click
-   after 87 clicks at three different speeds, the step is 1s
-   ✓ unchanged, as chosen
-
 ▸ …and it STAYS — no time-out, and the screen says so while it is set
+
    2.5s untouched, the screen reads "step · 1m"; the next click was +1m
    ✓ still set, and still saying so
 
 ▸ press again → back to seconds, not to minutes
+
    one press after an hour a click, and the next click was +1s
    ✓ straight back to the finest step
 
-▸ …and starting it again is a FRESH run, with its laps back
-   label on restart: "2s", one lap later: "2s · ×1/2"
-   ✓ counter reset, and it repeats again
-
 ▸ key: one press → pauses; the caption names the gesture, then settles on the state
+
    caption right after: "pause", once the toast expires: "paused"
    ✓ gesture then state
 ```

@@ -18,6 +18,8 @@ Every dial and every key holds its own independent timer.
 
 Download the latest `.streamDeckPlugin` from [Releases](https://github.com/matewishkey/mwk-dial-countdown/releases) and double-click it. Stream Deck installs it and adds **Dial Countdown** to the actions list; drag **Countdown** onto a dial, or **Countdown (Key)** onto a button.
 
+**Upgrading from a version before 2.0.0?** The plugin's identifier changed, so Stream Deck treats this as a different plugin: your existing buttons stop resolving and do not carry over. Remove the old one from Stream Deck's preferences first, then install this and place the actions again. [Why](CHANGELOG.md#200--2026-08-20).
+
 ## Gestures
 
 The same three gestures on both actions — the touchscreen on a dial, the button itself on a key:
