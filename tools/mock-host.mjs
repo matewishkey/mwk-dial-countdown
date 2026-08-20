@@ -514,6 +514,29 @@ async function runDemo() {
 			}
 		],
 
+		// Reported from the hardware: reaching for the dial mid-run used to throw you onto the next
+		// preset. A running clock is not sitting on its preset either, so the press puts it right first.
+		[
+			"start it running, then press the dial → STOPS and restores; it does not jump to the next preset",
+			async () => {
+				gestures.touch(false);
+				await wait(700);
+				await wait(1200);
+				const running = screen.value;
+
+				await press(80);
+				await wait(400);
+				const after = screen.value;
+				const settled = screen.label;
+
+				await wait(1500);
+				console.log(`\n   running at ${running}, one press later ${after} (label "${settled}"), 1.5s on ${screen.value}`);
+				console.log(
+					`   ${after === "30:00" && screen.value === after ? "\u2713 stopped and back to full, on the same preset" : "\u2717 moved on, or did not stop"}`
+				);
+			}
+		],
+
 		// The long clock has to fit its box.
 		["set 1:10:10 → font shrinks to fit", async () => {
 			applySettings({ presets: [4210], presetIndex: 0 });

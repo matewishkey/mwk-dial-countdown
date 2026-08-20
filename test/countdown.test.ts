@@ -78,10 +78,7 @@ describe("the gestures a countdown answers to", () => {
 	});
 
 	it("loads the next preset without starting it — choosing what to time is not beginning", () => {
-		const { countdown, advance } = fixture();
-
-		countdown.toggle();
-		advance(10_000);
+		const { countdown } = fixture();
 
 		countdown.cyclePreset(1);
 		assert.equal(countdown.presetIndex, 1);
@@ -191,15 +188,73 @@ describe("pressing for the next preset", () => {
 		assert.equal(countdown.presetIndex, 1, "and then steps back as usual");
 	});
 
-	it("moves straight on when there is nothing to put back", () => {
+	it("stops and restores a RUNNING clock rather than throwing you onto the next preset", () => {
+		// Reported from the hardware, and the rule was too narrow: this fired only when the dial had
+		// wound the clock off its preset, on the reasoning that a running timer has a reset of its own
+		// in the double tap. But the double tap is on a different control, and reaching for the dial
+		// mid-run and landing on another preset is exactly the surprise the restore exists to prevent.
 		const { countdown, advance } = fixture([300, 1200], 0);
 
 		countdown.toggle();
 		advance(10_000);
-		assert.equal(countdown.drifted, false, "a half-spent clock has not been dialled off its preset");
+		assert.equal(countdown.drifted, false, "the duration still matches — it has not been dialled anywhere");
+		assert.equal(countdown.onPreset, false, "but a running clock is not sitting on its preset either");
 
 		countdown.cyclePreset(1);
+		assert.equal(countdown.presetIndex, 0, "the first press does not move on");
+		assert.equal(countdown.timer.status, "idle", "it stops the clock");
+		assert.equal(countdown.timer.remainingMs, 300_000, "and puts it back to full");
+		assert.equal(countdown.toast, "preset · 5m");
+
+		countdown.cyclePreset(1);
+		assert.equal(countdown.presetIndex, 1, "and the second press advances, as it always did");
+	});
+
+	it("puts a paused or finished clock right before it moves on, too", () => {
+		for (const [name, wind] of [
+			["paused", (c: Countdown, adv: (ms: number) => void) => (c.toggle(), adv(10_000), c.toggle())],
+			["finished", (c: Countdown, adv: (ms: number) => void) => (c.toggle(), adv(300_000), void c.settle())]
+		] as const) {
+			const { countdown, advance } = fixture([300, 1200], 0);
+			wind(countdown, advance);
+			assert.notEqual(countdown.timer.status, "idle", `precondition: ${name}`);
+
+			countdown.cyclePreset(1);
+			assert.equal(countdown.presetIndex, 0, `${name}: the first press restores`);
+			assert.equal(countdown.timer.status, "idle");
+		}
+	});
+
+	it("moves straight on from a clock that is already stopped and full on its preset", () => {
+		const { countdown } = fixture([300, 1200], 0);
+
+		assert.equal(countdown.onPreset, true, "fresh, stopped, full");
+		countdown.cyclePreset(1);
 		assert.equal(countdown.presetIndex, 1, "so the press is not spent on a restore");
+	});
+
+	it("holds the invariant `onPreset` leans on: an idle clock is always a full one", () => {
+		const { countdown, advance } = fixture([300, 1200], 0);
+
+		const idleStates: Array<() => void> = [
+			() => countdown.reset(),
+			() => countdown.cyclePreset(1),
+			() => countdown.adjust(1, false),
+			() => countdown.applySettings({ presets: [900], presetIndex: 0 })
+		];
+
+		for (const reach of idleStates) {
+			countdown.toggle();
+			advance(5_000);
+			reach();
+			if (countdown.timer.status === "idle") {
+				assert.equal(
+					countdown.timer.remainingMs,
+					countdown.timer.durationMs,
+					"an idle clock with time already spent would make `onPreset` lie"
+				);
+			}
+		}
 	});
 
 	it("gives the one-preset case a way back, where before there was none", () => {

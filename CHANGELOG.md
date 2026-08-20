@@ -11,6 +11,27 @@ this project that generally means they do not change the packaged plugin at all.
 
 Nothing yet.
 
+## [1.4.0] — 2026-08-20
+
+### Changed
+
+- **A press of the dial now puts a running clock right, instead of jumping to the next preset.** The
+  rule is: if the clock is not sitting stopped and full on its preset, the first press puts it there,
+  and only a press with nothing left to put right moves on. Running, paused, finished and dialled off
+  its preset all count.
+
+  It used to fire only on the last of those, on the reasoning that a running timer already has a reset
+  of its own in the double tap. That was wrong twice over: the double tap is on the touchscreen and
+  the press is on the dial, so reaching for one does not put the other under your finger — and being
+  thrown onto another preset because you touched the dial mid-run is exactly the surprise the restore
+  exists to prevent.
+
+  Holding the dial for the previous preset, and holding the touchscreen, behave the same way.
+
+The `from 20m` label is unchanged and still means only that the dial has wound the clock off its
+preset. A timer that is merely running has not been moved anywhere, so it gets no marker — even
+though a press would still put it back to full.
+
 ## [1.3.0] — 2026-08-20
 
 ### Changed
@@ -125,7 +146,8 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v1.3.0...HEAD
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v1.4.0...HEAD
+[1.4.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.4.0
 [1.3.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.3.0
 [1.2.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.2.0
 [1.1.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.1.0

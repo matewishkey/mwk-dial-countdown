@@ -26,14 +26,14 @@ The same three gestures on both actions — the touchscreen on a dial, the butto
 | --- | --- |
 | One tap | Pause / resume |
 | Two taps | Reset the clock to full — stopped, not started |
-| Hold | Put the clock back on its preset, or load the next one — **without** starting it |
+| Hold | Put the clock right if it is not, otherwise load the next preset — **without** starting it |
 
 And on a dial, the encoder as well:
 
 | Gesture | Does |
 | --- | --- |
-| Press dial | Back to the preset, then the next one |
-| Hold dial | Back to the preset, then the previous one |
+| Press dial | Put the clock right, then the next preset |
+| Hold dial | Put the clock right, then the previous preset |
 | Turn | Adjust the clock — 1s, 10s, 1min or 10min a click, depending on the gear |
 | Press + turn | A flat 1 minute a tick |
 
@@ -44,6 +44,8 @@ A single tap acts a quarter of a second after your finger lifts, not the instant
 Neither the reset nor the hold starts anything. Putting a clock back to the top and setting it running are two decisions, and a gesture that makes both takes the second one away from you — there would be no way to reset without immediately committing to a fresh run.
 
 Holding **loads** the next preset rather than running it. Choosing what to time is not the same as starting it.
+
+And it puts things right before it moves on: if the clock is running, paused, finished, or dialled off its preset, the first press or hold stops it and returns it to full — only a press with nothing left to put right moves to another preset.
 
 Turning **never edits a preset** — running or stopped, it moves the clock in front of you and leaves the configuration alone. While the two disagree the label says so, reading `from 20m`, and the next press of the dial puts the clock back rather than moving on. Press again and it moves on as usual.
 

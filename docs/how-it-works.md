@@ -74,7 +74,7 @@ Tapping the touchscreen, or pressing a key, does one of three things depending o
 | --- | --- | --- |
 | **One tap** | Pause / resume | The thing you do most, so it gets the plainest gesture. |
 | **Two taps** | Reset the clock to full, stopped | Getting back to the top is common enough to deserve a gesture of its own. |
-| **Hold** | Put the clock back on its preset, or load the next one | Choosing what to time is not the same as beginning it. |
+| **Hold** | Put the clock right if it is not, otherwise load the next preset | Choosing what to time is not the same as beginning it. |
 
 ### Why neither the reset nor the hold starts anything
 
@@ -145,24 +145,32 @@ It used to, and that is covered above under *What a rotation actually changes*. 
 
 Because the dial no longer writes back, a countdown wound from 20 minutes to 23 has nothing that returns it to 20 — the property inspector still says 20, the clock says 23, and there is no gesture that closes the gap. That gap is the direct cost of the change above, so the change has to pay for it.
 
-The press of the dial pays for it. **Once the clock has drifted from its preset, the first press puts it back; only the next one moves on.**
+The press of the dial pays for it. **If the clock is not sitting stopped and full on its preset, the first press puts it there. Only a press with nothing left to put right moves on.**
 
-| State | Press the dial | Press it again |
+| The clock is… | Press the dial | Press it again |
 | --- | --- | --- |
-| Sitting on its preset | Next preset | The one after that |
+| Stopped and full on its preset | Next preset | The one after that |
+| Running | Stopped, back to full | Next preset |
+| Paused, or finished | Stopped, back to full | Next preset |
 | Dialled off its preset | Back to the preset, stopped | Next preset |
 
 The restore comes first because it is wanted far more often: putting the clock back where it belongs is a thing you do constantly, and moving to a different preset is a thing you do occasionally. Nothing is lost either way — the press that would have advanced still advances, one press later — and the word on screen says which of the two it just did, `preset · 20m` against `next · 30m`.
 
+**This rule was too narrow at first**, and the correction is worth recording. It originally fired only on the last row of that table: the dial had wound the clock off its preset, and nothing else counted. The reasoning was that a *running* timer already has a reset of its own, the double tap, so spending the press on one would be redundant.
+
+In the hand that was wrong twice over. The double tap is on the **touchscreen**, and the press is on the **dial** — reaching for one does not put the other under your finger. And being thrown onto the next preset because you touched the dial mid-run is precisely the surprise the restore exists to prevent. A running clock is not sitting on its preset either, whatever its duration says.
+
 The same applies to **holding** the dial for the previous preset, and to **holding the screen**. A gesture that skipped the restore would be a way round it, and then the rule would be something to remember rather than something that just holds.
 
-It also gives the **one-preset** case something to do. It used to be the documented dead end — "with only one preset configured, the gesture lands back on the same one" — and now it is the way back from a dialled clock.
+It also gives the **one-preset** case something to do. It used to be the documented dead end — "with only one preset configured, the gesture lands back on the same one" — and now it is a reset.
 
 ### Why the label shows the preset, not the clock
 
 The label tracks the *preset's* length rather than the live duration, so you can always see where this timer started: begin a 20-minute countdown, add five minutes to it mid-flight, and the label still reads `20m`.
 
 Once the two genuinely disagree it says so, reading `from 20m`. That matters more than it used to, because the disagreement is now permanent until you close it — an idle clock showing `23:00` under a label reading `20m`, with the settings agreeing with the label and not the clock, would otherwise just look broken.
+
+It says so for that reason and no other. A timer that is merely *running* has not been dialled anywhere, so it gets no marker, even though a press of the dial would still put it back to full. Those are two different questions — "has this been moved?" and "is there anything to put right?" — and only the first belongs on the label.
 
 ## Try it without hardware
 

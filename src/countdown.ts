@@ -86,11 +86,28 @@ export class Countdown {
 	 * True when the clock has been dialled away from the preset it was loaded from.
 	 *
 	 * The dial deliberately no longer writes back to the preset list, so this is the state that needs
-	 * a way out: the working duration says one thing and the configuration says another. Pressing for
-	 * the next preset spends its first press closing that gap — see {@link Countdown.cyclePreset}.
+	 * saying out loud: the working duration says one thing and the configuration says another. It is
+	 * what puts `from 20m` on the label, and it is deliberately *only* about the duration — a timer
+	 * merely running has not been dialled anywhere, and labelling it as though it had would be noise.
 	 */
 	get drifted(): boolean {
 		return this.timer.durationMs !== this.presetSeconds * 1000;
+	}
+
+	/**
+	 * True when the clock is sitting stopped, full, on exactly the preset it is set to.
+	 *
+	 * This is the "nothing to put right" state, and it is what decides whether a press of the dial
+	 * restores or advances — see {@link Countdown.cyclePreset}. It is deliberately wider than
+	 * {@link Countdown.drifted}: a countdown that is *running*, paused, or finished is not sitting on
+	 * its preset either, even though its duration still matches.
+	 *
+	 * `idle` is enough to mean full: every path that reaches it — reset, loading a preset, adjusting a
+	 * stopped clock — puts the remaining time back to the whole duration. `test/countdown.test.ts`
+	 * holds that invariant, since this getter now leans on it.
+	 */
+	get onPreset(): boolean {
+		return !this.drifted && this.timer.status === "idle";
 	}
 
 	/** The word acknowledging the last gesture, or `""` once it has had its time. */
@@ -204,21 +221,27 @@ export class Countdown {
 	}
 
 	/**
-	 * Moves to another preset and loads its duration, stopped — but spends its first press putting
-	 * the clock back on the preset it is already on, if the dial has taken it off it.
+	 * Puts things right, or moves on — in that order.
 	 *
-	 * The restore comes first because it is wanted far more often. Turning the dial now leaves the
-	 * configured preset alone, so a countdown that has been wound to 23 minutes has no other way back
-	 * to the 20 it was set to, and "put it back" is a thing you do constantly while "move to the next
-	 * one" is a thing you do occasionally. Press once and the clock returns; press again and it moves
-	 * on. There is nothing to lose either way, since the press that would have advanced still does.
+	 * **If the clock is not sitting stopped and full on its preset, the press puts it there.** Only a
+	 * press made when there is nothing left to put right moves to another preset. Press once, press
+	 * again: restore, then advance.
+	 *
+	 * The restore comes first because it is wanted far more often, and the rule was too narrow at
+	 * first. It originally fired only when the dial had wound the clock off its preset, on the
+	 * reasoning that a *running* timer has a reset of its own — the double tap. In the hand that was
+	 * wrong: reaching for the dial mid-run and being thrown onto the next preset is exactly the
+	 * surprise the restore exists to prevent, and the double tap lives on a different control. So
+	 * running, paused, finished and dialled-off all count as something to put right.
+	 *
+	 * Nothing is lost by it. The press that would have advanced still advances, one press later, and
+	 * the word says which of the two it just did: `preset · 20m` against `next · 30m`.
 	 *
 	 * Loading a preset deliberately does not start it: this is how you choose what to time, and
-	 * choosing is not the same as beginning. The word names the preset landed on, so a blind cycle
-	 * through four of them is still readable — and says which of the two things the press just did.
+	 * choosing is not the same as beginning.
 	 */
 	cyclePreset(step: number): void {
-		if (this.drifted) {
+		if (!this.onPreset) {
 			this.#load("preset");
 			return;
 		}
