@@ -50,7 +50,7 @@ Nothing special: it is a rotation at the current step. It does cancel the press,
 
 Turning a stopped countdown used to write the new length straight back into the preset list, on the reasoning that the dial is the preset editor. In practice that made the presets unusable: winding a 20 minute timer up to 23 for one call silently redefined "20 minutes" as 23, and cycling away saved it there. A preset is a setting, and settings are changed where settings are changed — in the property inspector.
 
-So turning is now the same thing whether the timer is running or stopped: it moves the clock, and the configuration is untouched. While the two disagree, the label says so — `from 20m` — and the next press of the dial closes the gap.
+So turning is now the same thing whether the timer is running or stopped: it moves the clock, and the configuration is untouched. While the two disagree, the label says so — `from 20m` — and holding the screen closes the gap.
 
 ## The three gestures
 
@@ -118,7 +118,7 @@ A preset is **just a duration**. There is no name, because a countdown's length 
 Out of the box: **5, 20, 30 and 40 minutes**.
 
 - **Edit them in the property inspector**, as hours, minutes and seconds. Add as many as you like; remove any but the last.
-- **Hold the screen** — or **press the dial** for the next one, **hold the dial** for the previous.
+- **Hold the screen** — or the key itself — for the next one. The dial's own press and hold set the step instead; see above.
 - Anything from **one second to twenty-four hours**.
 
 Each dial and each key keeps its own preset list and its own running countdown, so they never interfere.
@@ -127,7 +127,7 @@ Each dial and each key keeps its own preset list and its own running countdown, 
 
 It used to, and that is covered above under *What a rotation actually changes*. The short version: a preset that the dial rewrites is not a preset, it is a last-used value. Turning moves the clock; the list stays as configured.
 
-### Why a press puts it back before it moves on
+### Why the hold puts it back before it moves on
 
 Because the dial no longer writes back, a countdown wound from 20 minutes to 23 has nothing that returns it to 20 — the property inspector still says 20, the clock says 23, and there is no gesture that closes the gap. That gap is the direct cost of the change above, so the change has to pay for it.
 
@@ -156,7 +156,7 @@ The label tracks the *preset's* length rather than the live duration, so you can
 
 Once the two genuinely disagree it says so, reading `from 20m`. That matters more than it used to, because the disagreement is now permanent until you close it — an idle clock showing `23:00` under a label reading `20m`, with the settings agreeing with the label and not the clock, would otherwise just look broken.
 
-It says so for that reason and no other. A timer that is merely *running* has not been dialled anywhere, so it gets no marker, even though a press of the dial would still put it back to full. Those are two different questions — "has this been moved?" and "is there anything to put right?" — and only the first belongs on the label.
+It says so for that reason and no other. A timer that is merely *running* has not been dialled anywhere, so it gets no marker, even though holding the screen would still put it back to full. Those are two different questions — "has this been moved?" and "is there anything to put right?" — and only the first belongs on the label.
 
 ## Try it without hardware
 
@@ -170,12 +170,12 @@ It says so for that reason and no other. A timer that is merely *running* has no
 | hold the dial | `step · 1h`, and the next click is `+1h` |
 | press again | `+1s` — back to the finest step, not the middle one |
 
-Through every one of those the preset list underneath reads `5m [20m] 30m 40m`, unchanged, and the label reads `from 20m`. The next two steps press the dial twice: once to land back on `20:00`, and once more to move on to `30m`.
+Through every one of those the preset list underneath reads `5m [20m] 30m 40m`, unchanged, and the label reads `from 20m`. The next two steps hold the screen twice: once to land back on `20:00`, and once more to move on to `30m`.
 
 It also walks the gesture vocabulary and asserts the parts a person would otherwise have to check by eye — that a hold really does leave the clock stopped, that the pulse appears and then clears, and that the key's caption falls back from the gesture to the state:
 
 ```
-▸ every gesture pulses the ring
+▸ every gesture pulses the ring — on immediately, off again within a few frames
    pulse right after the tick: yes, half a second later: no
    ✓ pulses, then clears
 
@@ -191,11 +191,11 @@ It also walks the gesture vocabulary and asserts the parts a person would otherw
    one press after an hour a click, and the next click was +1s
    ✓ straight back to the finest step
 
-▸ …and starting a spent auto-repeat again is a FRESH run
+▸ …and starting it again is a FRESH run, with its laps back
    label on restart: "2s", one lap later: "2s · ×1/2"
    ✓ counter reset, and it repeats again
 
-▸ key: one press → pauses
+▸ key: one press → pauses; the caption names the gesture, then settles on the state
    caption right after: "pause", once the toast expires: "paused"
    ✓ gesture then state
 ```

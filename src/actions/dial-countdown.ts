@@ -176,7 +176,7 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 
 		// The label shows the preset's own length — as configured, never as the dial has since left it.
 		// Once the two disagree it says so, because the gap is otherwise invisible: the clock reads
-		// 23:00, the settings still say 20m, and the next press of the dial is what closes it.
+		// 23:00, the settings still say 20m, and holding the screen is what closes it.
 		const label = `${countdown.drifted ? "from " : ""}${formatPresetLabel(countdown.presetSeconds * 1000)}`;
 		const value = formatDuration(remainingMs);
 		const dimmed = countdown.dimmed;

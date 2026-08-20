@@ -97,7 +97,7 @@ export class Countdown {
 	/**
 	 * True when the clock is sitting stopped, full, on exactly the preset it is set to.
 	 *
-	 * This is the "nothing to put right" state, and it is what decides whether a press of the dial
+	 * This is the "nothing to put right" state, and it is what decides whether a hold of the screen
 	 * restores or advances — see {@link Countdown.cyclePreset}. It is deliberately wider than
 	 * {@link Countdown.drifted}: a countdown that is *running*, paused, or finished is not sitting on
 	 * its preset either, even though its duration still matches.
@@ -234,8 +234,8 @@ export class Countdown {
 	/**
 	 * Puts things right, or moves on — in that order.
 	 *
-	 * **If the clock is not sitting stopped and full on its preset, the press puts it there.** Only a
-	 * press made when there is nothing left to put right moves to another preset. Press once, press
+	 * **If the clock is not sitting stopped and full on its preset, the hold puts it there.** Only a
+	 * hold made when there is nothing left to put right moves to another preset. Hold once, hold
 	 * again: restore, then advance.
 	 *
 	 * The restore comes first because it is wanted far more often, and the rule was too narrow at

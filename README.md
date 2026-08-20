@@ -33,7 +33,7 @@ And on a dial, the encoder as well:
 | Gesture | Does |
 | --- | --- |
 | Turn | Adjust the clock, at whatever step is set |
-| Press dial | Swap the step between 1 second and 1 minute a click |
+| Press dial | Swap the step between 1 second and 1 minute a click — and from 1 hour, back to 1 second |
 | Hold dial | 1 hour a click |
 
 The screen owns everything to do with the timer, because tapping it is where your hand already is when you are reading the clock. Pressing a dial in is a fiddly, two-handed movement by comparison, so the dial owns the thing you set occasionally and deliberately: how much time one click is worth.
@@ -80,7 +80,7 @@ Stream Deck runs on macOS and Windows only, so the plugin cannot be *run* on Lin
 ```sh
 npm install
 npm run build      # bundle into com.matewishkey.dial-countdown.sdPlugin/bin
-npm test           # 112 unit tests
+npm test           # 127 unit tests
 npm run demo       # scripted gesture pass, prints one frame per step
 npm run mock       # the same harness, driven from the keyboard
 ```
