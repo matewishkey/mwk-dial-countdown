@@ -10,7 +10,7 @@
 import type { TimerStatus } from "./timer";
 
 /** The ring occupies a square on the left of the 200 × 100 touchscreen. */
-export const RING_SIZE = 88;
+const RING_SIZE = 88;
 
 /** A Stream Deck key is 144 × 144, so the same ring is drawn again at nearly twice the size. */
 export const KEY_SIZE = 144;
@@ -106,8 +106,6 @@ export const THEMES: Record<string, Palette> = {
 		track: "#2A2630"
 	}
 };
-
-export const DEFAULT_PALETTE: Palette = THEMES.default;
 
 /** Resolves a theme id from settings, falling back rather than throwing on an unknown name. */
 export function themeFor(id: string | undefined): Palette {

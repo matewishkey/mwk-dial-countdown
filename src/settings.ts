@@ -129,23 +129,3 @@ function clampIndex(value: unknown, length: number): number {
 	}
 	return value;
 }
-
-/** Splits a duration into the hours, minutes and seconds the property inspector edits. */
-export function toParts(totalSeconds: number): { hours: number; minutes: number; seconds: number } {
-	const total = clamp(Math.round(totalSeconds), MIN_PRESET_SECONDS, MAX_PRESET_SECONDS);
-	return {
-		hours: Math.floor(total / 3600),
-		minutes: Math.floor((total % 3600) / 60),
-		seconds: total % 60
-	};
-}
-
-/** Inverse of {@link toParts}, clamped so the inspector cannot produce an impossible preset. */
-export function fromParts(hours: number, minutes: number, seconds: number): number {
-	const total = (safe(hours) * 3600 + safe(minutes) * 60 + safe(seconds)) | 0;
-	return clamp(total, MIN_PRESET_SECONDS, MAX_PRESET_SECONDS);
-}
-
-function safe(value: number): number {
-	return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
-}

@@ -71,15 +71,6 @@ describe("Selector", () => {
 		assert.equal(selector.delta(-2), -2 * 3600);
 	});
 
-	it("goes back to the default when reset", () => {
-		const selector = new Selector();
-		selector.coarsen();
-
-		selector.reset();
-		assert.equal(selector.step, DEFAULT_STEP);
-		assert.equal(selector.delta(1), 1);
-	});
-
 	it("names every step it can be in", () => {
 		const selector = new Selector();
 

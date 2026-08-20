@@ -2,7 +2,7 @@
  * Lets the tests import the source as the bundler sees it.
  *
  * `src/` is written for rollup, whose resolver fills in the extension — so a module says
- * `from "./acceleration"`. Node's ESM resolver deliberately does no such thing, which is fine for
+ * `from "./step"`. Node's ESM resolver deliberately does no such thing, which is fine for
  * the shipped bundle (there is only one file by then) but stops a test from loading anything that
  * imports a sibling. This hook does the one thing rollup does and Node does not.
  */

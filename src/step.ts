@@ -73,11 +73,6 @@ export class Selector {
 		return this.#step;
 	}
 
-	/** Back to the default, e.g. when the control is set up fresh. */
-	reset(): void {
-		this.#step = DEFAULT_STEP;
-	}
-
 	/** The change in seconds a rotation should produce. Linear, always. */
 	delta(ticks: number): number {
 		return ticks * this.stepSeconds;

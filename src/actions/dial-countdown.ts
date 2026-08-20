@@ -63,7 +63,7 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 	 *
 	 * Nothing is saved, because nothing worth saving changed: turning moves the clock, never the
 	 * preset behind it, and never the step. A rotation while the dial is held is still just a
-	 * rotation — it only cancels the press, so that letting go afterwards does not also change gear.
+	 * rotation — it only cancels the press, so letting go afterwards does not also change the step.
 	 */
 	override onDialRotate(ev: DialRotateEvent<DialCountdownSettings>): void {
 		const instance = this.instanceFor(ev.action.id);

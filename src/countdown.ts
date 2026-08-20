@@ -194,7 +194,7 @@ export class Countdown {
 				this.reset();
 				return;
 			case "next":
-				this.cyclePreset(1);
+				this.cyclePreset();
 		}
 	}
 
@@ -248,17 +248,20 @@ export class Countdown {
 	 * Nothing is lost by it. The press that would have advanced still advances, one press later, and
 	 * the word says which of the two it just did: `preset · 20m` against `next · 30m`.
 	 *
+	 * It only ever moves forwards. Stepping backwards lived on the dial's hold, which now sets how
+	 * much a click is worth; with the touchscreen as the only way through the list, one direction and
+	 * a wrap round the end is the whole of it.
+	 *
 	 * Loading a preset deliberately does not start it: this is how you choose what to time, and
 	 * choosing is not the same as beginning.
 	 */
-	cyclePreset(step: number): void {
+	cyclePreset(): void {
 		if (!this.onPreset) {
 			this.#load("preset");
 			return;
 		}
 
-		const count = this.#presets.length;
-		this.#presetIndex = (this.#presetIndex + step + count) % count;
+		this.#presetIndex = (this.#presetIndex + 1) % this.#presets.length;
 		this.#load("next");
 	}
 

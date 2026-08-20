@@ -3,7 +3,6 @@ import { describe, it } from "node:test";
 
 import {
 	asDataUri,
-	DEFAULT_PALETTE,
 	KEY_SIZE,
 	keyCaptionFontSize,
 	keyValueFontSize,
@@ -14,7 +13,8 @@ import {
 	THEMES
 } from "../src/render.ts";
 
-const base = { status: "running" as const, dimmed: false, palette: DEFAULT_PALETTE };
+const palette = themeFor("default");
+const base = { status: "running" as const, dimmed: false, palette };
 
 describe("renderRing", () => {
 	it("produces a well-formed svg", () => {
@@ -38,7 +38,7 @@ describe("renderRing", () => {
 	it("fills the whole ring in the elapsed colour when done, rather than showing nothing", () => {
 		const svg = renderRing({ ...base, remainingFraction: 0, status: "elapsed" });
 		assert.equal(svg.match(/A /g)?.length, 2, "a finished timer should draw a complete ring");
-		assert.ok(svg.includes(DEFAULT_PALETTE.elapsed), "and it should be the elapsed colour");
+		assert.ok(svg.includes(palette.elapsed), "and it should be the elapsed colour");
 	});
 
 	it("sets the large-arc flag only past the halfway point", () => {
@@ -57,15 +57,15 @@ describe("renderRing", () => {
 
 describe("ringColour", () => {
 	it("maps each state to its own colour", () => {
-		assert.equal(ringColour({ ...base, remainingFraction: 1, status: "running" }), DEFAULT_PALETTE.running);
-		assert.equal(ringColour({ ...base, remainingFraction: 1, status: "idle" }), DEFAULT_PALETTE.idle);
-		assert.equal(ringColour({ ...base, remainingFraction: 0, status: "elapsed" }), DEFAULT_PALETTE.elapsed);
+		assert.equal(ringColour({ ...base, remainingFraction: 1, status: "running" }), palette.running);
+		assert.equal(ringColour({ ...base, remainingFraction: 1, status: "idle" }), palette.idle);
+		assert.equal(ringColour({ ...base, remainingFraction: 0, status: "elapsed" }), palette.elapsed);
 	});
 
 	it("does not recolour on pause — the glyph states that, not the colour", () => {
 		assert.equal(
 			ringColour({ ...base, remainingFraction: 0.5, status: "paused" }),
-			DEFAULT_PALETTE.running,
+			palette.running,
 			"pausing must not change the ring's colour"
 		);
 	});
@@ -74,8 +74,8 @@ describe("ringColour", () => {
 		const lit = renderRing({ ...base, remainingFraction: 0.1 });
 		const dim = renderRing({ ...base, remainingFraction: 0.1, dimmed: true });
 
-		assert.ok(lit.includes(DEFAULT_PALETTE.running), "precondition: the lit half is the running colour");
-		assert.ok(dim.includes(DEFAULT_PALETTE.running), "the dim half must be the same colour, not a different one");
+		assert.ok(lit.includes(palette.running), "precondition: the lit half is the running colour");
+		assert.ok(dim.includes(palette.running), "the dim half must be the same colour, not a different one");
 		assert.notEqual(lit, dim, "and it must actually differ");
 		assert.match(dim, /opacity="0\.3"/, "the difference is opacity");
 	});
@@ -175,7 +175,7 @@ describe("the key face", () => {
 	it("colours the caption only when it is reporting something, not merely labelling", () => {
 		assert.match(
 			renderKey({ ...key, accent: true }),
-			new RegExp(`fill="${DEFAULT_PALETTE.running}"[^>]*>20m</text>`),
+			new RegExp(`fill="${palette.running}"[^>]*>20m</text>`),
 			"a gesture or a pause takes the ring's own colour"
 		);
 		assert.match(renderKey({ ...key, accent: false }), /fill="#9A9AA0"[^>]*>20m<\/text>/, "a plain label stays grey");

@@ -79,27 +79,27 @@ describe("the gestures a countdown answers to", () => {
 	it("loads the next preset without starting it — choosing what to time is not beginning", () => {
 		const { countdown } = fixture();
 
-		countdown.cyclePreset(1);
+		assert.equal(countdown.onPreset, true, "fresh, stopped and full: nothing to put right");
+		countdown.cyclePreset();
 		assert.equal(countdown.presetIndex, 1);
 		assert.equal(countdown.timer.durationMs, 1_200_000);
 		assert.equal(countdown.timer.status, "idle", "a preset change must never leave the clock running");
 		assert.equal(countdown.toast, "next · 20m", "and it names the one it landed on");
 	});
 
-	it("wraps round the presets in both directions", () => {
+	it("wraps round the end of the presets rather than stopping at it", () => {
 		const { countdown } = fixture([60, 120, 180], 0);
 
-		countdown.cyclePreset(-1);
-		assert.equal(countdown.presetIndex, 2, "stepping back from the first lands on the last");
-
-		countdown.cyclePreset(1);
-		assert.equal(countdown.presetIndex, 0);
+		for (const expected of [1, 2, 0]) {
+			countdown.cyclePreset();
+			assert.equal(countdown.presetIndex, expected);
+		}
 	});
 
 	it("stays put when there is only one preset, rather than failing to find another", () => {
 		const { countdown } = fixture([600], 0);
 
-		countdown.cyclePreset(1);
+		countdown.cyclePreset();
 		assert.equal(countdown.presetIndex, 0);
 		assert.equal(countdown.timer.durationMs, 600_000);
 		assert.equal(countdown.toast, "next · 10m", "it still acknowledges the press, so the dial does not feel dead");
@@ -139,9 +139,9 @@ describe("what the dial changes, and what it leaves alone", () => {
 		countdown.adjust(5);
 		assert.equal(countdown.timer.durationMs, 305_000, "precondition: wound up by five clicks");
 
-		countdown.cyclePreset(1); // first press only puts it back on the preset
-		countdown.cyclePreset(1); // second press moves on
-		countdown.cyclePreset(1); // and round again to the first
+		countdown.cyclePreset(); // first press only puts it back on the preset
+		countdown.cyclePreset(); // second press moves on
+		countdown.cyclePreset(); // and round again to the first
 		assert.equal(countdown.presetIndex, 0);
 		assert.equal(countdown.timer.durationMs, 300_000, "the preset is exactly what it was configured as");
 		assert.equal(countdown.persistable.presets[0], 300, "and that is what gets saved");
@@ -156,35 +156,23 @@ describe("what the dial changes, and what it leaves alone", () => {
 	});
 });
 
-describe("pressing for the next preset", () => {
-	it("spends its first press putting the clock back on the preset it is already on", () => {
+describe("holding for the next preset", () => {
+	it("spends its first hold putting the clock back on the preset it is already on", () => {
 		const { countdown } = fixture([300, 1200], 0);
 
 		countdown.toggle();
 		countdown.adjust(5);
 		assert.equal(countdown.drifted, true, "precondition: dialled off the preset");
 
-		countdown.cyclePreset(1);
+		countdown.cyclePreset();
 		assert.equal(countdown.presetIndex, 0, "the first press does not move on");
 		assert.equal(countdown.timer.durationMs, 300_000, "it goes back to what the preset says");
 		assert.equal(countdown.timer.status, "idle", "stopped, like every other way of loading a preset");
 		assert.equal(countdown.toast, "preset · 5m", "and says which of the two things it just did");
 
-		countdown.cyclePreset(1);
+		countdown.cyclePreset();
 		assert.equal(countdown.presetIndex, 1, "the second press moves on as it always did");
 		assert.equal(countdown.toast, "next · 20m");
-	});
-
-	it("restores in whichever direction the press asked for, so holding is not a way round it", () => {
-		const { countdown } = fixture([300, 1200], 0);
-
-		countdown.adjust(5);
-		countdown.cyclePreset(-1);
-		assert.equal(countdown.presetIndex, 0);
-		assert.equal(countdown.timer.durationMs, 300_000);
-
-		countdown.cyclePreset(-1);
-		assert.equal(countdown.presetIndex, 1, "and then steps back as usual");
 	});
 
 	it("stops and restores a RUNNING clock rather than throwing you onto the next preset", () => {
@@ -199,13 +187,13 @@ describe("pressing for the next preset", () => {
 		assert.equal(countdown.drifted, false, "the duration still matches — it has not been dialled anywhere");
 		assert.equal(countdown.onPreset, false, "but a running clock is not sitting on its preset either");
 
-		countdown.cyclePreset(1);
+		countdown.cyclePreset();
 		assert.equal(countdown.presetIndex, 0, "the first press does not move on");
 		assert.equal(countdown.timer.status, "idle", "it stops the clock");
 		assert.equal(countdown.timer.remainingMs, 300_000, "and puts it back to full");
 		assert.equal(countdown.toast, "preset · 5m");
 
-		countdown.cyclePreset(1);
+		countdown.cyclePreset();
 		assert.equal(countdown.presetIndex, 1, "and the second press advances, as it always did");
 	});
 
@@ -218,18 +206,10 @@ describe("pressing for the next preset", () => {
 			wind(countdown, advance);
 			assert.notEqual(countdown.timer.status, "idle", `precondition: ${name}`);
 
-			countdown.cyclePreset(1);
+			countdown.cyclePreset();
 			assert.equal(countdown.presetIndex, 0, `${name}: the first press restores`);
 			assert.equal(countdown.timer.status, "idle");
 		}
-	});
-
-	it("moves straight on from a clock that is already stopped and full on its preset", () => {
-		const { countdown } = fixture([300, 1200], 0);
-
-		assert.equal(countdown.onPreset, true, "fresh, stopped, full");
-		countdown.cyclePreset(1);
-		assert.equal(countdown.presetIndex, 1, "so the press is not spent on a restore");
 	});
 
 	it("holds the invariant `onPreset` leans on: an idle clock is always a full one", () => {
@@ -237,7 +217,7 @@ describe("pressing for the next preset", () => {
 
 		const idleStates: Array<() => void> = [
 			() => countdown.reset(),
-			() => countdown.cyclePreset(1),
+			() => countdown.cyclePreset(),
 			() => countdown.adjust(1),
 			() => countdown.applySettings({ presets: [900], presetIndex: 0 })
 		];
@@ -260,7 +240,7 @@ describe("pressing for the next preset", () => {
 		const { countdown } = fixture([600], 0);
 
 		countdown.adjust(5);
-		countdown.cyclePreset(1);
+		countdown.cyclePreset();
 		assert.equal(countdown.timer.durationMs, 600_000, "with one preset the press has nowhere else to go");
 		assert.equal(countdown.toast, "preset · 10m");
 	});
@@ -317,7 +297,7 @@ describe("the lap counter", () => {
 		exhaust(fixtureState);
 		assert.equal(fixtureState.countdown.cycles, 2, "precondition");
 
-		fixtureState.countdown.cyclePreset(1);
+		fixtureState.countdown.cyclePreset();
 		assert.equal(fixtureState.countdown.cycles, 0);
 	});
 
@@ -433,7 +413,7 @@ describe("the step the dial is set to", () => {
 		const { countdown } = fixture([300, 1200], 0);
 
 		countdown.coarsenStep();
-		countdown.cyclePreset(1);
+		countdown.cyclePreset();
 		assert.equal(countdown.stepLabel, "step · 1h", "loading a preset must not silently un-choose it");
 
 		countdown.reset();
@@ -592,8 +572,8 @@ describe("settings arriving from the inspector", () => {
 		const { countdown } = fixture();
 
 		countdown.adjust(5);
-		countdown.cyclePreset(1); // puts the dialled clock back on its preset
-		countdown.cyclePreset(1); // and then moves on
+		countdown.cyclePreset(); // puts the dialled clock back on its preset
+		countdown.cyclePreset(); // and then moves on
 
 		const saved = countdown.persistable;
 		assert.equal(saved.presetIndex, 1);

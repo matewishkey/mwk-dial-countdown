@@ -4,13 +4,11 @@ import { describe, it } from "node:test";
 import {
 	DEFAULT_PRESETS,
 	DEFAULTS,
-	fromParts,
 	MAX_PRESET_SECONDS,
 	MAX_REPEAT_COUNT,
 	MAX_SOUND_REPEAT,
 	normalisePresets,
-	normaliseSettings,
-	toParts
+	normaliseSettings
 } from "../src/settings.ts";
 
 describe("normaliseSettings", () => {
@@ -91,27 +89,6 @@ describe("normalisePresets", () => {
 
 	it("clamps a preset longer than a day", () => {
 		assert.deepEqual(normalisePresets([99_999_999]), [MAX_PRESET_SECONDS]);
-	});
-});
-
-describe("hours, minutes and seconds", () => {
-	it("splits a duration into parts", () => {
-		assert.deepEqual(toParts(4210), { hours: 1, minutes: 10, seconds: 10 });
-		assert.deepEqual(toParts(300), { hours: 0, minutes: 5, seconds: 0 });
-		assert.deepEqual(toParts(59), { hours: 0, minutes: 0, seconds: 59 });
-	});
-
-	it("round-trips through the editor's fields", () => {
-		for (const seconds of [1, 59, 60, 300, 4210, 3600, MAX_PRESET_SECONDS]) {
-			const { hours, minutes, seconds: s } = toParts(seconds);
-			assert.equal(fromParts(hours, minutes, s), seconds, `round trip failed for ${seconds}`);
-		}
-	});
-
-	it("never produces an impossible preset", () => {
-		assert.equal(fromParts(0, 0, 0), 1, "a zero-length timer is not a timer");
-		assert.equal(fromParts(999, 0, 0), MAX_PRESET_SECONDS);
-		assert.equal(fromParts(Number.NaN, -5, 30), 30);
 	});
 });
 

@@ -358,7 +358,7 @@ function size(toast) {
 	return String(toast).replace(/^[+-]/, "");
 }
 
-/** Spins the dial repeatedly, the way a wrist does — this is what builds acceleration. */
+/** Spins the dial repeatedly, the way a wrist does. */
 async function spin(events, ticks, gapMs) {
 	for (let i = 0; i < events; i++) {
 		gestures.rotate(ticks);
