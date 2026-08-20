@@ -47,9 +47,11 @@ Holding **loads** the next preset rather than running it. Choosing what to time 
 
 Turning **never edits a preset** — running or stopped, it moves the clock in front of you and leaves the configuration alone. While the two disagree the label says so, reading `from 20m`, and the next press of the dial puts the clock back rather than moving on. Press again and it moves on as usual.
 
-The step **changes gear every ten clicks in the same direction** — 1s, then 10s, then a minute, then ten. Distance, not speed: the same turn does the same thing however briskly you make it.
+The step follows one rule: **you step in the largest unit you have already travelled.** Move ten seconds and you move in tens of seconds; move a minute and you move in minutes; move ten minutes and you move in ten-minute steps. Distance, not speed — the same turn does the same thing however briskly you make it. Ten clicks to the first change, five to the next, nine to the last.
 
-Turning back **keeps the gear but starts the count over**, which is what makes hovering safe. A correction moves in the same unit as the movement it corrects, and nine clicks up followed by nine back — however many times — never reaches ten in one direction, so it never escalates. The ladder is only ever climbed on purpose. Letting go of the dial for two seconds drops it back to seconds.
+Turning back **keeps the gear but starts the distance over**, which is what makes hovering safe. A correction moves in the same unit as the movement it corrects, and nine clicks up followed by nine back — however many times — never covers ten seconds in one direction, so it never escalates. The ladder is only ever climbed on purpose.
+
+Letting go of the dial for two seconds drops it back to seconds, and the step readout on screen is what tells you: `+10s` states what the *next* click will do, and stays up for exactly as long as that is true.
 
 ## Feedback
 
@@ -114,7 +116,7 @@ The version lives in three places in three formats — `1.1.0`, `1.1.0.0`, `v1.1
 | --- | --- |
 | `src/timer.ts` | The countdown state machine. No Stream Deck imports and an injectable clock, so it is tested directly. |
 | `src/settings.ts` | The settings shape, and the only place they are read. |
-| `src/acceleration.ts` | The gearbox: ten clicks one way is one gear up, and turning back resets the count. |
+| `src/acceleration.ts` | The gearbox: you step in the largest unit already travelled; turning back resets the distance. |
 | `src/render.ts` | Draws the countdown ring, and the whole key face, as SVG. |
 | `src/sound.ts` | Hands a sound file to the platform's own player. |
 | `src/gestures.ts` | Turns raw presses into `toggle` / `reset` / `next`, double taps included. |

@@ -6,43 +6,53 @@ A few things in this plugin are worth explaining properly, because each does mor
 
 A dial reports *ticks* — one click of rotation. The obvious thing to do is map one tick to a fixed amount of time, and that is exactly what makes most timer plugins annoying: pick a step small enough to trim thirty seconds off a countdown and setting a two-hour one takes a minute of winding. Pick a step big enough for two hours and you can no longer nudge.
 
-So the step is not fixed. It sits in a **gear**:
+So the step is not fixed. It sits in a **gear**, and the rule for changing gear is one line:
 
-| Gear | Step per click | Reached after | Feels like |
+> **You step in the largest unit you have already travelled.**
+
+Move ten seconds and you are moving in tens of seconds. Move a minute and you are moving in minutes. Move ten minutes and you are moving in ten-minute steps.
+
+| Gear | Step per click | Unlocked by travelling | Clicks it takes |
 | --- | --- | --- | --- |
-| 1 | **1 second** | — | Trimming. One click, one second. |
-| 2 | **10 seconds** | 10 clicks one way | Adjusting. A short turn moves half a minute. |
-| 3 | **1 minute** | 20 clicks one way | Setting. A wrist-turn covers ten minutes. |
-| 4 | **10 minutes** | 30 clicks one way | Winding. One sustained gesture reaches twelve hours. |
+| 1 | **1 second** | — | — |
+| 2 | **10 seconds** | 10 seconds | 10 |
+| 3 | **1 minute** | 1 minute | 5 more |
+| 4 | **10 minutes** | 10 minutes | 9 more |
 
-**Every ten clicks in the same direction is one gear up.** Distance, not speed, and not elapsed time.
+The thresholds are not a second table to look up — they *are* the steps. `10` means both "ten seconds a click" and "unlocked once you have moved ten seconds", which is what makes the behaviour describable in a sentence instead of memorised from a table.
 
-### Why distance, after trying the other two
+It also makes the ladder **easier to climb the further up it you are**: ten clicks to the first change, five to the next, nine to the last. Twenty-four clicks takes you from one second a click to twelve hours in reach — and that is right, because by the twentieth click you have said plainly that you want to travel.
 
-This is the third design, and the first two are worth recording because each failed in a way the next one was built to avoid.
+### Distance, after trying the other two
 
-**Counting ticks in any direction** was first. Momentum went up as the dial turned and dropped after a third of a second of stillness. It made fine control impossible: winding *back and forth over* a value counted towards escalating exactly as much as winding *away* from it, so four clicks in the dial was already moving ten seconds and there was no way to click out thirty seconds one second at a time.
+This is the third design, and the first two are worth recording because each failed in a way the next was built to avoid.
+
+**Counting ticks in any direction** was first. Momentum rose as the dial turned and dropped after a third of a second of stillness. It made fine control impossible: winding *back and forth over* a value counted towards escalating exactly as much as winding *away* from it, so four clicks in the dial was already moving ten seconds and there was no way to click out thirty seconds one second at a time.
 
 **Measuring speed** replaced it — a flick of the wrist changed up, a deliberate turn never did. That reads better on paper than it works in the hand, because it means the same gesture does different things depending on how briskly you happen to make it. The step you got was never quite the step you predicted, and predicting it is the entire job.
 
-**Distance in one direction** is the thing the hand already knows it is doing. Ten clicks up is a deliberate journey, and by then you have said you want to travel. Ten clicks of hovering around a value is not a journey, and must not escalate.
+**Distance travelled** is neither. It does not care how fast you turn or how long you take, only how far you have got — which is the thing you can already see on the clock in front of you.
 
-### Turning back keeps the gear and resets the count
+### Turning back keeps the gear and resets the distance
 
 Both halves are load-bearing, and they do different jobs.
 
-- **The gear is kept**, so a correction moves in the same unit as the movement it is correcting. Overshooting at ten minutes a click and finding the way back is measured in seconds would be useless.
-- **The count starts over**, so hovering is safe. Nine clicks up, nine back, nine up — a lot of travel, but never ten in one direction, so the step never moves. That is what makes it possible to sit on a value and tune it.
+- **The gear is kept**, so a correction moves in the same unit as the movement it is correcting. Overshooting at ten minutes a click and finding the way back measured in seconds would be useless.
+- **The distance starts over**, so hovering is safe. Nine clicks up, nine back, nine up — a lot of travel, but never ten seconds in one direction, so the step never moves. That is what makes it possible to sit on a value and tune it.
 
-Which means the ladder is only ever climbed on purpose, by committing to a direction and staying with it. The demo hovers for 54 clicks and stays on one second a click.
+The ladder is therefore only ever climbed on purpose, by committing to a direction and staying with it. The demo hovers for 54 clicks and never leaves the first gear.
 
-### Coming back down
+### Coming back down, and how you know
 
-A gear only drops when the dial is **let go of for two seconds**. There is no other way down — reversing deliberately does not do it, and that is the point. Two seconds is enough to think without losing your place, and short enough that starting a new adjustment starts it fresh.
+A gear only drops when the dial is **let go of for two seconds**. There is no other way down: reversing deliberately does not do it.
+
+The word on screen is what tells you where you are. `+10s` is not a note about the click you just made — it is a **readout of what the next click will do**, and it stays up for exactly as long as that is true. When it disappears, the gear has gone with it and you are back to seconds.
+
+That is one constant, `IDLE_RESET_MS`, used in both places. It has been two: the word faded after 900 ms while the gear ran on for another 1.1 seconds, which invited the reasonable and entirely wrong conclusion that the dial had already reset. Every other acknowledgement — `pause`, `reset`, `next · 20m` — keeps the ordinary 900 ms, because those really are notes about something that has finished happening.
 
 ### Batched ticks
 
-A dial batches its ticks when spun hard, so one event can carry more clicks than are left before the next gear. Those are spent *across* the change rather than all at the old step: a batch of twelve from a standing start is ten clicks at a second and two at ten, not twelve at a second. The eleventh click is worth ten seconds however it arrived, which is the only version of "every ten clicks" that is true at every speed.
+A dial batches its ticks when spun hard, so one event can carry more clicks than are left before the next gear. Those are spent *across* the change rather than all at the old step: a batch of twelve from a standing start is ten clicks at a second and two at ten, not twelve at a second. The click that carries you past ten seconds is worth ten seconds however it arrived, which is the only reading of the rule that holds at every speed — and it stops a hard spin being quietly cheaper than a slow one.
 
 ### Holding the dial
 
@@ -156,16 +166,19 @@ Once the two genuinely disagree it says so, reading `from 20m`. That matters mor
 
 ## Try it without hardware
 
-`npm run mock` drives the whole thing from the keyboard with no Stream Deck attached, and `npm run demo` plays a scripted pass. It prints a labelled ASCII frame per step; the gears show up across six of them:
+`npm run mock` drives the whole thing from the keyboard with no Stream Deck attached, and `npm run demo` plays a scripted pass. It prints a labelled ASCII frame per step; the gears show up across seven of them:
 
 | Step | Clock goes from | to |
 | --- | --- | --- |
 | one click → +1s | `20:00` | `20:01` |
-| 8 more slow clicks → still one second a click, whatever the pace | `20:01` | `20:09` |
-| carry on the same way → the tenth click changes up, so ten seconds a click | `20:09` | `28:50` |
-| keep winding → a minute a click, then ten; half a day in one gesture | `28:50` | `8:01:50` |
+| 8 more slow clicks → still a second a click; nine is short of ten | `20:01` | `20:09` |
+| the tenth click reaches ten seconds travelled → ten seconds a click | `20:09` | `20:20` |
+| five more → a minute travelled, so a minute a click | `20:20` | `22:00` |
+| nine more → ten minutes travelled, so ten minutes a click | `22:00` | `40:00` |
 | turn back → the step **holds** at ten minutes a click | `+10m` | `-10m` |
 | hover, nine up and nine back, 54 clicks of it → never runs away | `+1s` | `-1s` |
+
+Twenty minutes of travel in twenty-four clicks, and the step at every point is the largest unit already covered.
 
 Through every one of those the preset list underneath reads `5m [20m] 30m 40m`, unchanged, and the label reads `from 20m`. The next two steps press the dial twice: once to land back on `20:00`, and once more to move on to `30m`.
 
@@ -175,6 +188,14 @@ It also walks the gesture vocabulary and asserts the parts a person would otherw
 ▸ every gesture pulses the ring
    pulse right after the tick: yes, half a second later: no
    ✓ pulses, then clears
+
+▸ the tenth click reaches ten seconds travelled → so now ten seconds a click
+   tenth click: +1s, eleventh: +10s
+   ✓ the click that gets you there is the last fine one
+
+▸ the step readout lasts exactly as long as the gear, and they go together
+   step: "-10m", 1.2s later: "-10m", 2.3s later: ""
+   ✓ readable while it is true, gone when it is not
 
 ▸ hover — nine up, nine back, over and over → it never runs away
    first click: +1s, after 54 clicks of hovering back and forth: -1s

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
 import { Countdown } from "../src/countdown.ts";
+import { IDLE_RESET_MS } from "../src/acceleration.ts";
 import { FLASH_MS, formatDelta, TOAST_MS } from "../src/feedback.ts";
 import { normaliseSettings } from "../src/settings.ts";
 
@@ -328,6 +329,35 @@ describe("elapsing", () => {
 		countdown.toggle();
 		now += 2_000;
 		assert.equal(countdown.settle(), false);
+	});
+});
+
+describe("the step readout", () => {
+	it("stays up for exactly as long as the gear it is reporting", () => {
+		// The bug this guards: the word faded after 900ms while the gear ran on for another 1.1
+		// seconds, which invited the reasonable and wrong conclusion that the dial was back to
+		// seconds. `+10s` is not a note about the last click, it is a statement about the next one.
+		const { countdown, advance } = fixture();
+
+		countdown.adjust(1, false);
+		assert.equal(countdown.toast, "+1s");
+
+		advance(TOAST_MS);
+		assert.equal(countdown.toast, "+1s", "an ordinary toast would have gone by now; this one must not");
+
+		advance(IDLE_RESET_MS - TOAST_MS - 1);
+		assert.equal(countdown.toast, "+1s", "still true right up to the moment the gear drops");
+
+		advance(1);
+		assert.equal(countdown.toast, "", "and gone at the instant it stops being true");
+	});
+
+	it("leaves every other acknowledgement to its ordinary moment", () => {
+		const { countdown, advance } = fixture();
+
+		countdown.toggle();
+		advance(TOAST_MS);
+		assert.equal(countdown.toast, "", "`start` is over as soon as it has been read");
 	});
 });
 

@@ -9,7 +9,7 @@
  * test with an injected clock.
  */
 
-import { Accelerator } from "./acceleration";
+import { Accelerator, IDLE_RESET_MS } from "./acceleration";
 import { type Acknowledgement, formatDelta, isFlashing, toastText } from "./feedback";
 import type { Gesture } from "./gestures";
 import { normaliseSettings, type DialCountdownSettings, type Preset } from "./settings";
@@ -261,7 +261,13 @@ export class Countdown {
 
 		this.timer.adjust(deltaSeconds * 1000);
 		this.#alerted = false;
-		this.#say(formatDelta(deltaSeconds));
+
+		// Said for as long as the gear lasts, not for the usual moment. `+10s` is a readout of what the
+		// *next* click will do, not a note about the last one — so it has to be on screen for exactly
+		// as long as it stays true. It used to fade after 900ms while the gear ran on for another 1.1
+		// seconds, which invited the reasonable and wrong conclusion that the dial had gone back to
+		// seconds. Now the word going is what tells you it has.
+		this.#say(formatDelta(deltaSeconds), IDLE_RESET_MS);
 	}
 
 	/**
@@ -292,7 +298,7 @@ export class Countdown {
 		return alert;
 	}
 
-	#say(text: string): void {
-		this.#ack = { text, at: this.#now() };
+	#say(text: string, ttlMs?: number): void {
+		this.#ack = { text, at: this.#now(), ttlMs };
 	}
 }

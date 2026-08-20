@@ -11,6 +11,29 @@ this project that generally means they do not change the packaged plugin at all.
 
 Nothing yet.
 
+## [1.3.0] — 2026-08-20
+
+### Changed
+
+- **The dial steps in the largest unit you have already travelled.** Move ten seconds and you move in
+  tens of seconds; move a minute and you move in minutes; move ten minutes and you move in ten-minute
+  steps. The thresholds are not a separate table — they *are* the steps, so the whole behaviour is one
+  sentence rather than something to memorise. Ten clicks to the first change, five to the next, nine
+  to the last: twenty-four clicks from a second a click to twelve hours in reach, and the ladder gets
+  easier to climb the further up it you are.
+
+  This replaces the flat "every ten clicks" of 1.2.0, which changed up at the same rate whether you
+  were moving in seconds or in ten-minute blocks.
+- **The step shown on screen now lasts exactly as long as the gear it reports.** `+10s` is not a note
+  about the click you just made — it states what the *next* click will do, so it stays up for as long
+  as that is true and disappears at the instant the dial goes back to seconds. It used to fade after
+  0.9 seconds while the gear ran on for another 1.1, which invited the reasonable and wrong conclusion
+  that the dial had already reset. Every other acknowledgement — `pause`, `reset`, `next · 20m` —
+  keeps its ordinary moment, because those really are notes about something that has finished.
+
+Turning back still keeps the gear and starts the distance over, so hovering never runs away, and
+letting go of the dial for two seconds still drops it back to seconds.
+
 ## [1.2.0] — 2026-08-20
 
 ### Changed
@@ -102,7 +125,8 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v1.2.0...HEAD
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v1.3.0...HEAD
+[1.3.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.3.0
 [1.2.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.2.0
 [1.1.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.1.0
 [1.0.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.0.0

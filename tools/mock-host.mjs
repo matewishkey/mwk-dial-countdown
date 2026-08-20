@@ -417,12 +417,24 @@ async function runDemo() {
 		["fresh install → defaults, and they get written back", async () => {}],
 		["press dial → 20m", async () => press(80)],
 
-		// Cadence: the step sits in a gear, and the gear is chosen by how FAR the dial has been turned
-		// in one direction — ten clicks the same way is one gear up. Not speed, and not elapsed time.
+		// Cadence: you step in the largest unit you have already travelled. Move ten seconds and you
+		// move in tens of seconds; move a minute and you move in minutes. Distance, not speed.
 		["one click → +1s", async () => gestures.rotate(1)],
-		["8 more slow clicks → still one second a click, whatever the pace", async () => spin(8, 1, 400)],
-		["carry on the same way → the tenth click changes up, so now ten seconds a click", async () => spin(6, 3, 50)],
-		["keep winding → a minute a click, then ten; half a day in one gesture", async () => spin(16, 3, 45)],
+		["8 more slow clicks → still one second a click; nine seconds is short of ten", async () => spin(8, 1, 400)],
+		[
+			"the tenth click reaches ten seconds travelled → so now ten seconds a click",
+			async () => {
+				await spin(1, 1, 200);
+				const tenth = screen.finish;
+				await spin(1, 1, 200);
+				console.log(`\n   tenth click: ${tenth}, eleventh: ${screen.finish}`);
+				console.log(
+					`   ${tenth === "+1s" && screen.finish === "+10s" ? "\u2713 the click that gets you there is the last fine one" : "\u2717 changed at the wrong click"}`
+				);
+			}
+		],
+		["five more → a minute travelled, so a minute a click", async () => spin(5, 1, 120)],
+		["nine more → ten minutes travelled, so ten minutes a click; twelve hours is in reach", async () => spin(9, 1, 100)],
 
 		// Turning back is a correction, not progress. The step has to hold, or the correction lands in
 		// a different unit from the movement it is correcting.
@@ -441,8 +453,26 @@ async function runDemo() {
 			}
 		],
 
-		// ...but the COUNT starts over, which is what makes hovering safe. Distance travelled here is
-		// large; distance in any one direction never reaches ten, so it must never escalate.
+		// The word on screen is a readout of the NEXT click, not a note about the last one — so it has
+		// to last exactly as long as it stays true. It used to fade at 900ms while the gear ran on to
+		// 2s, which read as "the dial has gone back to seconds" when it had not.
+		[
+			"…the step readout lasts exactly as long as the gear, and they go together",
+			async () => {
+				await spin(1, -1, 100);
+				const said = screen.finish;
+				await wait(1_200);
+				const midway = screen.finish;
+				await wait(1_100);
+				console.log(`\n   step: "${said}", 1.2s later: "${midway}", 2.3s later: "${screen.finish}"`);
+				console.log(
+					`   ${said !== "" && midway === said && screen.finish === "" ? "\u2713 readable while it is true, gone when it is not" : "\u2717 the word and the gear are out of step"}`
+				);
+			}
+		],
+
+		// ...and the DISTANCE starts over on a reversal, which is what makes hovering safe. Travel here
+		// is large; travel in any one direction never reaches ten seconds, so it must never escalate.
 		[
 			"…hover — nine up, nine back, over and over → it never runs away",
 			async () => {
