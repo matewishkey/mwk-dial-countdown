@@ -21,7 +21,12 @@ export type DialCountdownSettings = {
 	warnEnabled: boolean;
 	warnSeconds: number;
 	repeat: boolean;
-	/** How many times an auto-repeating timer comes round before it stops for good. */
+	/**
+	 * How many times an auto-repeating timer runs **in total** before it stops for good.
+	 *
+	 * A total, not a number of repeats. Reading it as repeats is what made a setting of 3 run four
+	 * times: the third repeat was still under the limit.
+	 */
 	repeatCount: number;
 	soundEnabled: boolean;
 	soundId: string;

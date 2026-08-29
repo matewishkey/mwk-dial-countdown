@@ -204,10 +204,14 @@
 			is off its preset the label reads <em>from&nbsp;20m</em>, and <strong>holding the screen</strong> puts it back.
 		</p>
 		<p class="hint encoder-only">
-			<strong>You set the step; turning never changes it.</strong> A click is one second to start with.
-			<strong>Press the dial</strong> to swap between one-second and one-minute clicks, or <strong>hold it</strong>
-			for one hour a click. A step you set stays set — there is no time-out — and the screen says which one you
-			are on whenever it is not the default.
+			<strong>Turn for seconds, push the dial in and turn for minutes.</strong> That is the whole step
+			model — there is no mode to set and nothing left switched on when you let go. Anything longer than
+			a few minutes is a preset, typed above, and the dial is for nudging what a preset loaded.
+		</p>
+		<p class="hint encoder-only">
+			<strong>Press the dial to start or pause.</strong> A press that did not turn the dial is the
+			start/stop control, so the job you do most often is under the hand already on the dial. A press
+			that <em>did</em> turn it was a minute-step adjustment, and letting go ends the turn, nothing more.
 		</p>
 
 		<p class="hint key-only">
@@ -248,7 +252,7 @@
 			<input type="checkbox" id="showTitle" />
 		</div>
 		<div class="row dial-only">
-			<label for="showLogo">Logo in the ring</label>
+			<label for="showLogo">Logo on an idle clock</label>
 			<input type="checkbox" id="showLogo" />
 		</div>
 		<div class="row dial-only">
@@ -274,9 +278,9 @@
 			<input type="checkbox" id="repeat" />
 		</div>
 		<div class="row sub">
-			<label for="repeatCount">Repeat at most</label>
+			<label for="repeatCount">Run at most</label>
 			<input type="number" id="repeatCount" min="1" max="10" step="1" />
-			<span class="muted">times</span>
+			<span class="muted">times in total</span>
 		</div>
 
 		<h2>Sound</h2>

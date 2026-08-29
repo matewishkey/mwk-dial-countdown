@@ -11,6 +11,57 @@ this project that generally means they do not change the packaged plugin at all.
 
 Nothing yet.
 
+## [3.0.0] — 2026-08-29
+
+### Changed
+
+- **The dial's step is no longer a mode you set — it is whether you are pushing the dial in.**
+  Turn for one second a click; push the dial in and turn for one minute a click. Let go and the next
+  click is a second again.
+
+  **What you have to relearn:** pressing the dial no longer swaps the step, holding it no longer
+  gives you an hour a click, and there is no `step · 1m` on the bottom line any more because there is
+  no longer a mode that could be left switched on. Nothing carries over between turns, so there is
+  nothing to check before you start turning.
+
+- **Pressing the dial now starts and pauses the clock.** The job you do most often on a countdown is
+  now under the hand that is already on the dial, and it acts the instant you let go — the
+  touchscreen's single tap has to wait a quarter of a second first, in case a second tap is coming.
+  Tapping the screen still works exactly as it did.
+
+  A press that turned the dial is a minute-step adjustment and nothing else; letting go afterwards
+  does not start the timer. **There is no long press on the dial at all** — a push is a push however
+  long you lean on it, which is what makes holding it in for a long wind safe.
+
+- **"Repeat at most N times" now means N runs in total, and it used to mean N runs *after* the
+  first.** A timer set to repeat 3 times ran four times. It now runs three.
+
+- **The middle of the ring shows the state.** A running clock shows a play triangle, a paused one two
+  bars, a finished one a filled square — and only an idle clock shows the Mate Wish Key mark, if you
+  have left it switched on. Previously the mark was drawn on three states out of four and silently
+  swapped for a pause glyph on the fourth, so it looked as though the logo came and went at random,
+  and running, idle and finished were told apart only by colour. The setting is now labelled *Logo on
+  an idle clock*.
+
+### Fixed
+
+- **A finished repeating timer said nothing to say it had finished.** It sat on `×3/3` for ever,
+  which is character-for-character what it showed while its last lap was still counting down. It now
+  reads `20m · ×3/3 · done` on a dial and `done ×3/3` on a key, and the ring shows the done glyph.
+
+- **The progress-bar layout never took the colour theme.** It used Stream Deck's built-in `$B1`
+  layout, whose item keys are published nowhere, so the fill colour was being sent to a slot that may
+  never have existed — and a feedback key that does not match fails silently. The plugin now ships
+  its own `layouts/bar.json`, so every key it sends is a key it defined. The bar view also carries the
+  same state glyph the ring does, drawn from the same code.
+
+- **Changing the repeat settings on a finished timer left the old tally counted against the new
+  rule** — raising the limit from 3 to 5 after it had stopped showed `×3/5` on a dead clock. A new
+  rule now counts from the start of itself.
+
+- **The lap counter appeared a run late.** It read `×0/3` for the whole of the first run and only
+  reached `×1/3` once that run had ended. It now reads from one.
+
 ## [2.0.1] — 2026-08-20
 
 ### Fixed

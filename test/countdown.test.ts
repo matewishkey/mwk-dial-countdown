@@ -150,8 +150,7 @@ describe("what the dial changes, and what it leaves alone", () => {
 	it("reports the change, not the raw click count", () => {
 		const { countdown } = fixture();
 
-		countdown.cycleStep();
-		countdown.adjust(3);
+		countdown.adjust(3, true);
 		assert.equal(countdown.toast, "+3m", "three clicks at a minute each");
 	});
 });
@@ -265,6 +264,79 @@ describe("the lap counter", () => {
 		}
 	}
 
+	it("counts a total, not a number of repeats", () => {
+		// The off-by-one this closes: `repeatCount` was compared against repeats *made*, so the third
+		// repeat of a count of three still passed the test and the timer ran a fourth time.
+		let now = 1_000_000;
+		const countdown = new Countdown(
+			normaliseSettings({ presets: [2], presetIndex: 0, repeat: true, repeatCount: 3, soundEnabled: true }),
+			() => now
+		);
+
+		// The alert sounds once per elapse, so counting it counts the runs.
+		countdown.toggle();
+		let runs = 0;
+		for (let i = 0; i < 20; i++) {
+			now += 2_000;
+			if (countdown.settle()) {
+				runs += 1;
+			}
+		}
+
+		assert.equal(runs, 3, "a count of three is three runs in total, not four");
+		assert.equal(countdown.finished, true);
+	});
+
+	it("reads from one, so the first lap is ×1/3 and not ×0/3", () => {
+		const fixtureState = repeating(3);
+		const { countdown, advance } = fixtureState;
+
+		countdown.toggle();
+		assert.equal(countdown.lap, 1, "the first run is the first lap the moment it starts");
+		assert.equal(countdown.laps, 3);
+
+		advance(2_000);
+		countdown.settle();
+		assert.equal(countdown.lap, 2);
+
+		advance(2_000);
+		countdown.settle();
+		assert.equal(countdown.lap, 3);
+	});
+
+	it("never counts past the total it was given", () => {
+		const fixtureState = repeating(2);
+		exhaust(fixtureState);
+
+		assert.equal(fixtureState.countdown.lap, 2, "×2/2, not ×3/2");
+		assert.equal(fixtureState.countdown.laps, 2);
+	});
+
+	it("says nothing at all when repeat is switched off", () => {
+		const { countdown } = fixture([2]);
+
+		assert.equal(countdown.laps, 0, "no total means no counter on screen");
+		assert.equal(countdown.lap, 0);
+	});
+
+	it("has a state for being finished, distinct from being on its last lap", () => {
+		// The bug this closes: `×2/2` was shown both while the last lap was still counting down and
+		// for ever afterwards, so there was no way to tell a finished job from one still going.
+		const fixtureState = repeating(2);
+		const { countdown, advance } = fixtureState;
+
+		countdown.toggle();
+		advance(2_000);
+		countdown.settle();
+		assert.equal(countdown.lap, 2, "on the last lap");
+		assert.equal(countdown.finished, false, "but not finished — it is still running");
+
+		advance(2_000);
+		countdown.settle();
+		assert.equal(countdown.lap, 2, "still ×2/2");
+		assert.equal(countdown.finished, true, "and now it is over, which the screen can finally say");
+	});
+
 	it("starts a restarted timer's repeats over, rather than finding the budget already spent", () => {
 		// The bug this guards: the count was left where the finished run put it, so starting an expired
 		// auto-repeating timer again gave a run that never repeated once, under a display reading ×2/2.
@@ -272,52 +344,73 @@ describe("the lap counter", () => {
 		const { countdown, advance } = fixtureState;
 
 		exhaust(fixtureState);
-		assert.equal(countdown.cycles, 2, "precondition: the repeats ran out");
+		assert.equal(countdown.finished, true, "precondition: the repeats ran out");
 
 		countdown.toggle();
-		assert.equal(countdown.cycles, 0, "starting it again is a fresh run, and a fresh run has run no laps");
+		assert.equal(countdown.lap, 1, "starting it again is a fresh run, and a fresh run is on lap one");
+		assert.equal(countdown.finished, false);
 
 		advance(2_000);
 		countdown.settle();
-		assert.equal(countdown.cycles, 1, "so it repeats again, which it could not before");
+		assert.equal(countdown.lap, 2, "so it repeats again, which it could not before");
 		assert.equal(countdown.timer.status, "running");
 	});
 
-	it("goes back to zero on a reset", () => {
+	it("goes back to lap one on a reset", () => {
 		const fixtureState = repeating(2);
 		exhaust(fixtureState);
-		assert.equal(fixtureState.countdown.cycles, 2, "precondition");
+		assert.equal(fixtureState.countdown.finished, true, "precondition");
 
 		fixtureState.countdown.reset();
-		assert.equal(fixtureState.countdown.cycles, 0);
+		assert.equal(fixtureState.countdown.lap, 1);
+		assert.equal(fixtureState.countdown.finished, false);
 	});
 
-	it("goes back to zero when a preset is loaded", () => {
+	it("goes back to lap one when a preset is loaded", () => {
 		const fixtureState = repeating(2);
 		exhaust(fixtureState);
-		assert.equal(fixtureState.countdown.cycles, 2, "precondition");
 
 		fixtureState.countdown.cyclePreset();
-		assert.equal(fixtureState.countdown.cycles, 0);
+		assert.equal(fixtureState.countdown.lap, 1);
 	});
 
-	it("goes back to zero when the dial moves an expired clock off zero", () => {
+	it("goes back to lap one when the dial moves an expired clock off zero", () => {
 		const fixtureState = repeating(2);
 		exhaust(fixtureState);
-		assert.equal(fixtureState.countdown.cycles, 2, "precondition");
 
 		fixtureState.countdown.adjust(1);
 		assert.equal(fixtureState.countdown.timer.status, "idle", "adjusting a finished clock puts it back to full");
-		assert.equal(fixtureState.countdown.cycles, 0, "which ends that run, count and all");
+		assert.equal(fixtureState.countdown.lap, 1, "which ends that run, count and all");
 	});
 
-	it("goes back to zero when the inspector changes the duration", () => {
+	it("goes back to lap one when the inspector changes the duration", () => {
 		const fixtureState = repeating(2);
 		exhaust(fixtureState);
-		assert.equal(fixtureState.countdown.cycles, 2, "precondition");
 
 		fixtureState.countdown.applySettings({ presets: [900], presetIndex: 0, repeat: true, repeatCount: 2 });
-		assert.equal(fixtureState.countdown.cycles, 0);
+		assert.equal(fixtureState.countdown.lap, 1);
+	});
+
+	it("goes back to lap one when the inspector changes the repeat rules themselves", () => {
+		// The bug this closes: raising the count from 2 to 5 after the timer had finished left the
+		// two laps it had already run counted against the new rule — `×2/5` on a dead clock.
+		const fixtureState = repeating(2);
+		exhaust(fixtureState);
+
+		fixtureState.countdown.applySettings({ presets: [2], presetIndex: 0, repeat: true, repeatCount: 5 });
+		assert.equal(fixtureState.countdown.laps, 5);
+		assert.equal(fixtureState.countdown.lap, 1, "a new rule counts from the start of itself");
+	});
+
+	it("goes back to lap one when repeat is switched off and on again", () => {
+		const fixtureState = repeating(2);
+		exhaust(fixtureState);
+
+		fixtureState.countdown.applySettings({ presets: [2], presetIndex: 0, repeat: false, repeatCount: 2 });
+		assert.equal(fixtureState.countdown.laps, 0);
+
+		fixtureState.countdown.applySettings({ presets: [2], presetIndex: 0, repeat: true, repeatCount: 2 });
+		assert.equal(fixtureState.countdown.lap, 1);
 	});
 });
 
@@ -342,18 +435,16 @@ describe("elapsing", () => {
 
 		countdown.toggle();
 
-		for (const lap of [1, 2]) {
-			now += 2_000;
-			countdown.settle();
-			assert.equal(countdown.cycles, lap);
-			assert.equal(countdown.timer.status, "running", `lap ${lap} should carry straight on`);
-			assert.equal(countdown.timer.remainingMs, 2_000, "and it starts full, not where the last one ended");
-		}
+		now += 2_000;
+		countdown.settle();
+		assert.equal(countdown.lap, 2, "the second lap starts as soon as the first ends");
+		assert.equal(countdown.timer.status, "running", "it should carry straight on, with no gap");
+		assert.equal(countdown.timer.remainingMs, 2_000, "and it starts full, not where the last one ended");
 
 		now += 2_000;
 		countdown.settle();
-		assert.equal(countdown.timer.status, "elapsed", "the third elapse is the last — a bounded repeat must stop");
-		assert.equal(countdown.cycles, 2);
+		assert.equal(countdown.timer.status, "elapsed", "the second elapse is the last — a count of two is two runs");
+		assert.equal(countdown.finished, true);
 	});
 
 	it("does not ask for an alert that is switched off", () => {
@@ -366,39 +457,35 @@ describe("elapsing", () => {
 	});
 });
 
-describe("the step the dial is set to", () => {
-	it("swaps between seconds and minutes on a press, and says which", () => {
+describe("the step the dial turns at", () => {
+	it("is a second a click on a free turn, and says so", () => {
 		const { countdown } = fixture();
 
-		assert.equal(countdown.stepLabel, "", "the default is silent — a permanent `1s` would be noise");
 		countdown.adjust(1);
 		assert.equal(countdown.toast, "+1s");
-
-		countdown.cycleStep();
-		assert.equal(countdown.toast, "step · 1m");
-		assert.equal(countdown.stepLabel, "step · 1m", "and it stays on screen, because it never expires");
-
-		countdown.adjust(1);
-		assert.equal(countdown.toast, "+1m", "a click is now worth a minute");
-
-		countdown.cycleStep();
-		assert.equal(countdown.stepLabel, "", "and back again");
 	});
 
-	it("goes to an hour on a hold, and back to seconds from there on a press", () => {
+	it("is a minute a click while the dial is pushed in", () => {
 		const { countdown } = fixture();
 
-		countdown.coarsenStep();
-		assert.equal(countdown.stepLabel, "step · 1h");
-		countdown.adjust(1);
-		assert.equal(countdown.toast, "+1h");
+		countdown.adjust(3, true);
+		assert.equal(countdown.toast, "+3m", "three clicks at a minute each");
+	});
 
-		countdown.cycleStep();
-		assert.equal(countdown.stepLabel, "", "coming back from a coarse step, you want the finest one");
+	it("goes back to seconds the moment the finger lifts, with nothing to un-set", () => {
+		// The whole redesign in one test. The step used to be a mode you set and then had to
+		// remember — it survived a preset change, a reset and a run, and needed a label on screen
+		// for exactly that reason. There is no mode left to survive anything.
+		const { countdown } = fixture();
+
+		countdown.adjust(1, true);
+		assert.equal(countdown.toast, "+1m");
+
+		countdown.adjust(1);
+		assert.equal(countdown.toast, "+1s", "the very next free turn is a second again");
 	});
 
 	it("never changes on its own, however far or fast or long the dial is turned", () => {
-		// This is the whole point, and what three earlier designs each got wrong in their own way.
 		const { countdown, advance } = fixture([24 * 60 * 60]);
 
 		for (let i = 0; i < 200; i++) {
@@ -406,21 +493,18 @@ describe("the step the dial is set to", () => {
 			advance(i % 5);
 		}
 		assert.equal(countdown.toast, "+1s", "still a second a click after two hundred of them");
-		assert.equal(countdown.stepLabel, "");
 	});
 
-	it("survives a preset change, a reset and a run — it is a mode, not a side effect", () => {
+	it("holds no step across a preset change, a reset or a run", () => {
 		const { countdown } = fixture([300, 1200], 0);
 
-		countdown.coarsenStep();
+		countdown.adjust(1, true);
 		countdown.cyclePreset();
-		assert.equal(countdown.stepLabel, "step · 1h", "loading a preset must not silently un-choose it");
-
 		countdown.reset();
-		assert.equal(countdown.stepLabel, "step · 1h");
-
 		countdown.toggle();
-		assert.equal(countdown.stepLabel, "step · 1h");
+
+		countdown.adjust(1);
+		assert.equal(countdown.toast, "+1s", "nothing carried a minute step over");
 	});
 });
 

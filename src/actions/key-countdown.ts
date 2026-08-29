@@ -128,13 +128,23 @@ export class KeyCountdown extends CountdownAction<Key, KeyInstance> {
 	}
 }
 
-/** What the key says when nothing is happening: the preset, its lap count, or that it is done. */
+/**
+ * What the key says when nothing is happening: the preset, its lap count, or that it is done.
+ *
+ * A key's caption is one short line with no room for both, so a finished repeating timer says
+ * `done ×3/3` — the fact first, the tally after it. Saying only `×3/3`, as it used to, left a
+ * finished job looking exactly like one still on its final lap.
+ */
 function captionFor(countdown: Countdown, status: string): string {
-	if (countdown.cycles > 0) {
-		return `×${countdown.cycles}/${countdown.settings.repeatCount}`;
-	}
 	if (status === "elapsed") {
-		return "done";
+		return countdown.laps > 0 ? `done ×${countdown.lap}/${countdown.laps}` : "done";
+	}
+
+	// Only once it is actually under way. The dial can append the tally to its label and keep both;
+	// a key has one line, so showing `×1/3` on a clock that has not been started yet would cost it
+	// the one thing it says when nothing is happening — which preset it is.
+	if (countdown.laps > 0 && status !== "idle") {
+		return `×${countdown.lap}/${countdown.laps}`;
 	}
 	return countdown.settings.showTitle ? formatPresetLabel(countdown.presetSeconds * 1000) : "";
 }

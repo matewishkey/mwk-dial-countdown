@@ -6,6 +6,7 @@ import {
 	KEY_SIZE,
 	keyCaptionFontSize,
 	keyValueFontSize,
+	renderGlyph,
 	renderKey,
 	renderRing,
 	ringColour,
@@ -29,10 +30,12 @@ describe("renderRing", () => {
 		assert.equal(svg.match(/A /g)?.length, 2);
 	});
 
-	it("draws nothing but the track when a running timer is at zero", () => {
+	it("draws no arc when a running timer is at zero", () => {
+		// An arc is the only `A` command in the file, so it is what to look for rather than `<path`:
+		// the running state's own glyph is a path too, and it belongs in the middle regardless.
 		const svg = renderRing({ ...base, remainingFraction: 0 });
-		assert.ok(!svg.includes("<path"), "an empty ring should have no arc");
-		assert.ok(svg.includes("<circle"));
+		assert.ok(!svg.includes("A "), "an empty ring should have no arc");
+		assert.ok(svg.includes("<circle"), "but it still has its track");
 	});
 
 	it("fills the whole ring in the elapsed colour when done, rather than showing nothing", () => {
@@ -208,23 +211,79 @@ describe("the key face", () => {
 });
 
 describe("the centre of the ring", () => {
-	it("shows a pause glyph when paused, so the state is stated and not merely coloured", () => {
-		const svg = renderRing({ ...base, remainingFraction: 0.5, status: "paused" });
-		assert.equal(svg.match(/<rect /g)?.length, 2, "a pause glyph is two bars");
+	const MARK = "M0 100";
+	const middle = { ...base, remainingFraction: 0.5, logo: true };
+
+	/** Two bars is a pause; one square is done; a triangle is running. */
+	const rects = (svg: string): number => svg.match(/<rect /g)?.length ?? 0;
+	const triangles = (svg: string): number => svg.match(/<path d="M [\d.]+ [\d.]+ L .* Z"/g)?.length ?? 0;
+
+	it("shows the mark on an idle clock, which is the one state with nothing to report", () => {
+		assert.ok(renderRing({ ...middle, status: "idle" }).includes(MARK));
 	});
 
-	it("shows the pause glyph even when the logo is switched off", () => {
-		const svg = renderRing({ ...base, remainingFraction: 0.5, status: "paused", logo: false });
-		assert.ok(svg.includes("<rect "));
+	it("keeps the mark switchable off even when idle", () => {
+		assert.ok(!renderRing({ ...middle, status: "idle", logo: false }).includes(MARK));
 	});
 
-	it("gives way to the pause glyph rather than drawing the logo too", () => {
-		const svg = renderRing({ ...base, remainingFraction: 0.5, status: "paused", logo: true });
-		assert.ok(!svg.includes("<path d=\"M0 100"), "the mark must not be drawn behind the pause glyph");
+	it("shows the state instead of the mark on every state that has one", () => {
+		// The bug this closes: the mark used to be drawn on running, idle and elapsed alike and then
+		// silently swapped for a pause glyph, so it appeared and vanished for reasons that looked
+		// random from the outside. An idle clock shows the mark; every other state shows itself.
+		for (const status of ["running", "paused", "elapsed"] as const) {
+			assert.ok(
+				!renderRing({ ...middle, status }).includes(MARK),
+				`the mark must not be drawn on a ${status} clock`
+			);
+		}
 	});
 
-	it("draws the logo only when asked, and only when not paused", () => {
-		assert.ok(renderRing({ ...base, remainingFraction: 0.5, logo: true }).includes("M0 100"));
-		assert.ok(!renderRing({ ...base, remainingFraction: 0.5, logo: false }).includes("M0 100"));
+	it("draws a distinct glyph for each of the three states", () => {
+		assert.equal(triangles(renderRing({ ...middle, status: "running" })), 1, "running is a triangle");
+		assert.equal(rects(renderRing({ ...middle, status: "paused" })), 2, "a pause glyph is two bars");
+		assert.equal(rects(renderRing({ ...middle, status: "elapsed" })), 1, "done is one square");
+	});
+
+	it("shows the state whether the mark is switched on or off", () => {
+		for (const status of ["running", "paused", "elapsed"] as const) {
+			for (const logo of [true, false]) {
+				const svg = renderRing({ ...middle, status, logo });
+				assert.ok(rects(svg) + triangles(svg) > 0, `${status} lost its glyph with logo=${logo}`);
+			}
+		}
+	});
+
+	it("keeps the key's middle clear, since its clock is drawn there", () => {
+		for (const status of ["idle", "running", "paused", "elapsed"] as const) {
+			const svg = renderRing({ ...middle, status, hollow: true });
+			assert.equal(rects(svg) + triangles(svg), 0, `${status} drew a glyph behind the key's digits`);
+			assert.ok(!svg.includes(MARK));
+		}
+	});
+});
+
+describe("the glyph on its own, for the progress-bar layout", () => {
+	it("says exactly what the ring's middle says, with no ring around it", () => {
+		// One source for both layouts, so the bar view and the ring view cannot come to disagree
+		// about what a paused timer looks like.
+		for (const status of ["idle", "running", "paused", "elapsed"] as const) {
+			const state = { ...base, remainingFraction: 0.5, status, logo: true };
+			const inRing = renderRing(state);
+			const alone = renderGlyph(state);
+
+			assert.ok(!alone.includes("<circle"), "a bare glyph draws no track and no pulse");
+			assert.ok(!alone.includes("A "), "and no arc");
+
+			const glyph = alone.replace(/^<svg[^>]*>/, "").replace(/<\/svg>$/, "");
+			if (glyph !== "") {
+				assert.ok(inRing.includes(glyph), `${status} draws a different glyph in the two layouts`);
+			}
+		}
+	});
+
+	it("scales to whatever box the layout gives it", () => {
+		const state = { ...base, remainingFraction: 0.5, status: "running" as const };
+		assert.ok(renderGlyph({ ...state, size: 52 }).includes('width="52"'));
+		assert.ok(renderGlyph({ ...state, size: 88 }).includes('width="88"'));
 	});
 });

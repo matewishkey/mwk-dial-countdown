@@ -1,6 +1,6 @@
 {
 	"Name": "Dial Countdown",
-	"Version": "2.0.1.0",
+	"Version": "3.0.0.0",
 	"Author": "Mate Wish Key",
 	"Actions": [
 		{
@@ -17,8 +17,8 @@
 				"layout": "layouts/ring.json",
 				"StackColor": "#E2342B",
 				"TriggerDescription": {
-					"Rotate": "Adjust the clock",
-					"Push": "Step: 1s / 1m — hold for 1h",
+					"Rotate": "Adjust the clock — push in for minutes",
+					"Push": "Start / pause",
 					"Touch": "Pause / resume · twice resets",
 					"LongTouch": "Put the clock right, then next preset"
 				}
@@ -50,7 +50,7 @@
 	"Category": "Dial Countdown",
 	"CategoryIcon": "imgs/plugin/category-icon",
 	"CodePath": "bin/plugin.js",
-	"Description": "Countdown timers for the Stream Deck + dials and for ordinary keys. Tap to pause or resume, tap twice to reset, hold for the next preset — and on a dial, turn to adjust, with a step you set yourself: press for one-second or one-minute clicks, hold for one hour.",
+	"Description": "Countdown timers for the Stream Deck + dials and for ordinary keys. Tap to pause or resume, tap twice to reset, hold for the next preset — and on a dial, press to start or pause, turn to adjust by seconds, or push the dial in and turn to adjust by minutes.",
 	"Icon": "imgs/plugin/marketplace",
 	"SDKVersion": 3,
 	"Software": {

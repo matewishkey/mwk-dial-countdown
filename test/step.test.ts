@@ -1,83 +1,43 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { DEFAULT_STEP, Selector, STEP_LABELS, STEP_SECONDS } from "../src/step.ts";
+import { deltaFor, STEP_SECONDS, stepFor } from "../src/step.ts";
 
-describe("Selector", () => {
-	it("starts on the finest step, which is the one you cannot recover by turning", () => {
-		const selector = new Selector();
-
-		assert.equal(selector.step, DEFAULT_STEP);
-		assert.equal(selector.stepSeconds, 1);
-		assert.equal(selector.delta(1), 1);
+describe("the step is your finger, not a mode", () => {
+	it("is a second a click when the dial is turned freely", () => {
+		assert.equal(stepFor(false), "second");
+		assert.equal(deltaFor(1, false), 1);
 	});
 
-	it("swaps between seconds and minutes on a press", () => {
-		const selector = new Selector();
-
-		assert.equal(selector.toggle(), "minute");
-		assert.equal(selector.delta(1), 60);
-
-		assert.equal(selector.toggle(), "second");
-		assert.equal(selector.delta(1), 1);
+	it("is a minute a click while the dial is pushed in", () => {
+		assert.equal(stepFor(true), "minute");
+		assert.equal(deltaFor(1, true), 60);
 	});
 
-	it("goes to an hour on a hold", () => {
-		const selector = new Selector();
-
-		assert.equal(selector.coarsen(), "hour");
-		assert.equal(selector.delta(1), 3600);
-	});
-
-	it("comes back from an hour to seconds, not to minutes", () => {
-		// Coming down from a coarse step you almost always want the finest one, not the middle — and
-		// a press that landed on minutes would leave no single gesture that gets you back to seconds.
-		const selector = new Selector();
-		selector.coarsen();
-
-		assert.equal(selector.toggle(), "second");
-	});
-
-	it("holds its step no matter how much turning happens", () => {
-		// The whole design. Three earlier versions each tried to infer the step from how the dial was
-		// being turned — momentum, then velocity, then distance travelled — and each in its own way
-		// changed the step underneath the hand that was using it.
-		const selector = new Selector();
-		selector.toggle();
-
-		let moved = 0;
-		for (let i = 0; i < 500; i++) {
-			moved += selector.delta(i % 9 === 0 ? -4 : 1);
-		}
-
-		assert.equal(selector.step, "minute", "five hundred clicks, and it is where it was put");
-		assert.equal(selector.delta(1), 60);
-		assert.equal(moved, 60 * (444 - 4 * 56), "and every click was worth exactly the same");
+	it("holds nothing between turns, so nothing can be left switched on", () => {
+		// The whole point of the redesign. Four earlier versions each carried the step as state —
+		// three inferred it from how the dial was being turned, the fourth let you set it and then
+		// had to keep a label on screen reminding you which one you had left it on. There is no
+		// object here to hold a step, so there is no step to forget.
+		assert.equal(deltaFor(1, false), 1, "after a pushed turn");
+		assert.equal(deltaFor(1, true), 60);
+		assert.equal(deltaFor(1, false), 1, "and it is a second again the moment the finger lifts");
 	});
 
 	it("scales linearly with the clicks in a batch", () => {
-		const selector = new Selector();
-		selector.toggle();
-
-		assert.equal(selector.delta(4), 4 * 60, "a batch of four is four clicks' worth, never more");
-		assert.equal(selector.delta(1) * 4, selector.delta(4), "batched or not, the same");
+		assert.equal(deltaFor(4, true), 4 * 60, "a batch of four is four clicks' worth, never more");
+		assert.equal(deltaFor(1, true) * 4, deltaFor(4, true), "batched or not, the same");
 	});
 
 	it("keeps the sign of the rotation", () => {
-		const selector = new Selector();
-
-		assert.equal(selector.delta(-3), -3);
-		selector.coarsen();
-		assert.equal(selector.delta(-2), -2 * 3600);
+		assert.equal(deltaFor(-3, false), -3);
+		assert.equal(deltaFor(-2, true), -2 * 60);
 	});
 
-	it("names every step it can be in", () => {
-		const selector = new Selector();
-
-		for (const step of Object.keys(STEP_SECONDS) as Array<keyof typeof STEP_SECONDS>) {
-			assert.equal(typeof STEP_LABELS[step], "string", `${step} has no label`);
-			assert.ok(STEP_LABELS[step].length > 0);
-		}
-		assert.equal(selector.label, STEP_LABELS[DEFAULT_STEP]);
+	it("offers seconds and minutes, and nothing coarser", () => {
+		// Hours went deliberately: nothing you dial by hand is four hours long. That is a preset,
+		// typed in the property inspector, and the dial is for nudging what a preset loaded.
+		assert.deepEqual(Object.keys(STEP_SECONDS), ["second", "minute"]);
+		assert.deepEqual(Object.values(STEP_SECONDS), [1, 60]);
 	});
 });

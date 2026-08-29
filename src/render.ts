@@ -122,7 +122,12 @@ export type RingState = {
 	 */
 	dimmed: boolean;
 	palette: Palette;
-	/** Draw the Mate Wish Key mark inside the ring. */
+	/**
+	 * Allow the Mate Wish Key mark in the middle of the ring.
+	 *
+	 * Only ever *allow*: the mark is drawn on a clock that is sitting idle and nothing else. See
+	 * {@link centre} for why the state won the argument over the brand.
+	 */
 	logo?: boolean;
 	/**
 	 * Pulse the ring, acknowledging a gesture. Drawn as a separate hairline outside the arc rather
@@ -142,7 +147,13 @@ export type RingState = {
 /** Opacity of the ring on the dim half of a blink. */
 const DIM_OPACITY = 0.3;
 
-/** A paused ring is very slightly held back, so the glyph is what carries the state. */
+/**
+ * A paused *arc* is very slightly held back, so the glyph is what carries the state.
+ *
+ * The arc only. Dimming the glyph as well — which is what happened while the two shared one opacity
+ * — held back the very thing this exists to make prominent, and meant the bar layout's glyph could
+ * not be drawn from the same call, since it has no arc to contrast against.
+ */
 const PAUSED_OPACITY = 0.85;
 
 /**
@@ -196,16 +207,40 @@ export function renderRing(state: RingState): string {
 	const fraction = state.status === "elapsed" ? 1 : clamp01(state.remainingFraction);
 	const colour = ringColour(state);
 
-	const opacity = state.dimmed ? DIM_OPACITY : state.status === "paused" ? PAUSED_OPACITY : 1;
+	// The warning blink dims everything on the screen; a pause holds back only the arc.
+	const glyphOpacity = glyphOpacityFor(state);
+	const arcOpacity = state.status === "paused" ? glyphOpacity * PAUSED_OPACITY : glyphOpacity;
 
 	return [
 		svgOpen(geometry),
 		track(geometry, state.palette.track),
-		arc(geometry, fraction, colour, opacity),
-		centre(geometry, state, colour, opacity),
+		arc(geometry, fraction, colour, arcOpacity),
+		centre(geometry, state, colour, glyphOpacity),
 		pulse(geometry, state, colour),
 		`</svg>`
 	].join("");
+}
+
+/**
+ * The state glyph on its own, with no ring around it — what the progress-bar layout shows.
+ *
+ * The bar layout has no ring to put anything inside, but it needs the same one-glance answer the
+ * ring gives: running, paused, done, or sitting idle with the mark on it. Drawn from the very same
+ * {@link centre}, so the two layouts cannot come to disagree about what a state looks like.
+ */
+export function renderGlyph(state: RingState): string {
+	const geometry = geometryFor(state.size ?? RING_SIZE);
+
+	return [
+		svgOpen(geometry),
+		centre(geometry, { ...state, hollow: false }, ringColour(state), glyphOpacityFor(state)),
+		`</svg>`
+	].join("");
+}
+
+/** One rule for both layouts, so a glyph is the same glyph wherever it is drawn. */
+function glyphOpacityFor(state: RingState): number {
+	return state.dimmed ? DIM_OPACITY : 1;
 }
 
 function svgOpen({ size }: Geometry): string {
@@ -234,35 +269,94 @@ function pulse(geometry: Geometry, state: RingState, colour: string): string {
 }
 
 /**
- * Whatever sits inside the ring. A paused timer shows a pause glyph, because "paused" is a fact
- * worth stating outright rather than leaving to a colour the user has to have learnt.
+ * Whatever sits inside the ring: **the state, or — when there is no state to report — the mark.**
+ *
+ * The middle of the ring can hold one thing, and it used to hold two on a rota nobody had been told
+ * about: the brand mark normally, silently swapped for a pause glyph while paused. So the logo came
+ * and went for reasons that looked random from the outside, and the other three states had no glyph
+ * at all — a running clock and a finished one differed only by a colour you had to have learnt.
+ *
+ * The rule now is one sentence. **An idle clock shows the mark; every other state shows itself.**
+ * Idle is the empty state — nothing running, nothing to resume, nothing finished — so it is the one
+ * moment there is genuinely nothing to say, and the only moment the mark is not in the way.
  */
 function centre(geometry: Geometry, state: RingState, colour: string, opacity: number): string {
 	if (state.hollow === true) {
 		return "";
 	}
-	if (state.status === "paused") {
-		return pauseGlyph(geometry, colour, opacity);
+
+	switch (state.status) {
+		case "running":
+			return playGlyph(geometry, colour, opacity);
+		case "paused":
+			return pauseGlyph(geometry, colour, opacity);
+		case "elapsed":
+			return doneGlyph(geometry, colour, opacity);
+		default:
+			return state.logo === true ? mark(geometry, colour, opacity) : "";
 	}
-	return state.logo === true ? mark(geometry, colour, opacity) : "";
+}
+
+/**
+ * The three state glyphs, drawn to one set of proportions so they read as one family.
+ *
+ * All are sized from the same box as the pause bars always were, so nothing here changes how much of
+ * the ring's inside is occupied — only which shape occupies it.
+ */
+const GLYPH_HEIGHT = 24;
+const GLYPH_BAR_WIDTH = 6;
+const GLYPH_BAR_GAP = 7;
+const GLYPH_RADIUS = 1.5;
+
+/** A right-pointing triangle: the clock is running. */
+function playGlyph({ size, centre: c }: Geometry, colour: string, opacity: number): string {
+	const scale = size / RING_SIZE;
+	const height = round(GLYPH_HEIGHT * scale);
+	// Optically centred rather than geometrically: a triangle's mass sits behind its point, so a
+	// centred bounding box reads as though it has slid to the right.
+	const width = round(height * 0.86);
+	const left = round(c - width / 2 + width * 0.12);
+	const top = round(c - height / 2);
+
+	return (
+		`<path d="M ${left} ${top} L ${round(left + width)} ${round(c)} L ${left} ${round(top + height)} Z" ` +
+		`fill="${colour}" opacity="${opacity}" stroke="${colour}" stroke-width="${round(2 * scale)}" ` +
+		`stroke-linejoin="round"/>`
+	);
 }
 
 /** Two upright bars, the universal pause mark. */
 function pauseGlyph({ size, centre: c }: Geometry, colour: string, opacity: number): string {
 	const scale = size / RING_SIZE;
-	const barWidth = round(6 * scale);
-	const barHeight = round(24 * scale);
-	const gap = round(7 * scale);
+	const barWidth = round(GLYPH_BAR_WIDTH * scale);
+	const barHeight = round(GLYPH_HEIGHT * scale);
+	const gap = round(GLYPH_BAR_GAP * scale);
 	const y = round(c - barHeight / 2);
 	const left = round(c - gap / 2 - barWidth);
 	const right = round(c + gap / 2);
 
 	return (
 		`<g opacity="${opacity}">` +
-		`<rect x="${left}" y="${y}" width="${barWidth}" height="${barHeight}" rx="${round(1.5 * scale)}" fill="${colour}"/>` +
-		`<rect x="${right}" y="${y}" width="${barWidth}" height="${barHeight}" rx="${round(1.5 * scale)}" fill="${colour}"/>` +
+		`<rect x="${left}" y="${y}" width="${barWidth}" height="${barHeight}" rx="${round(GLYPH_RADIUS * scale)}" fill="${colour}"/>` +
+		`<rect x="${right}" y="${y}" width="${barWidth}" height="${barHeight}" rx="${round(GLYPH_RADIUS * scale)}" fill="${colour}"/>` +
 		`</g>`
 	);
+}
+
+/**
+ * A filled square: the timer has run out and has nothing left to do.
+ *
+ * A square rather than a tick. The ring behind it is already full and already in the elapsed colour,
+ * so this only has to say "stopped", and a square is what the same button says on every transport
+ * control ever made — whereas a tick would claim the timer had *succeeded*, which is a judgement a
+ * countdown is in no position to make.
+ */
+function doneGlyph({ size, centre: c }: Geometry, colour: string, opacity: number): string {
+	const scale = size / RING_SIZE;
+	const side = round(GLYPH_HEIGHT * 0.82 * scale);
+	const at = round(c - side / 2);
+
+	return `<rect x="${at}" y="${at}" width="${side}" height="${side}" rx="${round(GLYPH_RADIUS * 1.6 * scale)}" fill="${colour}" opacity="${opacity}"/>`;
 }
 
 /** The brand mark, centred in the ring and tinted to match it so the two read as one object. */

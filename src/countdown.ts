@@ -9,7 +9,7 @@
  * test with an injected clock.
  */
 
-import { Selector, type Step } from "./step";
+import { deltaFor } from "./step";
 import { type Acknowledgement, formatDelta, isFlashing, toastText } from "./feedback";
 import type { Gesture } from "./gestures";
 import { normaliseSettings, type DialCountdownSettings, type Preset } from "./settings";
@@ -22,8 +22,6 @@ type Clock = () => number;
 
 export class Countdown {
 	readonly timer: Timer;
-
-	readonly #selector = new Selector();
 
 	#presets: Preset[];
 
@@ -45,8 +43,14 @@ export class Countdown {
 	/** Guards against re-playing the alert on every frame once the timer has elapsed. */
 	#alerted = false;
 
-	/** How many times an auto-repeating timer has come round. */
-	#cycles = 0;
+	/**
+	 * How many runs of a repeating timer have finished.
+	 *
+	 * Counted as *completed* runs rather than as repeats, because that is the number the stopping
+	 * rule needs: `repeatCount` is a total, so the timer stops the moment this reaches it. Reading it
+	 * as "repeats so far" is what made a count of 3 run four times.
+	 */
+	#completed = 0;
 
 	#ack: Acknowledgement | null = null;
 
@@ -73,8 +77,40 @@ export class Countdown {
 		return this.#presetIndex;
 	}
 
-	get cycles(): number {
-		return this.#cycles;
+	/**
+	 * Which run of a repeating timer is on screen, 1-based, or `0` when repeat is switched off.
+	 *
+	 * While a repeating timer is on its first run this reads `1`, not `0` — the label says `×1/3`
+	 * from the moment it starts, so the count runs 1, 2, 3 and stops, rather than appearing a run
+	 * late and then over-running the total it was given.
+	 */
+	get lap(): number {
+		if (!this.#settings.repeat) {
+			return 0;
+		}
+
+		// Clamped at both ends. The ceiling stops a finished timer reading `×3/2`; the floor of one
+		// covers the clock that is sitting elapsed when the repeat rules themselves are re-edited —
+		// the tally it had belonged to the old rule and has been dropped, and `×0/5` is not a lap.
+		const run = this.finished ? this.#completed : this.#completed + 1;
+		return Math.min(Math.max(run, 1), this.laps);
+	}
+
+	/** How many runs a repeating timer gets in total, or `0` when repeat is switched off. */
+	get laps(): number {
+		return this.#settings.repeat ? this.#settings.repeatCount : 0;
+	}
+
+	/**
+	 * True once the timer has run out with nothing left to repeat — the end of the whole job, not the
+	 * end of one lap.
+	 *
+	 * This is the state that had no name before, and having no name is why it had no appearance: a
+	 * finished repeating timer showed `×3/3` for ever, which is exactly what it showed while its last
+	 * lap was still running. Now the screen can say `done`.
+	 */
+	get finished(): boolean {
+		return this.timer.status === "elapsed";
 	}
 
 	/** Length of the selected preset, in seconds — as configured, not as the dial has since left it. */
@@ -108,18 +144,6 @@ export class Countdown {
 	 */
 	get onPreset(): boolean {
 		return !this.drifted && this.timer.status === "idle";
-	}
-
-	/**
-	 * The dial's current step, when it is worth saying — `1m`, `1h`, or `""` for the default.
-	 *
-	 * A chosen step has no time-out, which is what makes it predictable and also what makes it easy to
-	 * forget. So any step other than the default says so on screen for as long as it is set. The
-	 * default stays silent: a permanent label reading `1s` would be noise on every timer that has
-	 * never had its dial pressed.
-	 */
-	get stepLabel(): string {
-		return this.#selector.step === "second" ? "" : `step · ${this.#selector.label}`;
 	}
 
 	/** The word acknowledging the last gesture, or `""` once it has had its time. */
@@ -170,6 +194,12 @@ export class Countdown {
 		// countdown dialled off its preset would be yanked back to it by an unrelated edit.
 		const durationChanged = settings.presets[settings.presetIndex] !== this.#loadedSeconds;
 
+		// Re-deciding how many times a timer repeats re-decides how far through it is. Without this a
+		// count raised from 3 to 5 after the timer had already finished read `×3/5` on a dead clock —
+		// three laps that belonged to a rule which no longer exists, counted against the new one.
+		const repeatChanged =
+			settings.repeat !== this.#settings.repeat || settings.repeatCount !== this.#settings.repeatCount;
+
 		this.#settings = settings;
 		this.#presets = settings.presets;
 		this.#presetIndex = settings.presetIndex;
@@ -178,7 +208,10 @@ export class Countdown {
 			this.#loadedSeconds = this.presetSeconds;
 			this.timer.setDuration(this.#loadedSeconds * 1000);
 			this.#alerted = false;
-			this.#cycles = 0;
+		}
+
+		if (durationChanged || repeatChanged) {
+			this.#completed = 0;
 		}
 
 		return durationChanged;
@@ -209,7 +242,7 @@ export class Countdown {
 		// count goes back with it. Leaving it where it was is what used to strand an auto-repeating
 		// timer: its budget read as already spent, so the restarted run never repeated even once.
 		if (before === "elapsed") {
-			this.#cycles = 0;
+			this.#completed = 0;
 		}
 
 		this.timer.toggle();
@@ -226,7 +259,7 @@ export class Countdown {
 	 */
 	reset(): void {
 		this.timer.reset();
-		this.#cycles = 0;
+		this.#completed = 0;
 		this.#alerted = false;
 		this.#say("reset");
 	}
@@ -248,9 +281,9 @@ export class Countdown {
 	 * Nothing is lost by it. The press that would have advanced still advances, one press later, and
 	 * the word says which of the two it just did: `preset · 20m` against `next · 30m`.
 	 *
-	 * It only ever moves forwards. Stepping backwards lived on the dial's hold, which now sets how
-	 * much a click is worth; with the touchscreen as the only way through the list, one direction and
-	 * a wrap round the end is the whole of it.
+	 * It only ever moves forwards. Stepping backwards lived on the dial's hold, and the dial has no
+	 * hold any more — a push is a push however long you lean on it. With the touchscreen as the only
+	 * way through the list, one direction and a wrap round the end is the whole of it.
 	 *
 	 * Loading a preset deliberately does not start it: this is how you choose what to time, and
 	 * choosing is not the same as beginning.
@@ -270,46 +303,33 @@ export class Countdown {
 		this.#loadedSeconds = this.presetSeconds;
 		this.timer.setDuration(this.#loadedSeconds * 1000);
 		this.#alerted = false;
-		this.#cycles = 0;
+		this.#completed = 0;
 		this.#say(`${word} · ${formatPresetLabel(this.presetSeconds * 1000)}`);
 	}
 
 	/**
 	 * Turning adjusts the clock, and nothing else.
 	 *
-	 * Two things it deliberately does not do. It does not touch the preset behind the clock — winding
-	 * a 20 minute timer up to 23 for one call must not silently redefine "20 minutes" as 23, and a
-	 * preset the dial rewrites is not a preset but a last-used value. And it does not change the step:
-	 * however far or fast you turn, a click is worth whatever the last press of the dial said. See
-	 * `./step` for why that took four attempts to get to.
+	 * @param pressed Whether the dial was pushed in for this turn — a minute a click rather than a
+	 * second. Passed in per rotation rather than held as state, because it *is* per rotation: the step
+	 * is your finger, and it lasts exactly as long as your finger does. See `./step`.
+	 *
+	 * It deliberately does not touch the preset behind the clock. Winding a 20 minute timer up to 23
+	 * for one call must not silently redefine "20 minutes" as 23 — a preset the dial rewrites is not a
+	 * preset but a last-used value.
 	 */
-	adjust(ticks: number): void {
+	adjust(ticks: number, pressed = false): void {
 		const before = this.timer.status;
-		const deltaSeconds = this.#selector.delta(ticks);
+		const deltaSeconds = deltaFor(ticks, pressed);
 
 		// Adjusting an expired timer puts it back to a full, stopped clock, which ends that run.
 		if (before === "elapsed") {
-			this.#cycles = 0;
+			this.#completed = 0;
 		}
 
 		this.timer.adjust(deltaSeconds * 1000);
 		this.#alerted = false;
 		this.#say(formatDelta(deltaSeconds));
-	}
-
-	/** A press of the dial: swap the step between seconds and minutes. */
-	cycleStep(): Step {
-		return this.#sayStep(this.#selector.toggle());
-	}
-
-	/** A hold of the dial: an hour a click. */
-	coarsenStep(): Step {
-		return this.#sayStep(this.#selector.coarsen());
-	}
-
-	#sayStep(step: Step): Step {
-		this.#say(`step · ${this.#selector.label}`);
-		return step;
 	}
 
 	/**
@@ -329,9 +349,11 @@ export class Countdown {
 
 		this.#alerted = true;
 		const alert = this.#settings.soundEnabled;
+		this.#completed += 1;
 
-		if (this.#settings.repeat && this.#cycles < this.#settings.repeatCount) {
-			this.#cycles += 1;
+		// `repeatCount` is a total, so the comparison is against runs *completed*. Counting repeats
+		// instead is what made "repeat 3 times" run four times: the third repeat still passed the test.
+		if (this.#settings.repeat && this.#completed < this.#settings.repeatCount) {
 			this.#alerted = false;
 			this.timer.reset();
 			this.timer.start();

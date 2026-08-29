@@ -34,11 +34,11 @@ And on a dial, the encoder as well:
 
 | Gesture | Does |
 | --- | --- |
-| Turn | Adjust the clock, at whatever step is set |
-| Press dial | Swap the step between 1 second and 1 minute a click — and from 1 hour, back to 1 second |
-| Hold dial | 1 hour a click |
+| Turn | ±1 second a click |
+| Push the dial in and turn | ±1 minute a click |
+| Press the dial | Start / pause |
 
-The screen owns everything to do with the timer, because tapping it is where your hand already is when you are reading the clock. Pressing a dial in is a fiddly, two-handed movement by comparison, so the dial owns the thing you set occasionally and deliberately: how much time one click is worth.
+The dial owns the two things you do constantly — nudge the clock, and start or stop it — because your hand is already on it. The screen owns the rest: resetting, and choosing which preset you are timing.
 
 A single tap acts a quarter of a second after your finger lifts, not the instant it does — that is the window in which a second tap would make it a reset. There is no way to have both an instant pause and a double tap, and a reset that briefly flashes "paused" first would be worse than the wait.
 
@@ -50,9 +50,11 @@ And it puts things right before it moves on: if the clock is running, paused, fi
 
 Turning **never edits a preset** — running or stopped, it moves the clock in front of you and leaves the configuration alone. While the two disagree the label says so, reading `from 20m`, and holding the screen puts the clock back.
 
-**The step is chosen, not guessed.** A click is one second; press the dial for one minute, hold it for one hour, press again for seconds. Turning never changes it — however far, however fast, however long, a click is worth what the last press said.
+**The step is your finger.** A free turn is one second a click; a turn made with the dial pushed in is one minute a click. There is nothing to set, nothing that stays set, and nothing on screen reminding you which state you left it in. Let go and it is seconds again.
 
-A step you set **stays set**; nothing expires it. That is what makes it predictable, and also what makes it easy to forget, so any step other than the default says so on the bottom line for as long as it is set.
+There is no hour step. Nothing you dial by hand is four hours long — that is a preset, typed in the property inspector, and the dial is for nudging what a preset loaded.
+
+**Pressing the dial starts and pauses the clock.** A press that did not turn the dial is the start/stop control; a press that *did* turn it was a minute-step adjustment, and letting go simply ends the turn. There is no long press on the dial at all, which is what lets you lean on it for as long as a wind takes without a third meaning quietly accruing.
 
 ## Feedback
 
@@ -61,17 +63,17 @@ There is no haptic feedback to be had on this hardware — the SDK exposes no su
 - **The ring pulses** on every gesture and every tick of the dial. It says only that *something* registered, which is the part you catch without reading — you cannot read a word per tick, but you can see the ring answer every one of them.
 - **A line names the action** — `+10s`, `start`, `pause`, `resume`, `reset`, `preset · 20m`, `next · 20m` — for about a second, then gives way to the finish time on a dial, or to the preset's length on a key.
 
-**[How the dial and the presets work →](docs/how-it-works.md)** — the step model and the presets, and the three designs that came before this one.
+**[How the dial and the presets work →](docs/how-it-works.md)** — the step model and the presets, and the four designs that came before this one.
 
 ## Features
 
 - **Presets** — 5, 20, 30 and 40 minutes out of the box, edited as hours, minutes and seconds. They carry no names: a timer's length is its own label, so the display reads `20m`, or `20m 30s` once nudged off a round number. The dial cannot overwrite them.
 - **Countdown ring** that empties as the timer runs, with the clock beside it. A progress bar is available instead.
-- **Seven colour themes**, and an optional logo in the middle of the ring.
+- **Seven colour themes**. The middle of the ring shows the state — running, paused, done — and, on an idle clock, an optional logo instead.
 - **A pause glyph** rather than a colour change, so the state is stated outright.
 - **Fade near the end** — the same colour, shaded and unshaded, from a threshold you set in minutes and seconds, capped at half the preset's own length so a fresh timer never starts already fading.
 - **Sound when finished**, repeatable up to ten times, at a volume you set. Choose a bundled sound, any sound already installed on your machine, or your own file.
-- **Auto-repeat**, counting laps on screen, up to a limit you set — nothing here should still be going tomorrow.
+- **Auto-repeat**, counting laps on screen — `×2/3` while it runs, `done ×3/3` once it is over. The limit is a total number of runs, and it is a limit because nothing here should still be going tomorrow.
 - **Finish time** — `ends 14:35`, more useful than a raw remaining count on a long timer.
 - Anything up to **24 hours**.
 
@@ -117,7 +119,7 @@ The version lives in three places in three formats — `1.1.0`, `1.1.0.0`, `v1.1
 | --- | --- |
 | `src/timer.ts` | The countdown state machine. No Stream Deck imports and an injectable clock, so it is tested directly. |
 | `src/settings.ts` | The settings shape, and the only place they are read. |
-| `src/step.ts` | How much time one click is worth. Set by pressing the dial, never inferred from turning. |
+| `src/step.ts` | How much time one click is worth. A second, or a minute while the dial is pushed in. |
 | `src/render.ts` | Draws the countdown ring, and the whole key face, as SVG. |
 | `src/sound.ts` | Hands a sound file to the platform's own player. |
 | `src/gestures.ts` | Turns raw presses into `toggle` / `reset` / `next`, double taps included. |

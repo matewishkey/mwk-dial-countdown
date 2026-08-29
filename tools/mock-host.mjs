@@ -70,7 +70,7 @@ const INFO = {
 };
 
 /** Latest touchscreen state, as reported by the plugin's setFeedback calls. */
-const screen = { title: "—", value: "—", label: "", finish: "", indicator: 0, ring: 0, colour: "", font: 0, opacity: 1, glyph: "", layout: "(default)", flash: false };
+const screen = { title: "—", value: "—", label: "", finish: "", indicator: 0, ring: 0, colour: "", barFill: "", font: 0, opacity: 1, glyph: "", layout: "(default)", flash: false };
 
 /** How many times the plugin has raised Stream Deck's own "that failed" alert. */
 let alertCount = 0;
@@ -168,9 +168,15 @@ function handlePluginMessage(message) {
 			if (payload.indicator !== undefined) {
 				screen.indicator = typeof payload.indicator === "object" ? payload.indicator.value : payload.indicator;
 				screen.colour = payload.indicator?.bar_fill_c ?? screen.colour;
+				// Held apart from `colour`, which the ring also writes: the bar layout has no ring, so
+				// this is the only place its fill can be read back from.
+				screen.barFill = payload.indicator?.bar_fill_c ?? screen.barFill;
 			}
-			if (typeof payload.ring === "string") {
-				readRing(payload.ring);
+			// The ring layout draws a ring; the bar layout draws the same state glyph on its own.
+			for (const key of ["ring", "glyph"]) {
+				if (typeof payload[key] === "string") {
+					readRing(payload[key]);
+				}
 			}
 			draw();
 			break;
@@ -208,6 +214,26 @@ function send(message) {
 }
 
 /**
+ * Names whatever the plugin drew in the middle of the ring.
+ *
+ * Order matters: the brand mark is two `<path>` elements and the play triangle is one, so the mark
+ * has to be ruled out first or a logo would be read as a play glyph.
+ */
+function glyphIn(svg) {
+	if (svg.includes("M0 100")) {
+		return "logo";
+	}
+	const rects = svg.match(/<rect /g)?.length ?? 0;
+	if (rects === 2) {
+		return "pause";
+	}
+	if (rects === 1) {
+		return "done";
+	}
+	return /<path d="M [\d.]+ [\d.]+ L .* Z"/.test(svg) ? "play" : "";
+}
+
+/**
  * Reads back what the plugin drew.
  *
  * The ring arrives as an SVG data URI, so rather than trusting the plugin's own arithmetic the
@@ -228,7 +254,7 @@ function readRing(dataUri) {
 
 	const opacity = svg.match(/stroke-linecap="round" fill="none" opacity="([\d.]+)"/);
 	screen.opacity = opacity === null ? 1 : Number(opacity[1]);
-	screen.glyph = svg.includes("<rect ") ? "pause" : svg.includes("M0 100") ? "logo" : "";
+	screen.glyph = glyphIn(svg);
 	screen.flash = PULSE.test(svg);
 
 	// Two arcs is the full-circle special case; no path at all means nothing is drawn.
@@ -417,8 +443,8 @@ async function runDemo() {
 			await wait(400);
 		}],
 
-		// The step is CHOSEN, not inferred. Turning never changes it — which is the one thing three
-		// earlier designs (momentum, then velocity, then distance travelled) each got wrong.
+		// The step is your FINGER. A free turn is a second a click; a turn made with the dial pushed
+		// in is a minute a click. Nothing is held between turns, so there is no mode to leave on.
 		["one click → +1s", async () => gestures.rotate(1)],
 		[
 			"turn as much as you like, however fast → still a second a click",
@@ -430,56 +456,90 @@ async function runDemo() {
 				// a three-tick event says "+3s" at the very same one-second step.
 				await spin(1, 1, 200);
 				console.log(`\n   after 87 clicks at three different speeds, the step is ${size(screen.finish)}`);
-				console.log(`   ${size(screen.finish) === "1s" ? "\u2713 unchanged, as chosen" : `\u2717 it drifted to ${screen.finish}`}`);
+				console.log(`   ${size(screen.finish) === "1s" ? "\u2713 unchanged — a free turn is always seconds" : `\u2717 it drifted to ${screen.finish}`}`);
 			}
 		],
 
 		[
-			"press the dial → a minute a click, and it says so",
+			"push the dial IN and turn → a minute a click",
 			async () => {
 				await wait(1200);
+				gestures.rotate(1, true);
+				await wait(300);
+				console.log(`\n   one pushed click reported ${screen.finish}`);
+				console.log(`   ${screen.finish === "+1m" ? "\u2713 pushed in, and a click is a minute" : "\u2717 the push was not read"}`);
+			}
+		],
+
+		// The whole point of the redesign: nothing survives the release. The old design set a step
+		// that stayed set until you set another one, and needed a permanent label on screen saying so.
+		[
+			"…let go and turn again → straight back to seconds, with nothing to un-set",
+			async () => {
+				await wait(1200);
+				await spin(1, 1, 200);
+				console.log(`\n   the very next free click reported ${screen.finish}`);
+				console.log(`   ${screen.finish === "+1s" ? "\u2713 no mode left behind" : "\u2717 a minute step stuck around"}`);
+			}
+		],
+
+		// A press of the dial that did NOT turn it is the start/pause control — the most-used job on
+		// a countdown, under the hand that is already on the dial.
+		[
+			"press the dial → starts the clock",
+			async () => {
+				await wait(1200);
+				const before = screen.value;
 				await press(80);
-				await wait(400);
+				await wait(500);
 				const said = screen.finish;
-				await spin(1, 1, 200);
-				console.log(`\n   press said "${said}", and the next click was ${screen.finish}`);
-				console.log(`   ${said === "step · 1m" && screen.finish === "+1m" ? "\u2713 pressed, and a click is a minute" : "\u2717 the press did not take"}`);
+				await wait(1200);
+				console.log(`\n   was ${before}, press said "${said}", 1.2s later ${screen.value}`);
+				console.log(`   ${said === "start" && screen.value !== before ? "\u2713 the dial starts it" : "\u2717 the press did not start the clock"}`);
 			}
 		],
-
-		// A chosen step has no time-out, which is what makes it predictable and also what makes it
-		// easy to forget. So it stays on screen for as long as it is set.
 		[
-			"…and it STAYS — no time-out, and the screen says so while it is set",
-			async () => {
-				await wait(2500);
-				const idle = screen.finish;
-				await spin(1, 1, 200);
-				console.log(`\n   2.5s untouched, the screen reads "${idle}"; the next click was ${screen.finish}`);
-				console.log(`   ${idle === "step · 1m" && screen.finish === "+1m" ? "\u2713 still set, and still saying so" : "\u2717 it expired"}`);
-			}
-		],
-
-		[
-			"hold the dial → an hour a click",
-			async () => {
-				await press(900);
-				await wait(400);
-				const said = screen.finish;
-				await spin(1, 1, 200);
-				console.log(`\n   hold said "${said}", and the next click was ${screen.finish}`);
-				console.log(`   ${said === "step · 1h" && screen.finish === "+1h" ? "\u2713 held, and a click is an hour" : "\u2717 the hold did not take"}`);
-			}
-		],
-
-		[
-			"press again → back to seconds, not to minutes",
+			"press again → pauses it, and the ring shows the pause glyph",
 			async () => {
 				await press(80);
+				await wait(500);
+				const said = screen.finish;
+				const held = screen.value;
+				await wait(1500);
+				console.log(`\n   press said "${said}", glyph is "${screen.glyph}", clock ${held} then ${screen.value}`);
+				console.log(`   ${said === "pause" && screen.glyph === "pause" && held === screen.value ? "\u2713 paused, stated, and frozen" : "\u2717 not paused as intended"}`);
+			}
+		],
+		[
+			"a PUSHED turn's release does nothing — otherwise every minute-nudge would start the clock",
+			async () => {
 				await wait(400);
-				await spin(1, 1, 200);
-				console.log(`\n   one press after an hour a click, and the next click was ${screen.finish}`);
-				console.log(`   ${screen.finish === "+1s" ? "\u2713 straight back to the finest step" : "\u2717 landed somewhere else"}`);
+				const before = screen.value;
+				gestures.dialDown();
+				await wait(60);
+				gestures.rotate(2, true);
+				await wait(60);
+				gestures.dialUp();
+				await wait(500);
+				console.log(`\n   was ${before}, after push-turn-release ${screen.value}, said "${screen.finish}"`);
+				console.log(`   ${screen.finish === "+2m" ? "\u2713 read as a turn, not as a press" : "\u2717 the release was also taken as a press"}`);
+			}
+		],
+		// There is no long press on the dial any more. A push is a push however long you lean on it,
+		// which is what lets you hold it in for a long minute-stepped wind without a second meaning
+		// quietly accruing underneath.
+		[
+			"a long hold is just a press — the dial has no long-press gesture left",
+			async () => {
+				await wait(1200);
+				gestures.dialDown();
+				await wait(1500);
+				gestures.dialUp();
+				await wait(500);
+				console.log(`\n   held the dial 1.5s, then let go: it said "${screen.finish}"`);
+				console.log(
+					`   ${screen.finish === "start" ? "\u2713 the same as a quick press, with no third meaning to learn" : `\u2717 a long hold meant something else: "${screen.finish}"`}`
+				);
 			}
 		],
 
@@ -666,14 +726,22 @@ async function runDemo() {
 			await wait(2400);
 		}],
 		["…second lap", async () => wait(2200)],
+		// A count of two is two RUNS, not two repeats after a first run. It used to be the latter,
+		// which quietly ran every repeating timer one lap more than it was told to.
 		[
-			"…and STOPS at the limit rather than looping for ever",
+			"…and STOPS at the limit, saying `done`, rather than looping for ever or going quiet",
 			async () => {
 				await wait(3000);
 				const settled = screen.value;
+				// The ring layout's heading is the `label` slot; `title` belongs to the bar layout.
+				const said = screen.label;
 				await wait(2000);
-				console.log(`\n   clock 2s apart: ${settled} then ${screen.value}`);
+				console.log(`\n   clock 2s apart: ${settled} then ${screen.value}; label reads "${said}"`);
 				console.log(`   ${settled === screen.value ? "\u2713 stopped" : "\u2717 still running"}`);
+				console.log(
+					`   ${said.includes("\u00d72/2") && said.includes("done") ? "\u2713 and it says so — a finished job no longer looks like its own last lap" : "\u2717 nothing on screen distinguishes finished from still-running"}`
+				);
+				console.log(`   ${screen.glyph === "done" ? "\u2713 the ring shows the done glyph, not the brand mark" : `\u2717 the middle of the ring shows "${screen.glyph}"`}`);
 			}
 		],
 
@@ -684,12 +752,62 @@ async function runDemo() {
 			async () => {
 				gestures.touch(false);
 				await wait(700);
-				// The ring layout's heading is the `label` slot; `title` belongs to the bar layout.
 				const restarted = screen.label;
 				await wait(2400);
 				console.log(`\n   label on restart: "${restarted}", one lap later: "${screen.label}"`);
 				console.log(
-					`   ${restarted === "2s" && screen.label.includes("\u00d71/2") ? "\u2713 counter reset, and it repeats again" : "\u2717 the spent lap count stuck"}`
+					`   ${restarted.includes("\u00d71/2") && !restarted.includes("done") && screen.label.includes("\u00d72/2") ? "\u2713 counter reset, and it repeats again" : "\u2717 the spent lap count stuck"}`
+				);
+			}
+		],
+
+		// The middle of the ring: the mark on an idle clock, the state on every other. It used to be
+		// the mark on three states out of four and a pause glyph on the fourth, which is why the logo
+		// looked like it came and went at random.
+		[
+			"the ring's middle shows the STATE, and the brand mark only on an idle clock",
+			async () => {
+				applySettings({ presets: [600], presetIndex: 0, repeat: false, showLogo: true, layout: "ring" });
+				await wait(600);
+				const whenIdle = screen.glyph;
+
+				await press(80);
+				await wait(600);
+				const whenRunning = screen.glyph;
+
+				await press(80);
+				await wait(600);
+				const whenPaused = screen.glyph;
+
+				console.log(`\n   idle: "${whenIdle}", running: "${whenRunning}", paused: "${whenPaused}"`);
+				console.log(
+					`   ${whenIdle === "logo" && whenRunning === "play" && whenPaused === "pause" ? "\u2713 one glyph per state, and the mark only where there is nothing to report" : "\u2717 the middle of the ring is not following the state"}`
+				);
+			}
+		],
+
+		// The progress-bar view used to be Stream Deck's built-in $B1, whose item keys are published
+		// nowhere — so the bar colour was being sent hopefully and never landed. Both layouts are the
+		// plugin's own files now.
+		[
+			"the progress-bar layout takes the theme, and carries the same state glyph",
+			async () => {
+				// A different duration from the step before, so the clock is reloaded and genuinely
+				// idle rather than left paused — otherwise the "idle" sample is a paused one.
+				applySettings({ presets: [900], presetIndex: 0, layout: "bar", theme: "neon" });
+				await wait(800);
+				const idleFill = screen.barFill;
+				const idleGlyph = screen.glyph;
+
+				await press(80);
+				await wait(800);
+
+				console.log(`\n   layout "${screen.layout}", bar idle ${idleFill} (glyph "${idleGlyph}") → running ${screen.barFill} (glyph "${screen.glyph}")`);
+				console.log(
+					`   ${idleFill === "#7C4DFF" && screen.barFill === "#00E5FF" ? "\u2713 the bar is coloured, and follows both the theme and the state" : "\u2717 the bar did not take the theme"}`
+				);
+				console.log(
+					`   ${idleGlyph === "logo" && screen.glyph === "play" ? "\u2713 and the bar view says the same thing the ring view does" : "\u2717 the two layouts disagree"}`
 				);
 			}
 		]
@@ -873,9 +991,9 @@ function draw() {
 		"",
 		...keyLines(),
 		"",
-		dim("   ←/→ adjust   shift+←/→ ×5   ↑/↓ press+turn (an ordinary turn; cancels the press)"),
+		dim("   ←/→ turn: ±1s   shift+←/→ ×5   ↑/↓ push in and turn: ±1m"),
 		dim("   t tap: pause/resume   d double tap: reset   y hold: put right, then next preset"),
-		dim("   space press dial: step 1s/1m   r hold dial: step 1h"),
+		dim("   space press dial: start/pause   r hold the dial (the same thing — there is no long press)"),
 		dim("   k press key   j double press key   l hold key   ctrl+c quit")
 	];
 
