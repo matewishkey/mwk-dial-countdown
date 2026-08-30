@@ -1,4 +1,7 @@
-# Everything docs/releasing.md lists as a manual step before cutting a release, run on every push.
+# Every automatable check docs/releasing.md lists before cutting a release, run on every push.
+#
+# Not `npm run demo` — releasing.md keeps that as the step CI does not do, because it drives the
+# *built* plugin end to end over a real WebSocket and asserts by printing frames a human reads.
 #
 # The version check is the reason this exists at all: the manifest sat at 0.1.0.0 through nine
 # releases, so the Stream Deck application reported the same version whichever build was installed.

@@ -75,6 +75,7 @@ There is no haptic feedback to be had on this hardware — the SDK exposes no su
 - **Sound when finished**, repeatable up to ten times, at a volume you set. Choose a bundled sound, any sound already installed on your machine, or your own file.
 - **Auto-repeat**, counting laps on screen — `×2/3` while it runs, `done ×3/3` once it is over. The limit is a total number of runs, and it is a limit because nothing here should still be going tomorrow.
 - **Finish time** — `ends 14:35`, more useful than a raw remaining count on a long timer.
+- **Timers survive a page or profile switch** — flip away and back and the clock is where you left it, still counting. They do not survive the plugin restarting, and one that ran out while you were away comes back silent rather than sounding an alarm for a moment that has passed.
 - Anything up to **24 hours**.
 
 ## Developing
@@ -84,14 +85,16 @@ Stream Deck runs on macOS and Windows only, so the plugin cannot be *run* on Lin
 ```sh
 npm install
 npm run build      # bundle into com.matewishkey.dial-countdown-v2.sdPlugin/bin
-npm test           # 202 tests — 35 of them drive the property inspector in a browser
+npm test           # 212 tests — 35 of them drive the property inspector in a browser
 npm run check      # everything CI runs: typecheck, lint, format, tests, versions
 npm run demo       # scripted gesture pass, prints one frame per step
 npm run mock       # the same harness, driven from the keyboard
 ```
 
-`npm run check` is the one to run before pushing; [CI](.github/workflows/ci.yml) runs exactly the same
-list on every push, Chromium included, so the browser suite is never quietly skipped there.
+`npm run check` is the one to run before pushing; [CI](.github/workflows/ci.yml) runs the same checks on
+every push — plus a build and a `streamdeck validate`, which `check` deliberately leaves out because
+they are slower and only matter before a release. Chromium is installed there, so the browser suite is
+never quietly skipped.
 
 Two of those deserve a note. **`npm run typecheck` uses `tsconfig.test.json`, not `tsconfig.json`** —
 the latter covers `src/` only, because that is what rollup bundles, and for a long time it meant the
@@ -114,7 +117,8 @@ npm run watch                                       # rebuild + restart on save
 ### Packaging and releasing
 
 ```sh
-npm run version:check                               # package.json ↔ manifest.json ↔ tag
+npm run version:check                               # package.json ↔ manifest.json
+node tools/check-version.mjs v3.1.0                 # ...and the tag you are about to cut
 npx streamdeck validate com.matewishkey.dial-countdown-v2.sdPlugin
 npx streamdeck pack com.matewishkey.dial-countdown-v2.sdPlugin
 ```

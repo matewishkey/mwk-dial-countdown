@@ -199,7 +199,7 @@ Both layouts are the plugin's own files now (`layouts/ring.json`, `layouts/bar.j
 
 ## Try it without hardware
 
-`npm run mock` drives the whole thing from the keyboard with no Stream Deck attached, and `npm run demo` plays a scripted pass of about thirty checks. It prints a labelled ASCII frame per step; the dial's step shows up across three of them:
+`npm run mock` drives the whole thing from the keyboard with no Stream Deck attached, and `npm run demo` plays a scripted pass of 26 checks across 37 steps. It prints a labelled ASCII frame per step; the dial's step shows up across three of them:
 
 | Step | What it shows |
 | --- | --- |

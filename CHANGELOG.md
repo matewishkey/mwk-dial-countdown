@@ -9,6 +9,16 @@ this project that generally means they do not change the packaged plugin at all.
 
 ## [Unreleased]
 
+### Added
+
+- **Pick a preset in the property inspector**, by clicking the dot beside it. Holding the screen or
+  the key still cycles forward one at a time, which meant the fourth of four presets was three holds
+  away with no way back. The panel already showed which one was loaded; now it can be told.
+
+- **Tests for the two parts of the plugin that had none** — sound resolution, and the action
+  lifecycle that owns the timers, the redraw loops and the write to disk. Four of the fixes listed
+  below were found there, and every one is now held by a test that fails without it.
+
 ### Changed
 
 - **A countdown now survives switching page or profile.** It used to be destroyed the moment the
@@ -26,6 +36,22 @@ this project that generally means they do not change the packaged plugin at all.
   only way to turn the alert off, because it always was one of two ways to say the same thing — and
   the state where the two disagreed is exactly the bug listed below. If you had the sound switched
   off, it stays off; the setting is carried over for you.
+
+- **The progress-bar display now acknowledges the dial too.** Every gesture and every click of the
+  dial pulses a hairline around the state glyph, exactly as it does around the ring. On that display
+  it previously did nothing at all, leaving the word on the bottom line as the only acknowledgement —
+  which is the half you have to stop and read, and no use at all while winding.
+
+- **Settings belonging to a switch that is off are now greyed out** — the sound picker, volume and
+  *Test* button when the sound is off, the fade threshold when the fade is off, the repeat count when
+  repeat is off. *Test* in particular would audition a sound the timer itself would never play.
+
+- **The fade threshold can be set beyond an hour**, as the plugin always allowed; the panel stopped
+  at 59 minutes.
+
+- **A released build now logs at `info` rather than `trace`.** Trace logging is a development tool;
+  leaving it on meant every install wrote a line for every frame of a redraw loop that runs four
+  times a second, for as long as the plugin was on screen. `npm run watch` still logs at `trace`.
 
 ### Fixed
 
@@ -54,36 +80,6 @@ this project that generally means they do not change the packaged plugin at all.
 - **Typing a preset could lose the cursor.** The plugin writes settings of its own — loading a preset
   on the hardware saves the new selection — and every such write redrew the preset rows, pulling the
   caret out of whatever was being typed.
-
-### Added
-
-- **Pick a preset in the property inspector**, by clicking the dot beside it. Holding the screen or
-  the key still cycles forward one at a time, which meant the fourth of four presets was three holds
-  away with no way back. The panel already showed which one was loaded; now it can be told.
-
-### Changed
-
-- **The progress-bar display now acknowledges the dial too.** Every gesture and every click of the
-  dial pulses a hairline around the state glyph, exactly as it does around the ring. On that display
-  it previously did nothing at all, leaving the word on the bottom line as the only acknowledgement —
-  which is the half you have to stop and read, and no use at all while winding.
-
-- **Settings belonging to a switch that is off are now greyed out** — the sound picker, volume and
-  *Test* button when the sound is off, the fade threshold when the fade is off, the repeat count when
-  repeat is off. *Test* in particular would audition a sound the timer itself would never play.
-
-- **The fade threshold can be set beyond an hour**, as the plugin always allowed; the panel stopped
-  at 59 minutes.
-
-- **A released build now logs at `info` rather than `trace`.** Trace logging is a development tool;
-  leaving it on meant every install wrote a line for every frame of a redraw loop that runs four
-  times a second, for as long as the plugin was on screen. `npm run watch` still logs at `trace`.
-
-### Added
-
-- **Tests for the two parts of the plugin that had none** — sound resolution, and the action
-  lifecycle that owns the timers, the redraw loops and the write to disk. All four of the fixes above
-  that live in that half were found there and are now held by a test that fails without them.
 
 ## [3.0.1] — 2026-08-30
 
