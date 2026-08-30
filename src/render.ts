@@ -15,7 +15,6 @@ const RING_SIZE = 88;
 /** A Stream Deck key is 144 × 144, so the same ring is drawn again at nearly twice the size. */
 export const KEY_SIZE = 144;
 
-const CENTRE = RING_SIZE / 2;
 const RADIUS = 36;
 const STROKE = 9;
 

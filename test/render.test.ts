@@ -99,7 +99,7 @@ describe("themes", () => {
 		assert.ok(ids.length >= 5, `expected a handful of themes, got ${ids.length}`);
 
 		for (const [id, palette] of Object.entries(THEMES)) {
-			for (const role of ["running", "elapsed", "idle", "track"]) {
+			for (const role of ["running", "elapsed", "idle", "track"] as const) {
 				assert.match(palette[role], /^#[0-9A-Fa-f]{6}$/, `${id}.${role} is not a hex colour`);
 			}
 		}

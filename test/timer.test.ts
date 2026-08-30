@@ -17,7 +17,9 @@ function at(startMs = 0, durationSeconds = 300) {
 	const timer = new Timer(durationSeconds * 1000, () => now);
 	return {
 		timer,
-		advance(seconds: number) {
+		// An arrow property rather than a method: every test destructures this off the object, and a
+		// method taken off its owner is exactly the shape that goes wrong when it later needs `this`.
+		advance: (seconds: number): void => {
 			now += seconds * 1000;
 		}
 	};

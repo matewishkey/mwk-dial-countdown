@@ -39,6 +39,9 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 	const lastSaved = (): Promise<Record<string, unknown> | null> =>
 		ui.evaluate("window.__calls.setSettings.at(-1) ?? null") as Promise<Record<string, unknown> | null>;
 
+	/** A page value read as the string it is displayed as. */
+	const text = async (expression: string): Promise<string> => String(await ui.evaluate(expression));
+
 	/** Sets a control's value and fires the `change` event the page listens for. */
 	const change = (id: string, value: string | boolean): Promise<unknown> =>
 		ui.evaluate(`(() => {
@@ -357,17 +360,17 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 			await ui.evaluate(
 				'window.__subs.toInspector({ payload: { event: "soundStatus", path: "/gone.wav", exists: false } })'
 			);
-			assert.match(await ui.evaluate('document.getElementById("soundStatus").textContent'), /not found/);
+			assert.match(await text('document.getElementById("soundStatus").textContent'), /not found/);
 
 			await ui.evaluate(
 				'window.__subs.toInspector({ payload: { event: "soundStatus", path: "/there.wav", exists: true, played: true } })'
 			);
-			assert.match(await ui.evaluate('document.getElementById("soundStatus").textContent'), /^✓/);
+			assert.match(await text('document.getElementById("soundStatus").textContent'), /^✓/);
 
 			await ui.evaluate(
 				'window.__subs.toInspector({ payload: { event: "soundStatus", path: "/there.wav", exists: true, played: false } })'
 			);
-			assert.match(await ui.evaluate('document.getElementById("soundStatus").textContent'), /no player/);
+			assert.match(await text('document.getElementById("soundStatus").textContent'), /no player/);
 		});
 
 		it("reloads its controls when the plugin saves settings of its own", async () => {

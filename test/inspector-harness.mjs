@@ -226,7 +226,13 @@ export async function startInspector() {
 			await this.evaluate("new Promise((done) => setTimeout(done, 0))");
 		},
 
-		/** Runs an expression in the page and returns its value. Rejects on a page-side throw. */
+		/**
+		 * Runs an expression in the page and returns its value. Rejects on a page-side throw.
+		 *
+		 * @param {string} expression
+		 * @returns {Promise<unknown>} Whatever the page produced — `unknown` rather than `any`, so a
+		 * caller has to say what it expects instead of quietly inheriting it.
+		 */
 		async evaluate(expression) {
 			const result = await devtools.send("Runtime.evaluate", {
 				expression: `(async () => { return (${expression}); })()`,

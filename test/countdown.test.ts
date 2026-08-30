@@ -574,12 +574,16 @@ describe("the end-of-timer fade", () => {
 		countdown.toggle();
 		assert.equal(countdown.dimmed, false, "it must not fade the instant it starts");
 
+		// Read across two frames, because the fade blinks: landing on the dim half is not guaranteed
+		// on any single one. Read into locals rather than testing an array of two inline expressions —
+		// `assert.equal(countdown.dimmed, false)` above carries an assertion signature, so TypeScript
+		// has `countdown.dimmed` narrowed to `false` from here on and could not check the old form.
 		advance(151_000);
-		assert.equal(
-			[countdown.dimmed, (advance(500), countdown.dimmed)].includes(true),
-			true,
-			"but past the halfway cap it does fade"
-		);
+		const onFirstFrame = countdown.dimmed;
+		advance(500);
+		const onNextFrame = countdown.dimmed;
+
+		assert.ok(onFirstFrame || onNextFrame, "but past the halfway cap it does fade");
 	});
 
 	it("alternates rather than sitting dim, so it reads as a blink", () => {

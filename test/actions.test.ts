@@ -26,9 +26,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import type { DialAction, KeyAction } from "@elgato/streamdeck";
+
 import { CountdownAction, type Instance } from "../src/actions/countdown-action.ts";
 import type { Gesture } from "../src/gestures.ts";
-import { normaliseSettings } from "../src/settings.ts";
+import { normaliseSettings, type DialCountdownSettings } from "../src/settings.ts";
+
+type Dial = DialAction<DialCountdownSettings>;
 
 const wait = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms));
 
@@ -83,22 +87,20 @@ function fakeDial(id: string): { action: Record<string, unknown>; calls: Calls }
  * subclass is how a test reaches the debounced save without going through a subclass's own event
  * handlers, which are not what is under test here.
  */
-class TestAction extends CountdownAction<never> {
+class TestAction extends CountdownAction<Dial> {
 	protected readonly controller = "Encoder" as const;
 
-	protected owns(): boolean {
-		return true;
+	protected owns(action: Dial | KeyAction<DialCountdownSettings>): action is Dial {
+		return action.isDial();
 	}
 
 	protected extras(): Record<string, never> {
 		return {};
 	}
 
-	protected draw(instance: Instance<never>, force: boolean): void {
+	protected draw(instance: Instance<Dial>, force: boolean): void {
 		void force;
-		(instance.action as { setFeedback(value: unknown): Promise<void> }).setFeedback({
-			value: instance.countdown.toast
-		});
+		void instance.action.setFeedback({ value: instance.countdown.toast });
 	}
 
 	/** Runs a resolved gesture against a live instance, as a subclass's event handler would. */
@@ -119,7 +121,9 @@ type Driver = {
 };
 
 function driver(): Driver {
-	return new TestAction() as unknown as Driver;
+	// No cast needed: methods are compared bivariantly, so a handler declared for a real SDK event
+	// satisfies one declared for `unknown`.
+	return new TestAction();
 }
 
 describe("an action's lifecycle", () => {

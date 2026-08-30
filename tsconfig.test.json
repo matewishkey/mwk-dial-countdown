@@ -1,0 +1,11 @@
+{
+	"$comment": "Typechecks the tests as well as the source. Kept separate from tsconfig.json so that rollup, which reads that one, still sees only the files it bundles. See the `typecheck` script.",
+	"extends": "./tsconfig.json",
+	"compilerOptions": {
+		"noEmit": true,
+		"allowImportingTsExtensions": true,
+		"allowJs": true,
+		"checkJs": false
+	},
+	"include": ["src/**/*.ts", "test/**/*.ts", "test/**/*.mjs"]
+}

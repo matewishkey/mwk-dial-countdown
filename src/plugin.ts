@@ -23,4 +23,6 @@ streamDeck.logger.setLevel(__DEV__ ? "trace" : "info");
 streamDeck.actions.registerAction(new DialCountdown());
 streamDeck.actions.registerAction(new KeyCountdown());
 
-streamDeck.connect();
+// `void`, not ignored: `connect` returns a promise, and if it rejects the plugin has no Stream Deck
+// to talk to and nothing useful left to do — including logging, which goes back down the same pipe.
+void streamDeck.connect();

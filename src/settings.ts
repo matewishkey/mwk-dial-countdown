@@ -105,7 +105,12 @@ export function normalisePresets(raw: unknown): Preset[] {
 		return [...DEFAULT_PRESETS];
 	}
 
-	const seconds = raw
+	// Annotated, because `Array.isArray` narrows an `unknown` to `any[]` rather than `unknown[]` — so
+	// without this every element below is an `any` and the sanitising this whole file exists to do is
+	// unchecked exactly where it matters most.
+	const items: unknown[] = raw;
+
+	const seconds = items
 		.map((preset) => (typeof preset === "object" && preset !== null ? (preset as { seconds?: unknown }).seconds : preset))
 		.filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0)
 		.map((value) => clamp(Math.round(value), MIN_PRESET_SECONDS, MAX_PRESET_SECONDS));

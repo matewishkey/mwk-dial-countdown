@@ -1,0 +1,11 @@
+node_modules/
+com.matewishkey.dial-countdown-v2.sdPlugin/bin/
+
+# Vendored third-party code — formatted as its author shipped it.
+com.matewishkey.dial-countdown-v2.sdPlugin/ui/sdpi-components.js
+
+package-lock.json
+
+# Prose. Prettier rewrites *emphasis* as _emphasis_ and re-pads every table, which is churn in a
+# repo where the documentation is written rather than generated.
+*.md

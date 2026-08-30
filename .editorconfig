@@ -1,0 +1,14 @@
+# Mirrors .prettierrc.json, for editors that read this instead.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = tab
+max_line_length = 120
+trim_trailing_whitespace = true
+
+[*.{json,md,yml,yaml}]
+indent_style = space
+indent_size = 2
