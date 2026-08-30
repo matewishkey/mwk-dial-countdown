@@ -176,6 +176,10 @@ A few decisions worth knowing before changing things:
 
 **The tests resolve imports through a hook.** `src/` is written for rollup, which fills in file extensions; Node's ESM resolver deliberately does not, so `test/ts-resolve.mjs` does that one job and nothing else.
 
+**A test cannot import either action subclass.** `DialCountdown` and `KeyCountdown` carry an `@action` decorator, and Node's type stripping does exactly what it says — it erases types and leaves decorators standing, so importing `src/actions/dial-countdown.ts` from a test is a `SyntaxError` rather than a test. `test/actions.test.ts` therefore drives `CountdownAction`, the abstract base, through a minimal subclass it declares itself. That reaches everything the two share — the instance map, teardown, the debounced save, suspend and revive, the alert — and reaches none of their own event handlers, which is a real gap and is why `npm run demo` matters. The SDK itself imports fine: `streamDeck.connect()` is a separate call the entry point makes, so nothing connects to anything just by importing it.
+
+**`src/sound.ts` finds its sounds relative to `process.cwd()`**, which is the `.sdPlugin` directory when Stream Deck launches the plugin — the same assumption the SDK makes for `manifest.json` and its log directory, not an extra one. The consequence is only felt in tests: `test/sound.test.ts` has to `chdir` there *before* the module is loaded, which is why it uses a dynamic import rather than a plain one that would be hoisted above the `chdir`.
+
 ## About Mate Wish Key
 
 This plugin comes out of **[Mate Wish Key](https://matewishkey.com/)** — a show built on one question:
