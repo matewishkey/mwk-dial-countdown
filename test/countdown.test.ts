@@ -8,7 +8,7 @@ import { normaliseSettings } from "../src/settings.ts";
 /** A clock the test drives by hand, so nothing here depends on how long an assertion took. */
 function fixture(presets = [300, 1200], presetIndex = 0): { countdown: Countdown; advance: (ms: number) => void } {
 	let now = 1_000_000;
-	const settings = normaliseSettings({ presets, presetIndex, soundEnabled: true });
+	const settings = normaliseSettings({ presets, presetIndex });
 	return {
 		countdown: new Countdown(settings, () => now),
 		advance: (ms: number) => {
@@ -253,7 +253,7 @@ describe("the lap counter", () => {
 	function repeating(repeatCount: number): { countdown: Countdown; advance: (ms: number) => void } {
 		let now = 1_000_000;
 		const countdown = new Countdown(
-			normaliseSettings({ presets: [2], presetIndex: 0, repeat: true, repeatCount, soundEnabled: false }),
+			normaliseSettings({ presets: [2], presetIndex: 0, repeat: true, repeatCount, soundId: "none" }),
 			() => now
 		);
 		return { countdown, advance: (ms: number) => void (now += ms) };
@@ -273,7 +273,7 @@ describe("the lap counter", () => {
 		// repeat of a count of three still passed the test and the timer ran a fourth time.
 		let now = 1_000_000;
 		const countdown = new Countdown(
-			normaliseSettings({ presets: [2], presetIndex: 0, repeat: true, repeatCount: 3, soundEnabled: true }),
+			normaliseSettings({ presets: [2], presetIndex: 0, repeat: true, repeatCount: 3 }),
 			() => now
 		);
 
@@ -433,7 +433,7 @@ describe("elapsing", () => {
 	it("starts the next lap without a gap, and stops once the limit is reached", () => {
 		let now = 1_000_000;
 		const countdown = new Countdown(
-			normaliseSettings({ presets: [2], presetIndex: 0, repeat: true, repeatCount: 2, soundEnabled: false }),
+			normaliseSettings({ presets: [2], presetIndex: 0, repeat: true, repeatCount: 2, soundId: "none" }),
 			() => now
 		);
 
@@ -451,13 +451,19 @@ describe("elapsing", () => {
 		assert.equal(countdown.finished, true);
 	});
 
-	it("does not ask for an alert that is switched off", () => {
+	it("reports an elapse once, and does not decide what it sounds like", () => {
+		// `settle()` used to answer "should this make a noise", which meant it had to know about the
+		// sound settings — and it knew about only half of them. It now answers the question it is
+		// actually in a position to answer: has the timer just run out. Which sound that produces, and
+		// whether a failure to play it is worth reporting, belongs to whoever can see the filesystem.
 		let now = 1_000_000;
-		const countdown = new Countdown(normaliseSettings({ presets: [2], soundEnabled: false }), () => now);
+		const countdown = new Countdown(normaliseSettings({ presets: [2], soundId: "none" }), () => now);
 
 		countdown.toggle();
 		now += 2_000;
-		assert.equal(countdown.settle(), false);
+
+		assert.equal(countdown.settle(), true, "the timer ran out, whatever the sound settings say");
+		assert.equal(countdown.settle(), false, "and it only ran out once");
 	});
 });
 

@@ -217,6 +217,25 @@ export class Countdown {
 		return durationChanged;
 	}
 
+	/**
+	 * Called when a countdown that was off screen comes back.
+	 *
+	 * One job: **a timer that ran out while nobody was looking has nothing left to announce.** The
+	 * alert exists to say that the moment has arrived, and by the time the control is on screen again
+	 * the moment has been and gone — sounding an alarm for it now would be reporting old news at full
+	 * volume, possibly hours late. The screen still says `done`, in the elapsed colour, because that
+	 * part is still true.
+	 *
+	 * The same reasoning stops an auto-repeating timer from picking up where it left off. Its laps
+	 * were not run, so it does not get to claim them, and quietly fast-forwarding a tally nobody
+	 * watched would be inventing history. It comes back finished, and starting it starts a fresh run.
+	 */
+	resume(): void {
+		if (this.timer.status === "elapsed") {
+			this.#alerted = true;
+		}
+	}
+
 	/** Runs whatever a press turned out to mean. */
 	apply(gesture: Gesture): void {
 		switch (gesture) {
@@ -339,8 +358,10 @@ export class Countdown {
 	 * gap between cycles is exactly what an interval timer must not have. It is bounded, though — an
 	 * unattended timer that never stops is a nuisance, not a feature.
 	 *
-	 * @returns `true` when the alert should sound. Playing it is the caller's job, which is what
-	 * keeps this file free of anything that touches the filesystem.
+	 * @returns `true` on the one turn of the loop where the timer *has just* run out — once per
+	 * elapse, never twice. Whether that makes a noise is the caller's business, and deliberately so:
+	 * it keeps this file free of anything that touches the filesystem, and it keeps the question of
+	 * which sound to play in one place rather than half here and half there.
 	 */
 	settle(): boolean {
 		if (this.timer.status !== "elapsed" || this.#alerted) {
@@ -348,7 +369,6 @@ export class Countdown {
 		}
 
 		this.#alerted = true;
-		const alert = this.#settings.soundEnabled;
 		this.#completed += 1;
 
 		// `repeatCount` is a total, so the comparison is against runs *completed*. Counting repeats
@@ -359,7 +379,7 @@ export class Countdown {
 			this.timer.start();
 		}
 
-		return alert;
+		return true;
 	}
 
 	#say(text: string): void {

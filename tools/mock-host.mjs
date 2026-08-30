@@ -772,7 +772,7 @@ async function runDemo() {
 			"alarm set to play 3 times, 2s timer → runs out",
 			async () => {
 				const before = alertCount;
-				applySettings({ presets: [2], presetIndex: 0, soundEnabled: true, soundRepeat: 3, showTitle: true });
+				applySettings({ presets: [2], presetIndex: 0, soundRepeat: 3, showTitle: true });
 				await wait(300);
 				gestures.touch(false);
 				await wait(2600);
@@ -789,7 +789,7 @@ async function runDemo() {
 		[
 			"repeat on, limit 2, 2s preset → first lap",
 			async () => {
-				applySettings({ presets: [2], presetIndex: 0, repeat: true, repeatCount: 2, soundEnabled: false });
+				applySettings({ presets: [2], presetIndex: 0, repeat: true, repeatCount: 2, soundId: "none" });
 				await wait(300);
 				gestures.touch(false);
 				await wait(2400);
@@ -892,7 +892,7 @@ async function runDemo() {
 		[
 			"key: one press → starts",
 			async () => {
-				applySettings({ presets: [600, 1200], presetIndex: 0, repeat: false, soundEnabled: false, showTitle: true });
+				applySettings({ presets: [600, 1200], presetIndex: 0, repeat: false, soundId: "none", showTitle: true });
 				await wait(400);
 				await keyPress(60);
 			}

@@ -47,6 +47,19 @@ const SETTINGS_DEBOUNCE_MS = 400;
 const RESEND_INTERVAL_MS = 2_000;
 const RESEND_EVERY_TICKS = Math.round(RESEND_INTERVAL_MS / RENDER_INTERVAL_MS);
 
+/**
+ * How long a countdown is held for a control that has left the screen.
+ *
+ * Not a limit on how long a timer may run — it is only what stops {@link CountdownAction.#suspended}
+ * growing without bound. An action *deleted* from a profile looks exactly like one flipped away from,
+ * and nothing tells the plugin which it was, so the only difference is that nobody ever comes back
+ * for the first. A day is the longest a countdown can be set to in the first place.
+ */
+const SUSPEND_TTL_MS = 24 * 60 * 60 * 1_000;
+
+/** A countdown waiting for its control to come back, and when it stopped being watched. */
+type Suspended = { countdown: Countdown; at: number };
+
 /** Everything that lives only for as long as the action is on screen. */
 export type Instance<A> = {
 	action: A;
@@ -72,6 +85,25 @@ export abstract class CountdownAction<
 	 * action class itself.
 	 */
 	readonly #instances = new Map<string, I>();
+
+	/**
+	 * Countdowns belonging to controls that are not on screen at the moment.
+	 *
+	 * **A timer used to be destroyed the moment you flipped to another page**, on the reasoning that a
+	 * countdown nobody can see has nothing to count for. That is true of a control that is *gone*; it
+	 * is not true of one you looked away from for eleven seconds to press something else — and
+	 * flipping pages is a thing Stream Deck users do constantly. Losing the count because of it is the
+	 * single worst thing a timer can do.
+	 *
+	 * The clock survives because it never needed the render loop in the first place: `Timer` works
+	 * from an absolute deadline rather than accumulating ticks, so a suspended countdown keeps
+	 * perfectly good time with nothing running. Only the drawing stops.
+	 *
+	 * **Held in memory, deliberately, and so lost when the plugin restarts.** Writing it to disk would
+	 * mean deciding what a timer that "finished" while Stream Deck was closed should do, and there is
+	 * no good answer to that. Page and profile switches are the case worth solving.
+	 */
+	readonly #suspended = new Map<string, Suspended>();
 
 	/** Which control this action runs on, as the manifest declares it. */
 	protected abstract readonly controller: "Encoder" | "Keypad";
@@ -122,7 +154,7 @@ export abstract class CountdownAction<
 
 		const instance = {
 			action: ev.action,
-			countdown: new Countdown(settings),
+			countdown: this.#revive(ev.action.id, settings),
 			// Filled in below: the resolver has to be able to call back into the instance holding it.
 			taps: undefined,
 			renderHandle: null,
@@ -147,9 +179,10 @@ export abstract class CountdownAction<
 	}
 
 	/**
-	 * Fires when the user flips to another page or profile. The render loop is torn down, but the
-	 * timer itself is deliberately dropped with it: a countdown the user cannot see, on a control that
-	 * no longer exists, has nothing to count for. Persisted presets survive; the running clock does not.
+	 * Fires when the user flips to another page or profile.
+	 *
+	 * The render loop is torn down; the countdown is not. It is set aside in {@link #suspended} and
+	 * handed back if the control returns — see there for why, and for what is deliberately not kept.
 	 */
 	override onWillDisappear(ev: WillDisappearEvent<DialCountdownSettings>): void {
 		const instance = this.#instances.get(ev.action.id);
@@ -173,6 +206,7 @@ export abstract class CountdownAction<
 	#teardown(instance: I): void {
 		this.detach(instance);
 		instance.taps.cancel();
+		this.#suspend(instance);
 
 		if (instance.renderHandle !== null) {
 			clearInterval(instance.renderHandle);
@@ -308,6 +342,40 @@ export abstract class CountdownAction<
 			instance.saveHandle = null;
 			this.#save(instance);
 		}, SETTINGS_DEBOUNCE_MS);
+	}
+
+	/**
+	 * The countdown this control should come back to: the one it left with, or a new one.
+	 *
+	 * Settings may have been edited in the property inspector while the control was away, so a revived
+	 * countdown is given them — through {@link Countdown.applySettings}, which reloads the clock only
+	 * when the *selected duration* changed. That is the whole point of going through it: a timer
+	 * running on a preset nobody touched keeps running, while one whose preset was rewritten while it
+	 * was off screen comes back on the new length rather than silently counting the old one.
+	 */
+	#revive(id: string, settings: DialCountdownSettings): Countdown {
+		const suspended = this.#suspended.get(id);
+		this.#suspended.delete(id);
+
+		if (suspended === undefined) {
+			return new Countdown(settings);
+		}
+
+		suspended.countdown.applySettings(settings);
+		suspended.countdown.resume();
+		return suspended.countdown;
+	}
+
+	/** Sets a countdown aside for a control that has left the screen, and forgets the long-gone. */
+	#suspend(instance: I): void {
+		const now = Date.now();
+		for (const [id, held] of this.#suspended) {
+			if (now - held.at > SUSPEND_TTL_MS) {
+				this.#suspended.delete(id);
+			}
+		}
+
+		this.#suspended.set(instance.action.id, { countdown: instance.countdown, at: now });
 	}
 
 	/** The write itself, so the debounce and the teardown flush cannot come to disagree about it. */

@@ -22,6 +22,9 @@ jobs:
   check:
     runs-on: ubuntu-latest
 
+    # A hung test would otherwise sit here burning the runner until GitHub's own six-hour ceiling.
+    timeout-minutes: 15
+
     steps:
       - uses: actions/checkout@v4
 

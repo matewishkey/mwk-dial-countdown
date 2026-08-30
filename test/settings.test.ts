@@ -3,7 +3,9 @@ import { describe, it } from "node:test";
 
 import {
 	DEFAULT_PRESETS,
+	DEFAULT_SOUND,
 	DEFAULTS,
+	NO_SOUND,
 	MAX_PRESET_SECONDS,
 	MAX_REPEAT_COUNT,
 	MAX_SOUND_REPEAT,
@@ -69,7 +71,7 @@ describe("normaliseSettings", () => {
 	});
 
 	it("defaults to playing a sound, since a silent timer is not much of an alarm", () => {
-		assert.equal(DEFAULTS.soundEnabled, true);
+		assert.equal(DEFAULTS.soundId, DEFAULT_SOUND);
 		assert.equal(DEFAULTS.soundId, "default");
 	});
 
@@ -111,5 +113,32 @@ describe("repeat count", () => {
 
 	it("keeps a sensible value untouched", () => {
 		assert.equal(normaliseSettings({ repeatCount: 5 }).repeatCount, 5);
+	});
+});
+
+describe("settings written by an older build", () => {
+	it("turns a switched-off sound into the No sound option", () => {
+		// `soundEnabled` was removed in favour of the picker's own *No sound* entry. Settings outlive
+		// the build that wrote them, so without this an install upgrading with the sound deliberately
+		// switched off would come back making a noise — nothing else in the stored settings says the
+		// user wanted silence once the flag is gone.
+		const settings = normaliseSettings({ soundEnabled: false, soundId: "default" });
+
+		assert.equal(settings.soundId, NO_SOUND);
+	});
+
+	it("leaves a switched-on sound exactly as it was", () => {
+		// The positive control. If the migration read the flag the wrong way round, or fired
+		// unconditionally, the test above would pass just the same.
+		const chosen = "/System/Library/Sounds/Glass.aiff";
+
+		assert.equal(normaliseSettings({ soundEnabled: true, soundId: chosen }).soundId, chosen);
+		assert.equal(normaliseSettings({ soundId: chosen }).soundId, chosen, "no flag at all is not a flag set to false");
+	});
+
+	it("does not resurrect the flag itself", () => {
+		// It is gone from the type; it must be gone from what is written back, or every save carries a
+		// setting nothing reads and the next reader has to wonder whether it means anything.
+		assert.ok(!("soundEnabled" in normaliseSettings({ soundEnabled: false })));
 	});
 });

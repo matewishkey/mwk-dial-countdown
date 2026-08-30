@@ -28,7 +28,15 @@ export type DialCountdownSettings = {
 	 * times: the third repeat was still under the limit.
 	 */
 	repeatCount: number;
-	soundEnabled: boolean;
+	/**
+	 * Which sound plays when the timer finishes, or {@link NO_SOUND} for none.
+	 *
+	 * There is no separate on/off switch. There was, and it was one switch too many: *Play a sound
+	 * when done* and a *No sound* entry in the picker are two ways to say the same thing, and the
+	 * combination they disagreed about — enabled, but set to no sound — is what raised Stream Deck's
+	 * error triangle on every finish of a timer that was doing exactly as it was told. One control,
+	 * one answer. See {@link normaliseSettings} for what becomes of the old flag.
+	 */
 	soundId: string;
 	customSoundPath: string;
 	volume: number;
@@ -63,7 +71,6 @@ export const DEFAULTS: DialCountdownSettings = {
 	warnSeconds: 60,
 	repeat: false,
 	repeatCount: 3,
-	soundEnabled: true,
 	soundId: DEFAULT_SOUND,
 	customSoundPath: "",
 	volume: 100,
@@ -88,8 +95,7 @@ export function normaliseSettings(raw: unknown): DialCountdownSettings {
 		warnSeconds: int(input.warnSeconds, DEFAULTS.warnSeconds, 1, MAX_PRESET_SECONDS),
 		repeat: bool(input.repeat, DEFAULTS.repeat),
 		repeatCount: int(input.repeatCount, DEFAULTS.repeatCount, 1, MAX_REPEAT_COUNT),
-		soundEnabled: bool(input.soundEnabled, DEFAULTS.soundEnabled),
-		soundId: typeof input.soundId === "string" && input.soundId.length > 0 ? input.soundId : DEFAULTS.soundId,
+		soundId: soundIdFrom(input),
 		customSoundPath: typeof input.customSoundPath === "string" ? input.customSoundPath : "",
 		volume: int(input.volume, DEFAULTS.volume, 0, 100),
 		soundRepeat: int(input.soundRepeat, DEFAULTS.soundRepeat, 1, MAX_SOUND_REPEAT)
@@ -118,6 +124,22 @@ export function normalisePresets(raw: unknown): Preset[] {
 		.map((value) => clamp(Math.round(value), MIN_PRESET_SECONDS, MAX_PRESET_SECONDS));
 
 	return seconds.length > 0 ? seconds : [...DEFAULT_PRESETS];
+}
+
+/**
+ * The chosen sound, honouring a switch that no longer exists.
+ *
+ * Builds before this one carried a separate `soundEnabled` flag. Settings outlive the build that
+ * wrote them, so an install upgrading with the sound switched off would otherwise come back with it
+ * switched on — the flag is gone, and nothing else in the stored settings says the user wanted
+ * silence. `soundEnabled: false` therefore becomes `soundId: "none"`, which is the same instruction
+ * in the vocabulary that survives.
+ */
+function soundIdFrom(input: Record<string, unknown>): string {
+	if (input.soundEnabled === false) {
+		return NO_SOUND;
+	}
+	return typeof input.soundId === "string" && input.soundId.length > 0 ? input.soundId : DEFAULTS.soundId;
 }
 
 function bool(value: unknown, fallback: boolean): boolean {

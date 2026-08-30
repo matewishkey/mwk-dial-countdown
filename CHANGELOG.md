@@ -9,13 +9,31 @@ this project that generally means they do not change the packaged plugin at all.
 
 ## [Unreleased]
 
+### Changed
+
+- **A countdown now survives switching page or profile.** It used to be destroyed the moment the
+  control left the screen, so flipping to another page for a few seconds lost the count — which for a
+  timer is the worst thing that can happen. Running timers come back running, having kept counting
+  while they were away; paused ones come back paused with the time they had.
+
+  Two limits, both deliberate. It is held in memory, so **restarting Stream Deck or the plugin still
+  starts you afresh** — the alternative means deciding what a timer that "finished" while the
+  application was closed should do, and there is no good answer. And a timer that **ran out while you
+  were away comes back silent**: the alarm says *the moment has arrived*, and by then it has been and
+  gone. The screen still shows it finished.
+
+- **The *Play a sound when done* checkbox is gone.** Choosing **No sound** in the picker is now the
+  only way to turn the alert off, because it always was one of two ways to say the same thing — and
+  the state where the two disagreed is exactly the bug listed below. If you had the sound switched
+  off, it stays off; the setting is carried over for you.
+
 ### Fixed
 
-- **A timer set to *No sound* flashed an error on every finish.** Ticking *Play a sound when done*
-  and then choosing *No sound* left the plugin treating its own silence as a failure to play, so
-  every completed countdown raised Stream Deck's alert triangle — on a timer that had done exactly
-  what it was told. Silence you asked for is no longer reported as something going wrong. A sound
-  that was genuinely wanted and could not be played still is.
+- **A timer set to *No sound* flashed an error on every finish.** With the alert switched on and the
+  sound set to *No sound*, the plugin treated its own silence as a failure to play, so every
+  completed countdown raised Stream Deck's alert triangle — on a timer that had done exactly what it
+  was told. Silence you asked for is no longer reported as something going wrong. A sound that was
+  genuinely wanted and could not be played still is.
 
 - **A preset chosen just before switching page was forgotten.** Holding to load the next preset
   schedules the write a fraction of a second later, so that winding the dial does not write to disk

@@ -163,7 +163,6 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 				warnSeconds: 125,
 				repeat: true,
 				repeatCount: MAX_REPEAT_COUNT,
-				soundEnabled: false,
 				soundId: "custom",
 				customSoundPath: "/tmp/ding.wav",
 				volume: 0,
@@ -366,22 +365,18 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 		/** Whether a control can be operated at all. */
 		const disabled = (id: string): Promise<unknown> => ui.evaluate(`document.getElementById("${id}").disabled`);
 
-		it("greys out the sound controls when the sound is switched off", async () => {
-			await ui.load({ ...DEFAULTS, soundEnabled: false });
+		it("offers no separate switch for the sound", async () => {
+			// Picking *No sound* is how the sound is turned off. A checkbox as well was one control too
+			// many, and the state the two disagreed about — enabled, but set to no sound — is what put
+			// an error triangle on every finish of a timer doing exactly as it was told.
+			await ui.load({ ...DEFAULTS });
 
-			for (const id of ["soundId", "soundRepeat", "browse", "preview", "volume"]) {
-				assert.equal(await disabled(id), true, `${id} is still operable with the sound switched off`);
-			}
-
-			// Including the Test button, which would otherwise audition a sound the timer itself would
-			// never play.
-			await change("soundEnabled", true);
-			for (const id of ["soundId", "soundRepeat", "browse", "preview", "volume"]) {
-				assert.equal(await disabled(id), false, `${id} did not come back when the sound was switched on`);
-			}
+			assert.equal(await ui.evaluate('document.getElementById("soundEnabled") === null'), true);
+			assert.equal(await disabled("soundId"), false, "the picker is the switch, so it is always live");
+			assert.equal(await disabled("preview"), false);
 		});
 
-		it("greys out the fade threshold and the repeat count with theirs", async () => {
+		it("greys out the fade threshold and the repeat count", async () => {
 			await ui.load({ ...DEFAULTS, warnEnabled: false, repeat: false });
 
 			assert.equal(await disabled("warnMin"), true);
@@ -396,11 +391,11 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 		it("dims the row rather than hiding it, so nothing below moves", async () => {
 			// A panel that hid disabled rows would rearrange itself as you ticked boxes, and you could
 			// no longer see what a setting was set to without switching it on.
-			await ui.load({ ...DEFAULTS, soundEnabled: false });
+			await ui.load({ ...DEFAULTS, warnEnabled: false });
 
-			assert.equal(await ui.evaluate('getComputedStyle(document.getElementById("volume")).display !== "none"'), true);
+			assert.equal(await ui.evaluate('getComputedStyle(document.getElementById("warnMin")).display !== "none"'), true);
 			assert.equal(
-				await ui.evaluate('document.getElementById("volume").closest(".row").classList.contains("disabled")'),
+				await ui.evaluate('document.getElementById("warnMin").closest(".row").classList.contains("disabled")'),
 				true
 			);
 		});

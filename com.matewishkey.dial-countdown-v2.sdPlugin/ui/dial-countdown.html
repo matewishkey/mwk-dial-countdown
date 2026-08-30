@@ -323,10 +323,6 @@
 
 		<h2>Sound</h2>
 		<div class="row">
-			<label for="soundEnabled">Play a sound when done</label>
-			<input type="checkbox" id="soundEnabled" />
-		</div>
-		<div class="row">
 			<label for="soundId">Sound</label>
 			<select id="soundId"></select>
 		</div>
@@ -368,7 +364,6 @@
 				warnSeconds: 60,
 				repeat: false,
 				repeatCount: 3,
-				soundEnabled: true,
 				soundId: "default",
 				customSoundPath: "",
 				volume: 100,
@@ -539,7 +534,6 @@
 				el("warnTotal").textContent = `left · ${label(state.warnSeconds)}`;
 				el("repeat").checked = state.repeat;
 				el("repeatCount").value = String(state.repeatCount);
-				el("soundEnabled").checked = state.soundEnabled;
 				el("soundRepeat").value = String(state.soundRepeat);
 				el("volume").value = String(state.volume);
 				el("soundId").value = state.soundId;
@@ -550,13 +544,14 @@
 			 * Greys out the settings that belong to a switch that is off.
 			 *
 			 * Dimmed and disabled rather than hidden: hiding a row moves everything below it, so a panel
-			 * that hid them would rearrange itself as you ticked boxes. The controls are still legible —
-			 * you can see what a sound *would* be — they just cannot be operated, and the Test button no
-			 * longer plays a sound the timer itself would not.
+			 * that hid them would rearrange itself as you ticked boxes. The controls stay legible — you can
+			 * still read what a threshold is set to — they just cannot be operated.
+			 *
+			 * The sound has no switch of its own: picking *No sound* is how you turn it off, which is one
+			 * control rather than two that could disagree.
 			 */
 			function renderEnabled() {
 				for (const [on, ids] of [
-					[state.soundEnabled, ["soundId", "soundRepeat", "browse", "preview", "volume"]],
 					[state.warnEnabled, ["warnMin", "warnSec"]],
 					[state.repeat, ["repeatCount"]]
 				]) {
@@ -578,7 +573,6 @@
 				["warnEnabled", "warnEnabled", (i) => i.checked],
 				["repeat", "repeat", (i) => i.checked],
 				["repeatCount", "repeatCount", (i) => clamp(Math.round(Number(i.value) || 1), 1, 10)],
-				["soundEnabled", "soundEnabled", (i) => i.checked],
 				["soundRepeat", "soundRepeat", (i) => clamp(Math.round(Number(i.value) || 1), 1, 10)],
 				["volume", "volume", (i) => clamp(Number(i.value) || 0, 0, 100)]
 			]) {

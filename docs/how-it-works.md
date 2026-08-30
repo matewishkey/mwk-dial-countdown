@@ -90,6 +90,20 @@ This is worth stating carefully, because the obvious explanation is not proven. 
 
 With no room for a glyph behind the digits, the line under the clock carries the state instead: the gesture you just made, then `paused` if it is paused, then the preset's length.
 
+## Flipping to another page does not lose the timer
+
+It used to. The reasoning was that a countdown nobody can see has nothing to count for — true of a control that is *gone*, and not true at all of one you looked away from for eleven seconds to press something on another page. Flipping pages is a thing Stream Deck users do constantly, and losing the count because of it is the single worst thing a timer can do.
+
+Nothing clever is needed to fix it, because the clock never depended on being watched: `Timer` works from an **absolute deadline** rather than accumulating ticks, so a countdown keeps perfectly good time with nothing running at all. Only the drawing stops. The countdown is set aside when the control leaves the screen and handed back when it returns, still counting, and a **paused** one comes back paused with exactly the time it had.
+
+Two things it deliberately does not do.
+
+**It is held in memory, so it does not survive the plugin restarting.** Writing it to disk would mean deciding what a timer that "finished" while Stream Deck was closed ought to do, and there is no good answer — page and profile switches are the case worth solving, and they are the case this solves.
+
+**A timer that ran out while you were away comes back silent.** The alert exists to say *the moment has arrived*; by the time you are looking at it again the moment has been and gone, and sounding an alarm for it then is old news at full volume, possibly hours of it. The screen still says `done`, in the elapsed colour, because that part is still true. For the same reason an auto-repeating timer does not pick up laps it never ran — quietly fast-forwarding a tally nobody watched would be inventing history.
+
+Settings edited in the property inspector while the control was away are picked up on the way back, by the same rule that applies at any other time: the clock reloads only if the **selected preset's length** changed. Nudge the volume while a timer is running on another page and it is still running when you return.
+
 ## Why the screen redraws when nothing has changed
 
 The render loop runs at 4 Hz and drops any frame identical to the last, which is what keeps an idle timer free. That optimisation quietly assumes every frame it *does* send arrives — and there is no way to ask a Stream Deck what it is currently showing.

@@ -29,6 +29,7 @@ import { describe, it } from "node:test";
 import type { DialAction, KeyAction } from "@elgato/streamdeck";
 
 import { CountdownAction, type Instance } from "../src/actions/countdown-action.ts";
+import type { Countdown } from "../src/countdown.ts";
 import type { Gesture } from "../src/gestures.ts";
 import { normaliseSettings, type DialCountdownSettings } from "../src/settings.ts";
 
@@ -105,11 +106,20 @@ class TestAction extends CountdownAction<Dial> {
 
 	/** Runs a resolved gesture against a live instance, as a subclass's event handler would. */
 	gesture(id: string, gesture: Gesture): void {
+		this.perform(this.#live(id), gesture);
+	}
+
+	/** The countdown a control is currently showing, so a test can ask it what it thinks. */
+	countdownFor(id: string): Countdown {
+		return this.#live(id).countdown;
+	}
+
+	#live(id: string): Instance<Dial> {
 		const instance = this.instanceFor(id);
 		if (instance === undefined) {
 			throw new Error(`no instance for ${id}`);
 		}
-		this.perform(instance, gesture);
+		return instance;
 	}
 }
 
@@ -118,6 +128,7 @@ type Driver = {
 	onWillAppear(ev: unknown): void;
 	onWillDisappear(ev: unknown): void;
 	gesture(id: string, gesture: Gesture): void;
+	countdownFor(id: string): Countdown;
 };
 
 function driver(): Driver {
@@ -215,6 +226,148 @@ describe("an action's lifecycle", () => {
 	});
 });
 
+describe("a control that leaves the screen and comes back", () => {
+	/** Appears a control, returns the recorder, and leaves teardown to the caller. */
+	function show(dial: Driver, id: string, settings: Record<string, unknown>) {
+		const { action, calls } = fakeDial(id);
+		dial.onWillAppear({ action, payload: { settings: normaliseSettings(settings) } });
+		return { action, calls };
+	}
+
+	it("keeps a running countdown running, and keeps counting while it is away", async () => {
+		// A timer used to be destroyed the moment you flipped to another page. Flipping pages is a
+		// thing Stream Deck users do constantly, and losing the count because of it is the single
+		// worst thing a timer can do.
+		const dial = driver();
+		const { action } = show(dial, "revive-1", { presets: [3600] });
+
+		dial.gesture("revive-1", "toggle");
+		dial.onWillDisappear({ action });
+
+		await wait(700);
+
+		dial.onWillAppear({ action, payload: { settings: normaliseSettings({ presets: [3600] }) } });
+		const back = dial.countdownFor("revive-1");
+		dial.onWillDisappear({ action });
+
+		assert.equal(back.timer.status, "running", "the countdown came back stopped");
+
+		// The clock works from an absolute deadline, not from ticks it was there to count, so the time
+		// spent off screen is time spent counting down.
+		const spent = 3_600_000 - back.timer.remainingMs;
+		assert.ok(spent >= 600, `only ${spent}ms was counted while the control was away`);
+	});
+
+	it("keeps a paused countdown paused, with the same time left", async () => {
+		const dial = driver();
+		const { action } = show(dial, "revive-2", { presets: [3600] });
+
+		dial.gesture("revive-2", "toggle");
+		await wait(300);
+		dial.gesture("revive-2", "toggle");
+
+		const paused = dial.countdownFor("revive-2").timer.remainingMs;
+		dial.onWillDisappear({ action });
+
+		await wait(600);
+
+		dial.onWillAppear({ action, payload: { settings: normaliseSettings({ presets: [3600] }) } });
+		const back = dial.countdownFor("revive-2");
+		dial.onWillDisappear({ action });
+
+		assert.equal(back.timer.status, "paused");
+		assert.equal(back.timer.remainingMs, paused, "a paused clock must not lose time while off screen");
+	});
+
+	it("gives a control it has never seen a fresh countdown", () => {
+		// The positive control for the three above: if revive handed *any* control the last countdown
+		// it stored, they would all pass while the feature was plainly broken.
+		const dial = driver();
+		const { action } = show(dial, "revive-3", { presets: [3600] });
+		dial.gesture("revive-3", "toggle");
+		dial.onWillDisappear({ action });
+
+		const { action: other } = show(dial, "revive-4", { presets: [3600] });
+		const fresh = dial.countdownFor("revive-4");
+		dial.onWillDisappear({ action: other });
+
+		assert.equal(fresh.timer.status, "idle", "a different control inherited someone else's clock");
+	});
+
+	it("takes settings edited while it was away, without restarting a clock that still fits", () => {
+		const dial = driver();
+		const { action } = show(dial, "revive-5", { presets: [3600], volume: 100 });
+
+		dial.gesture("revive-5", "toggle");
+		dial.onWillDisappear({ action });
+
+		// A change to something unrelated must not reload the clock — the same rule that stops the
+		// volume slider resetting a running timer.
+		dial.onWillAppear({ action, payload: { settings: normaliseSettings({ presets: [3600], volume: 40 }) } });
+		const back = dial.countdownFor("revive-5");
+		dial.onWillDisappear({ action });
+
+		assert.equal(back.timer.status, "running", "an unrelated edit stopped the clock");
+		assert.equal(back.settings.volume, 40, "the edit made while it was away was not picked up");
+	});
+
+	it("does not sound the alarm for a timer that ran out while nobody was looking", async () => {
+		// The alert says "the moment has arrived". By the time the control is back on screen the
+		// moment has been and gone, and sounding it now would be old news at full volume — possibly
+		// hours of it. The screen still says `done`, which is the part that is still true.
+		const dial = driver();
+		const { action, calls } = show(dial, "revive-7", { presets: [1], soundId: "/nowhere/nothing.wav", volume: 100 });
+
+		dial.gesture("revive-7", "toggle");
+		dial.onWillDisappear({ action });
+
+		// It runs out here, off screen and unwatched.
+		await wait(1_400);
+
+		dial.onWillAppear({ action, payload: { settings: normaliseSettings({ presets: [1] }) } });
+		const back = dial.countdownFor("revive-7");
+		await wait(500);
+		dial.onWillDisappear({ action });
+
+		assert.equal(back.timer.status, "elapsed", "it should still know it finished");
+		assert.equal(calls.showAlert, 0, "a timer that finished unwatched announced itself on return");
+	});
+
+	it("still sounds the alarm for one that runs out while you are watching", async () => {
+		// The positive control. The test above would pass just as well if coming back off a page
+		// switch had broken the alert altogether.
+		const dial = driver();
+		const { action, calls } = show(dial, "revive-8", { presets: [1], soundId: "/nowhere/nothing.wav", volume: 100 });
+
+		dial.onWillDisappear({ action });
+		dial.onWillAppear({
+			action,
+			payload: { settings: normaliseSettings({ presets: [1], soundId: "/nowhere/nothing.wav", volume: 100 }) }
+		});
+
+		dial.gesture("revive-8", "toggle");
+		await wait(1_500);
+		dial.onWillDisappear({ action });
+
+		assert.equal(calls.showAlert, 1, "a timer that ran out in plain sight must still report a failed alert");
+	});
+
+	it("reloads the clock when the preset itself was rewritten while it was away", () => {
+		const dial = driver();
+		const { action } = show(dial, "revive-6", { presets: [3600] });
+
+		dial.gesture("revive-6", "toggle");
+		dial.onWillDisappear({ action });
+
+		dial.onWillAppear({ action, payload: { settings: normaliseSettings({ presets: [60] }) } });
+		const back = dial.countdownFor("revive-6");
+		dial.onWillDisappear({ action });
+
+		assert.equal(back.timer.durationMs, 60_000, "the clock kept counting a length that no longer exists");
+		assert.equal(back.timer.status, "idle");
+	});
+});
+
 describe("the alert when a timer finishes", () => {
 	/**
 	 * Runs a one-second countdown to its end and reports whether the error triangle was raised.
@@ -227,7 +380,7 @@ describe("the alert when a timer finishes", () => {
 		const dial = driver();
 		const id = `alert-${Math.random()}`;
 		const { action, calls } = fakeDial(id);
-		const settings = normaliseSettings({ presets: [1], presetIndex: 0, soundEnabled: true, ...sound });
+		const settings = normaliseSettings({ presets: [1], presetIndex: 0, ...sound });
 
 		dial.onWillAppear({ action, payload: { settings } });
 		dial.gesture(id, "toggle");
