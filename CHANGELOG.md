@@ -9,6 +9,10 @@ this project that generally means they do not change the packaged plugin at all.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [3.1.0] — 2026-08-30
+
 ### Added
 
 - **Pick a preset in the property inspector**, by clicking the dot beside it. Holding the screen or
@@ -365,7 +369,8 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.0.1...HEAD
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.1.0...HEAD
+[3.1.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.1.0
 [3.0.1]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.0.1
 [3.0.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.0.0
 [2.0.1]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v2.0.1
