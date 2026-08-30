@@ -131,6 +131,14 @@ own tree. So a change confined to the second list is by definition not a release
 5. `node tools/check-version.mjs v<version>` — with the tag, which is the part `npm run check`
    cannot do for you, since it does not know which tag you are about to cut.
 6. `npm run build` then `npx streamdeck pack … --force`.
+
+   **`pack` rewrites `manifest.json` in place** — it re-emits the JSON with `Controllers` arrays
+   inlined and no trailing newline, which is not the formatting the repo keeps. `build` and
+   `validate` leave it alone; only `pack` does this. So **run `npx prettier --write
+   com.matewishkey.dial-countdown-v2.sdPlugin/manifest.json` after packing**, or the commit you tag
+   fails CI on formatting — which is exactly how v3.1.0 was cut with a red build. The rewrite is
+   whitespace only, so the packaged plugin is unaffected either way; it is the repo that ends up
+   inconsistent with itself.
 7. Move the changelog's *Unreleased* entries under the new version, with today's date.
 8. Commit, tag `v<version>`, push both.
 9. `gh release create v<version> com.matewishkey.dial-countdown-v2.streamDeckPlugin` with notes written
