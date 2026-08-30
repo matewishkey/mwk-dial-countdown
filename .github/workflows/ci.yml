@@ -1,0 +1,61 @@
+# Everything docs/releasing.md lists as a manual step before cutting a release, run on every push.
+#
+# The version check is the reason this exists at all: the manifest sat at 0.1.0.0 through nine
+# releases, so the Stream Deck application reported the same version whichever build was installed.
+# tools/check-version.mjs has caught that since — but only when somebody remembered to run it.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The manifest pins the runtime the plugin actually runs on. Building against anything else
+      # would be testing a plugin nobody installs.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Formatting
+        run: npm run format:check
+
+      # The property-inspector suite needs a browser and skips itself without one, so the run stays
+      # green either way — but skipped is not tested, and this is where it is cheapest to have one.
+      - name: Install Chromium for the property-inspector tests
+        run: npx --yes playwright@1.62.1 install --with-deps chromium
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Validate the plugin
+        run: npx streamdeck validate com.matewishkey.dial-countdown-v2.sdPlugin
+
+      - name: Versions agree
+        run: npm run version:check
