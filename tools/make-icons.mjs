@@ -279,7 +279,9 @@ writeSvg("actions/timer/icon.svg", bareMark(WHITE));
 writeSvg("actions/key/icon.svg", boxedMark(WHITE, 100, 46));
 
 // The circular canvas standing in for the dial in the application's layout view.
-writePng("actions/timer/encoder-icon.png", 72, (edge) => bareMark(WHITE).replace("<svg ", `<svg width="${edge}" height="${edge}" `));
+writePng("actions/timer/encoder-icon.png", 72, (edge) =>
+	bareMark(WHITE).replace("<svg ", `<svg width="${edge}" height="${edge}" `)
+);
 
 // ── The plugin's own icon, in Stream Deck's preferences and on the Marketplace listing ───────────
 
@@ -292,6 +294,8 @@ writePng("plugin/marketplace.png", 256, ringIcon);
 // The static key face, shown before the plugin draws its first frame and in the Stream Deck canvas.
 // A key is mostly mark, since at 72px the square is the tile's own edge and needs less emphasis.
 writePng("actions/key/key.png", 72, (edge) => boxedMark(RED, edge, edge * 0.52));
-writePng("actions/timer/key.png", 72, (edge) => bareMark(RED).replace("<svg ", `<svg width="${edge}" height="${edge}" `));
+writePng("actions/timer/key.png", 72, (edge) =>
+	bareMark(RED).replace("<svg ", `<svg width="${edge}" height="${edge}" `)
+);
 
 console.log(`Wrote:\n  ${written.join("\n  ")}`);

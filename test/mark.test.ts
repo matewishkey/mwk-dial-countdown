@@ -26,7 +26,14 @@ function markPaths(): string[] {
 }
 
 function ringWithLogo(): string {
-	return renderRing({ remainingFraction: 1, status: "idle", dimmed: false, flash: false, palette: themeFor("default"), logo: true });
+	return renderRing({
+		remainingFraction: 1,
+		status: "idle",
+		dimmed: false,
+		flash: false,
+		palette: themeFor("default"),
+		logo: true
+	});
 }
 
 describe("the mark drawn in the ring", () => {

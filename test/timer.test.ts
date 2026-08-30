@@ -146,7 +146,10 @@ describe("Timer", () => {
 describe("presets", () => {
 	it("ships 5, 20, 30 and 40 minutes", () => {
 		assert.deepEqual(DEFAULT_PRESETS, [300, 1200, 1800, 2400]);
-		assert.deepEqual(DEFAULT_PRESETS.map((seconds) => formatPresetLabel(seconds * 1000)), ["5m", "20m", "30m", "40m"]);
+		assert.deepEqual(
+			DEFAULT_PRESETS.map((seconds) => formatPresetLabel(seconds * 1000)),
+			["5m", "20m", "30m", "40m"]
+		);
 	});
 });
 

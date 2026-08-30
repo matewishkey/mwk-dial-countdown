@@ -244,7 +244,6 @@ function finishText(countdown: Countdown, remainingMs: number, status: string): 
 	return `ends ${formatClockTime(Date.now() + remainingMs)}`;
 }
 
-
 /**
  * A repeating timer counts its laps; a finished one says so — **and a finished repeating timer says
  * both.**

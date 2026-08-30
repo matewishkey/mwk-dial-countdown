@@ -178,10 +178,7 @@ const PULSE_OPACITY = 0.9;
  * Kept as bare path data so it can be recoloured and scaled to sit inside the ring, rather than
  * embedded as a fixed-colour image.
  */
-const MARK_PATHS = [
-	"M0 100 L23.09 0 L46.17 100 L69.26 0 L69.26 100",
-	"M69.26 100 L118.03 0"
-] as const;
+const MARK_PATHS = ["M0 100 L23.09 0 L46.17 100 L69.26 0 L69.26 100", "M69.26 100 L118.03 0"] as const;
 
 /** Native extent of {@link MARK_PATHS}, from the source artwork's viewBox. */
 const MARK_WIDTH = 118.03;

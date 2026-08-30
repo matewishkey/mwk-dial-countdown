@@ -104,7 +104,10 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 			await ui.load({ ...DEFAULTS, presets: [90, 600, 1800], presetIndex: 1 });
 
 			assert.equal(await ui.evaluate('document.querySelectorAll("#rows li").length'), 3);
-			assert.equal(await ui.evaluate('[...document.querySelectorAll("#rows li")].findIndex((r) => r.className === "active")'), 1);
+			assert.equal(
+				await ui.evaluate('[...document.querySelectorAll("#rows li")].findIndex((r) => r.className === "active")'),
+				1
+			);
 		});
 
 		it("splits a preset into hours, minutes and seconds", async () => {

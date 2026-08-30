@@ -73,7 +73,11 @@ describe("the gestures a countdown answers to", () => {
 
 		countdown.toggle();
 		assert.equal(countdown.timer.remainingMs, 2_000, "a finished timer goes back to full when started");
-		assert.equal(countdown.toast, "start", "so calling it a resume would describe a clock carrying on, which it is not");
+		assert.equal(
+			countdown.toast,
+			"start",
+			"so calling it a resume would describe a clock carrying on, which it is not"
+		);
 	});
 
 	it("loads the next preset without starting it — choosing what to time is not beginning", () => {

@@ -196,29 +196,29 @@
 	<body>
 		<p class="hint encoder-only">
 			<strong>Tap the screen</strong> to pause or resume, <strong>tap it twice</strong> to reset it to full,
-			<strong>hold it</strong> for the next preset. If the clock is running, paused, finished or dialled off its
-			preset, that hold puts it right first; the next one moves on. Nothing here starts the clock but the tap.
+			<strong>hold it</strong> for the next preset. If the clock is running, paused, finished or dialled off its preset,
+			that hold puts it right first; the next one moves on. Nothing here starts the clock but the tap.
 		</p>
 		<p class="hint encoder-only">
-			<strong>Turn to adjust the clock</strong> — never the presets below, which only change here. Once the clock
-			is off its preset the label reads <em>from&nbsp;20m</em>, and <strong>holding the screen</strong> puts it back.
+			<strong>Turn to adjust the clock</strong> — never the presets below, which only change here. Once the clock is off
+			its preset the label reads <em>from&nbsp;20m</em>, and <strong>holding the screen</strong> puts it back.
 		</p>
 		<p class="hint encoder-only">
-			<strong>Turn for seconds, push the dial in and turn for minutes.</strong> That is the whole step
-			model — there is no mode to set and nothing left switched on when you let go. Anything longer than
-			a few minutes is a preset, typed above, and the dial is for nudging what a preset loaded.
+			<strong>Turn for seconds, push the dial in and turn for minutes.</strong> That is the whole step model — there is
+			no mode to set and nothing left switched on when you let go. Anything longer than a few minutes is a preset, typed
+			above, and the dial is for nudging what a preset loaded.
 		</p>
 		<p class="hint encoder-only">
-			<strong>Press the dial to start or pause.</strong> A press that did not turn the dial is the
-			start/stop control, so the job you do most often is under the hand already on the dial. A press
-			that <em>did</em> turn it was a minute-step adjustment, and letting go ends the turn, nothing more.
+			<strong>Press the dial to start or pause.</strong> A press that did not turn the dial is the start/stop control,
+			so the job you do most often is under the hand already on the dial. A press that <em>did</em> turn it was a
+			minute-step adjustment, and letting go ends the turn, nothing more.
 		</p>
 
 		<p class="hint key-only">
 			<strong>Press</strong> to pause or resume, <strong>press twice</strong> to reset it to full,
-			<strong>hold</strong> to put the clock right, or load the next preset when there is nothing to put
-			right. Neither starts it. Every gesture is acknowledged on the key
-			itself — the ring pulses and the line under the clock names what just happened.
+			<strong>hold</strong> to put the clock right, or load the next preset when there is nothing to put right. Neither
+			starts it. Every gesture is acknowledged on the key itself — the ring pulses and the line under the clock names
+			what just happened.
 		</p>
 
 		<h2>Presets</h2>
@@ -492,10 +492,7 @@
 			// often a couple of minutes, and one field alone could not express both without decimals.
 			for (const id of ["warnMin", "warnSec"]) {
 				el(id).addEventListener("change", () => {
-					state.warnSeconds = Math.max(
-						1,
-						(Number(el("warnMin").value) || 0) * 60 + (Number(el("warnSec").value) || 0)
-					);
+					state.warnSeconds = Math.max(1, (Number(el("warnMin").value) || 0) * 60 + (Number(el("warnSec").value) || 0));
 					save();
 					renderControls();
 				});

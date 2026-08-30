@@ -9,9 +9,7 @@
 			"Icon": "imgs/actions/timer/icon",
 			"Tooltip": "A countdown timer on a dial. Press the dial to start or pause; turn it to adjust by seconds, or push it in and turn to adjust by minutes. Tap the screen to pause or resume, tap twice to reset it to full, hold for the next preset.",
 			"PropertyInspectorPath": "ui/dial-countdown.html",
-			"Controllers": [
-				"Encoder"
-			],
+			"Controllers": ["Encoder"],
 			"Encoder": {
 				"Icon": "imgs/actions/timer/encoder-icon",
 				"layout": "layouts/ring.json",
@@ -36,9 +34,7 @@
 			"Icon": "imgs/actions/key/icon",
 			"Tooltip": "The same countdown timer on an ordinary key. Press to pause or resume, press twice to reset it to full, hold to load the next preset.",
 			"PropertyInspectorPath": "ui/dial-countdown.html",
-			"Controllers": [
-				"Keypad"
-			],
+			"Controllers": ["Keypad"],
 			"States": [
 				{
 					"Image": "imgs/actions/key/key",

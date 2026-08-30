@@ -70,7 +70,21 @@ const INFO = {
 };
 
 /** Latest touchscreen state, as reported by the plugin's setFeedback calls. */
-const screen = { title: "—", value: "—", label: "", finish: "", indicator: 0, ring: 0, colour: "", barFill: "", font: 0, opacity: 1, glyph: "", layout: "(default)", flash: false };
+const screen = {
+	title: "—",
+	value: "—",
+	label: "",
+	finish: "",
+	indicator: 0,
+	ring: 0,
+	colour: "",
+	barFill: "",
+	font: 0,
+	opacity: 1,
+	glyph: "",
+	layout: "(default)",
+	flash: false
+};
 
 /** How many times the plugin has raised Stream Deck's own "that failed" alert. */
 let alertCount = 0;
@@ -98,7 +112,17 @@ wss.on("connection", (ws) => {
 
 const plugin = spawn(
 	process.execPath,
-	[PLUGIN_ENTRY, "-port", String(PORT), "-pluginUUID", PLUGIN_UUID, "-registerEvent", "register", "-info", JSON.stringify(INFO)],
+	[
+		PLUGIN_ENTRY,
+		"-port",
+		String(PORT),
+		"-pluginUUID",
+		PLUGIN_UUID,
+		"-registerEvent",
+		"register",
+		"-info",
+		JSON.stringify(INFO)
+	],
 	// The SDK resolves manifest.json and its log directory from process.cwd(), so the plugin must be
 	// launched from inside the .sdPlugin folder — exactly as the Stream Deck application does.
 	{ stdio: ["ignore", "pipe", "pipe"], cwd: PLUGIN_DIR }
@@ -293,9 +317,7 @@ const PULSE = /<circle[^>]*opacity="0\.9"/;
  * inspect — so the two text runs in the SVG are the clock and the line underneath it, in that order.
  */
 function readKey(image) {
-	const svg = image.startsWith("data:")
-		? Buffer.from(image.split(",")[1] ?? "", "base64").toString("utf8")
-		: image;
+	const svg = image.startsWith("data:") ? Buffer.from(image.split(",")[1] ?? "", "base64").toString("utf8") : image;
 
 	const texts = [...svg.matchAll(/<text[^>]*fill="([^"]+)"[^>]*>([^<]*)<\/text>/g)];
 	key.value = texts[0]?.[2] ?? key.value;
@@ -438,10 +460,13 @@ const wait = (ms) => new Promise((done) => setTimeout(done, ms));
 async function runDemo() {
 	const steps = [
 		["fresh install → defaults, and they get written back", async () => {}],
-		["hold the screen → 20m; preset cycling lives on the touchscreen now", async () => {
-			gestures.touch(true);
-			await wait(400);
-		}],
+		[
+			"hold the screen → 20m; preset cycling lives on the touchscreen now",
+			async () => {
+				gestures.touch(true);
+				await wait(400);
+			}
+		],
 
 		// The step is your FINGER. A free turn is a second a click; a turn made with the dial pushed
 		// in is a minute a click. Nothing is held between turns, so there is no mode to leave on.
@@ -456,7 +481,9 @@ async function runDemo() {
 				// a three-tick event says "+3s" at the very same one-second step.
 				await spin(1, 1, 200);
 				console.log(`\n   after 87 clicks at three different speeds, the step is ${size(screen.finish)}`);
-				console.log(`   ${size(screen.finish) === "1s" ? "\u2713 unchanged — a free turn is always seconds" : `\u2717 it drifted to ${screen.finish}`}`);
+				console.log(
+					`   ${size(screen.finish) === "1s" ? "\u2713 unchanged — a free turn is always seconds" : `\u2717 it drifted to ${screen.finish}`}`
+				);
 			}
 		],
 
@@ -467,7 +494,9 @@ async function runDemo() {
 				gestures.rotate(1, true);
 				await wait(300);
 				console.log(`\n   one pushed click reported ${screen.finish}`);
-				console.log(`   ${screen.finish === "+1m" ? "\u2713 pushed in, and a click is a minute" : "\u2717 the push was not read"}`);
+				console.log(
+					`   ${screen.finish === "+1m" ? "\u2713 pushed in, and a click is a minute" : "\u2717 the push was not read"}`
+				);
 			}
 		],
 
@@ -479,7 +508,9 @@ async function runDemo() {
 				await wait(1200);
 				await spin(1, 1, 200);
 				console.log(`\n   the very next free click reported ${screen.finish}`);
-				console.log(`   ${screen.finish === "+1s" ? "\u2713 no mode left behind" : "\u2717 a minute step stuck around"}`);
+				console.log(
+					`   ${screen.finish === "+1s" ? "\u2713 no mode left behind" : "\u2717 a minute step stuck around"}`
+				);
 			}
 		],
 
@@ -495,7 +526,9 @@ async function runDemo() {
 				const said = screen.finish;
 				await wait(1200);
 				console.log(`\n   was ${before}, press said "${said}", 1.2s later ${screen.value}`);
-				console.log(`   ${said === "start" && screen.value !== before ? "\u2713 the dial starts it" : "\u2717 the press did not start the clock"}`);
+				console.log(
+					`   ${said === "start" && screen.value !== before ? "\u2713 the dial starts it" : "\u2717 the press did not start the clock"}`
+				);
 			}
 		],
 		[
@@ -507,7 +540,9 @@ async function runDemo() {
 				const held = screen.value;
 				await wait(1500);
 				console.log(`\n   press said "${said}", glyph is "${screen.glyph}", clock ${held} then ${screen.value}`);
-				console.log(`   ${said === "pause" && screen.glyph === "pause" && held === screen.value ? "\u2713 paused, stated, and frozen" : "\u2717 not paused as intended"}`);
+				console.log(
+					`   ${said === "pause" && screen.glyph === "pause" && held === screen.value ? "\u2713 paused, stated, and frozen" : "\u2717 not paused as intended"}`
+				);
 			}
 		],
 		[
@@ -522,7 +557,9 @@ async function runDemo() {
 				gestures.dialUp();
 				await wait(500);
 				console.log(`\n   was ${before}, after push-turn-release ${screen.value}, said "${screen.finish}"`);
-				console.log(`   ${screen.finish === "+2m" ? "\u2713 read as a turn, not as a press" : "\u2717 the release was also taken as a press"}`);
+				console.log(
+					`   ${screen.finish === "+2m" ? "\u2713 read as a turn, not as a press" : "\u2717 the release was also taken as a press"}`
+				);
 			}
 		],
 		// There is no long press on the dial any more. A push is a push however long you lean on it,
@@ -588,14 +625,20 @@ async function runDemo() {
 		],
 
 		// The long clock has to fit its box.
-		["set 1:10:10 → font shrinks to fit", async () => {
-			applySettings({ presets: [4210], presetIndex: 0 });
-			await wait(300);
-		}],
-		["…running", async () => {
-			gestures.touch(false);
-			await wait(300);
-		}],
+		[
+			"set 1:10:10 → font shrinks to fit",
+			async () => {
+				applySettings({ presets: [4210], presetIndex: 0 });
+				await wait(300);
+			}
+		],
+		[
+			"…running",
+			async () => {
+				gestures.touch(false);
+				await wait(300);
+			}
+		],
 
 		// Pause is now stated by a glyph, not by colour alone. The bottom line names the gesture.
 		["one tap → paused, pause glyph in the ring, bottom line says so", async () => gestures.touch(false)],
@@ -615,7 +658,9 @@ async function runDemo() {
 				const sent = feedbackCount - before;
 
 				console.log(`\n   frames in 5s with nothing happening: ${sent}`);
-				console.log(`   ${sent >= 2 && sent <= 12 ? "\u2713 re-asserting, and not spamming" : "\u2717 " + (sent < 2 ? "silent — a dropped frame would stick" : "far too chatty")}`);
+				console.log(
+					`   ${sent >= 2 && sent <= 12 ? "\u2713 re-asserting, and not spamming" : "\u2717 " + (sent < 2 ? "silent — a dropped frame would stick" : "far too chatty")}`
+				);
 			}
 		],
 
@@ -630,7 +675,9 @@ async function runDemo() {
 				const during = screen.flash;
 				await wait(500);
 				const after = screen.flash;
-				console.log(`\n   pulse right after the tick: ${during ? "yes" : "no"}, half a second later: ${after ? "yes" : "no"}`);
+				console.log(
+					`\n   pulse right after the tick: ${during ? "yes" : "no"}, half a second later: ${after ? "yes" : "no"}`
+				);
 				console.log(`   ${during && !after ? "\u2713 pulses, then clears" : "\u2717 not pulsing as intended"}`);
 			}
 		],
@@ -672,12 +719,15 @@ async function runDemo() {
 		],
 
 		// The bug: adjusting the clock used to look like it triggered the warning.
-		["fade on at 5 min, on a 5 min preset — must NOT fade immediately", async () => {
-			applySettings({ presets: [300], presetIndex: 0, warnEnabled: true, warnSeconds: 300 });
-			await wait(300);
-			gestures.touch(false);
-			await wait(600);
-		}],
+		[
+			"fade on at 5 min, on a 5 min preset — must NOT fade immediately",
+			async () => {
+				applySettings({ presets: [300], presetIndex: 0, warnEnabled: true, warnSeconds: 300 });
+				await wait(300);
+				gestures.touch(false);
+				await wait(600);
+			}
+		],
 		[
 			"fade at 20s on a 20s preset, run into the window → shades, one colour",
 			async () => {
@@ -700,31 +750,51 @@ async function runDemo() {
 		],
 
 		// Title off, logo on, brand theme.
-		["title hidden, logo on, brand theme", async () => {
-			applySettings({ presets: [600], presetIndex: 0, warnEnabled: false, showTitle: false, showLogo: true, theme: "mwk" });
-			await wait(300);
-		}],
+		[
+			"title hidden, logo on, brand theme",
+			async () => {
+				applySettings({
+					presets: [600],
+					presetIndex: 0,
+					warnEnabled: false,
+					showTitle: false,
+					showLogo: true,
+					theme: "mwk"
+				});
+				await wait(300);
+			}
+		],
 
 		// Sound repeats. On Linux no player exists, so this proves it does not crash — and, since the
 		// sound genuinely cannot play here, that a failed alarm raises Stream Deck's own alert rather
 		// than finishing in a silence indistinguishable from not having finished at all.
-		["alarm set to play 3 times, 2s timer → runs out", async () => {
-			const before = alertCount;
-			applySettings({ presets: [2], presetIndex: 0, soundEnabled: true, soundRepeat: 3, showTitle: true });
-			await wait(300);
-			gestures.touch(false);
-			await wait(2600);
-			console.log(`\n   no audio player on this platform, so the alarm cannot sound: showAlert raised ${alertCount - before}x`);
-			console.log(`   ${alertCount > before ? "\u2713 a failed alert is reported, not swallowed" : "\u2717 silent failure"}`);
-		}],
+		[
+			"alarm set to play 3 times, 2s timer → runs out",
+			async () => {
+				const before = alertCount;
+				applySettings({ presets: [2], presetIndex: 0, soundEnabled: true, soundRepeat: 3, showTitle: true });
+				await wait(300);
+				gestures.touch(false);
+				await wait(2600);
+				console.log(
+					`\n   no audio player on this platform, so the alarm cannot sound: showAlert raised ${alertCount - before}x`
+				);
+				console.log(
+					`   ${alertCount > before ? "\u2713 a failed alert is reported, not swallowed" : "\u2717 silent failure"}`
+				);
+			}
+		],
 
 		// Auto-repeat, and the fact that it stops. A timer that loops for ever is a nuisance.
-		["repeat on, limit 2, 2s preset → first lap", async () => {
-			applySettings({ presets: [2], presetIndex: 0, repeat: true, repeatCount: 2, soundEnabled: false });
-			await wait(300);
-			gestures.touch(false);
-			await wait(2400);
-		}],
+		[
+			"repeat on, limit 2, 2s preset → first lap",
+			async () => {
+				applySettings({ presets: [2], presetIndex: 0, repeat: true, repeatCount: 2, soundEnabled: false });
+				await wait(300);
+				gestures.touch(false);
+				await wait(2400);
+			}
+		],
 		["…second lap", async () => wait(2200)],
 		// A count of two is two RUNS, not two repeats after a first run. It used to be the latter,
 		// which quietly ran every repeating timer one lap more than it was told to.
@@ -741,7 +811,9 @@ async function runDemo() {
 				console.log(
 					`   ${said.includes("\u00d72/2") && said.includes("done") ? "\u2713 and it says so — a finished job no longer looks like its own last lap" : "\u2717 nothing on screen distinguishes finished from still-running"}`
 				);
-				console.log(`   ${screen.glyph === "done" ? "\u2713 the ring shows the done glyph, not the brand mark" : `\u2717 the middle of the ring shows "${screen.glyph}"`}`);
+				console.log(
+					`   ${screen.glyph === "done" ? "\u2713 the ring shows the done glyph, not the brand mark" : `\u2717 the middle of the ring shows "${screen.glyph}"`}`
+				);
 			}
 		],
 
@@ -802,7 +874,9 @@ async function runDemo() {
 				await press(80);
 				await wait(800);
 
-				console.log(`\n   layout "${screen.layout}", bar idle ${idleFill} (glyph "${idleGlyph}") → running ${screen.barFill} (glyph "${screen.glyph}")`);
+				console.log(
+					`\n   layout "${screen.layout}", bar idle ${idleFill} (glyph "${idleGlyph}") → running ${screen.barFill} (glyph "${screen.glyph}")`
+				);
 				console.log(
 					`   ${idleFill === "#7C4DFF" && screen.barFill === "#00E5FF" ? "\u2713 the bar is coloured, and follows both the theme and the state" : "\u2717 the bar did not take the theme"}`
 				);
@@ -833,7 +907,9 @@ async function runDemo() {
 				// can be up to one 250 ms frame late. Sample past that, not on the nose.
 				await wait(1400);
 				console.log(`\n   caption right after: "${said}", once the toast expires: "${key.caption}"`);
-				console.log(`   ${said === "pause" && key.caption === "paused" ? "\u2713 gesture then state" : "\u2717 caption not settling"}`);
+				console.log(
+					`   ${said === "pause" && key.caption === "paused" ? "\u2713 gesture then state" : "\u2717 caption not settling"}`
+				);
 			}
 		],
 		[

@@ -111,7 +111,9 @@ export function normalisePresets(raw: unknown): Preset[] {
 	const items: unknown[] = raw;
 
 	const seconds = items
-		.map((preset) => (typeof preset === "object" && preset !== null ? (preset as { seconds?: unknown }).seconds : preset))
+		.map((preset) =>
+			typeof preset === "object" && preset !== null ? (preset as { seconds?: unknown }).seconds : preset
+		)
 		.filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0)
 		.map((value) => clamp(Math.round(value), MIN_PRESET_SECONDS, MAX_PRESET_SECONDS));
 

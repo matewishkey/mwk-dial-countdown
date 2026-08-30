@@ -223,8 +223,7 @@ export abstract class CountdownAction<
 	/** Auditions a sound, and answers whether a chosen file actually resolves. */
 	override onSendToPlugin(ev: { payload: unknown }): void {
 		const payload = ev.payload as
-			| { event?: string; soundId?: string; customSoundPath?: string; volume?: number; soundRepeat?: number }
-			| undefined;
+			{ event?: string; soundId?: string; customSoundPath?: string; volume?: number; soundRepeat?: number } | undefined;
 
 		if (payload?.event === "preview") {
 			// The preview plays the full repeat count, so what you hear is what the timer will do.

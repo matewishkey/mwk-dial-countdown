@@ -27,7 +27,13 @@ describe("normaliseSettings", () => {
 	});
 
 	it("upgrades the presets an older build wrote", () => {
-		const legacy = { presets: [{ label: "Focus", seconds: 1500 }, { label: "Break", seconds: 300 }], presetIndex: 1 };
+		const legacy = {
+			presets: [
+				{ label: "Focus", seconds: 1500 },
+				{ label: "Break", seconds: 300 }
+			],
+			presetIndex: 1
+		};
 		const settings = normaliseSettings(legacy);
 		assert.deepEqual(settings.presets, [1500, 300], "the durations are the part worth keeping");
 		assert.equal(settings.presetIndex, 1);

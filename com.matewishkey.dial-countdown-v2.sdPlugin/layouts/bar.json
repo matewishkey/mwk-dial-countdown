@@ -5,24 +5,14 @@
 		{
 			"key": "glyph",
 			"type": "pixmap",
-			"rect": [
-				12,
-				24,
-				52,
-				52
-			],
+			"rect": [12, 24, 52, 52],
 			"zOrder": 1,
 			"value": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABAQAAAAA3bvkkAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAACdFJOUwAAdpPNOAAAAAJiS0dEAAHdihOkAAAAB3RJTUUH6ggNCB0KqLvV4gAAAApJREFUCNdjYAAAAAIAAeIhvDMAAAAASUVORK5CYII="
 		},
 		{
 			"key": "value",
 			"type": "text",
-			"rect": [
-				70,
-				8,
-				122,
-				38
-			],
+			"rect": [70, 8, 122, 38],
 			"alignment": "center",
 			"color": "#FFFFFF",
 			"font": {
@@ -36,12 +26,7 @@
 		{
 			"key": "indicator",
 			"type": "bar",
-			"rect": [
-				70,
-				50,
-				122,
-				12
-			],
+			"rect": [70, 50, 122, 12],
 			"subtype": 4,
 			"border_w": 0,
 			"bar_bg_c": "#2E2E33",
@@ -52,12 +37,7 @@
 		{
 			"key": "label",
 			"type": "text",
-			"rect": [
-				70,
-				64,
-				122,
-				18
-			],
+			"rect": [70, 64, 122, 18],
 			"alignment": "center",
 			"color": "#9A9AA0",
 			"font": {
@@ -71,12 +51,7 @@
 		{
 			"key": "finish",
 			"type": "text",
-			"rect": [
-				70,
-				81,
-				122,
-				16
-			],
+			"rect": [70, 81, 122, 16],
 			"alignment": "center",
 			"color": "#6E6E76",
 			"font": {

@@ -5,24 +5,14 @@
 		{
 			"key": "ring",
 			"type": "pixmap",
-			"rect": [
-				6,
-				6,
-				88,
-				88
-			],
+			"rect": [6, 6, 88, 88],
 			"zOrder": 1,
 			"value": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABAQAAAAA3bvkkAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAACdFJOUwAAdpPNOAAAAAJiS0dEAAHdihOkAAAAB3RJTUUH6ggNCB0KqLvV4gAAAApJREFUCNdjYAAAAAIAAeIhvDMAAAAASUVORK5CYII="
 		},
 		{
 			"key": "value",
 			"type": "text",
-			"rect": [
-				100,
-				8,
-				96,
-				39
-			],
+			"rect": [100, 8, 96, 39],
 			"alignment": "center",
 			"color": "#FFFFFF",
 			"font": {
@@ -36,12 +26,7 @@
 		{
 			"key": "label",
 			"type": "text",
-			"rect": [
-				100,
-				48,
-				96,
-				19
-			],
+			"rect": [100, 48, 96, 19],
 			"alignment": "center",
 			"color": "#9A9AA0",
 			"font": {
@@ -55,12 +40,7 @@
 		{
 			"key": "finish",
 			"type": "text",
-			"rect": [
-				100,
-				68,
-				96,
-				19
-			],
+			"rect": [100, 68, 96, 19],
 			"alignment": "center",
 			"color": "#6E6E76",
 			"font": {

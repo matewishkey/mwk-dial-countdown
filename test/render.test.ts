@@ -158,7 +158,9 @@ describe("the gesture pulse", () => {
 	it("stays inside the box it is drawn in, at every size", () => {
 		for (const size of [88, KEY_SIZE]) {
 			const svg = renderRing({ ...base, remainingFraction: 0.5, flash: true, size });
-			const circle = svg.match(/<circle cx="[\d.]+" cy="[\d.]+" r="([\d.]+)"[^>]*stroke-width="([\d.]+)"[^>]*opacity="0\.9"/);
+			const circle = svg.match(
+				/<circle cx="[\d.]+" cy="[\d.]+" r="([\d.]+)"[^>]*stroke-width="([\d.]+)"[^>]*opacity="0\.9"/
+			);
 			assert.ok(circle !== null, `no pulse found at ${size}px`);
 
 			const outer = Number(circle[1]) + Number(circle[2]) / 2;
@@ -257,10 +259,7 @@ describe("the centre of the ring", () => {
 		// silently swapped for a pause glyph, so it appeared and vanished for reasons that looked
 		// random from the outside. An idle clock shows the mark; every other state shows itself.
 		for (const status of ["running", "paused", "elapsed"] as const) {
-			assert.ok(
-				!renderRing({ ...middle, status }).includes(MARK),
-				`the mark must not be drawn on a ${status} clock`
-			);
+			assert.ok(!renderRing({ ...middle, status }).includes(MARK), `the mark must not be drawn on a ${status} clock`);
 		}
 	});
 
