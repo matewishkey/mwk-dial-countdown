@@ -1,13 +1,13 @@
 {
 	"Name": "Dial Countdown",
-	"Version": "3.0.0.0",
+	"Version": "3.0.1.0",
 	"Author": "Mate Wish Key",
 	"Actions": [
 		{
 			"Name": "Countdown",
 			"UUID": "com.matewishkey.dial-countdown-v2.countdown",
 			"Icon": "imgs/actions/timer/icon",
-			"Tooltip": "A countdown timer on a dial. Tap the screen to pause or resume, tap twice to reset it to full, hold for the next preset. Turn the dial to adjust; press it to swap between one-second and one-minute steps, or hold it for one hour.",
+			"Tooltip": "A countdown timer on a dial. Press the dial to start or pause; turn it to adjust by seconds, or push it in and turn to adjust by minutes. Tap the screen to pause or resume, tap twice to reset it to full, hold for the next preset.",
 			"PropertyInspectorPath": "ui/dial-countdown.html",
 			"Controllers": [
 				"Encoder"

@@ -3,7 +3,7 @@
 [![MIT](https://img.shields.io/badge/licence-MIT-e2342b)](LICENSE)
 [![Stream Deck +](https://img.shields.io/badge/Stream%20Deck-%2B-101317)](https://www.elgato.com/stream-deck-plus)
 
-A countdown timer for the **Stream Deck +** dials, and for ordinary keys. Tap to pause or resume, tap twice to reset, hold for the next preset — and on a dial, turn to adjust.
+A countdown timer for **Stream Deck** dials, and for ordinary keys. Press the dial to start or pause, turn it to adjust by seconds, or push it in and turn to adjust by minutes. On the screen and on a key: tap to pause or resume, tap twice to reset, hold for the next preset.
 
 Two actions ship, sharing everything but the control they run on:
 
@@ -84,7 +84,7 @@ Stream Deck runs on macOS and Windows only, so the plugin cannot be *run* on Lin
 ```sh
 npm install
 npm run build      # bundle into com.matewishkey.dial-countdown-v2.sdPlugin/bin
-npm test           # 127 unit tests
+npm test           # 164 tests — 27 of them drive the property inspector in a browser
 npm run demo       # scripted gesture pass, prints one frame per step
 npm run mock       # the same harness, driven from the keyboard
 ```
@@ -129,8 +129,10 @@ The version lives in three places in three formats — `1.1.0`, `1.1.0.0`, `v1.1
 | `src/actions/dial-countdown.ts` | Dial events, and the touchscreen layout. |
 | `src/actions/key-countdown.ts` | Key events, and the key face. |
 | `src/plugin.ts` | Registers both actions and connects. |
+| `…sdPlugin/layouts/` | `ring.json` and `bar.json` — the two touchscreen layouts, both the plugin's own. |
 | `tools/mock-host.mjs` | A stand-in for the Stream Deck application. |
-| `tools/make-icons.mjs` | Draws every icon from `assets/mwk-mark.svg` — white for the app, red for the hardware. |
+| `test/inspector-harness.mjs` | Drives the property inspector in a real browser, so its inline JavaScript can be tested. |
+| `tools/make-icons.mjs` | Draws every icon from `assets/mwk-mark.svg` — white for the app, red for the hardware. The plugin's own icon is the countdown ring, drawn by `renderRing`. Rasterises with headless Chromium; see [docs/releasing.md](docs/releasing.md). |
 | `tools/check-version.mjs` | Holds `package.json`, `manifest.json` and the git tag to the same version. |
 | `assets/mwk-mark.svg` | The brand's own mark, as supplied. The one source the artwork is generated from. |
 

@@ -11,6 +11,18 @@ this project that generally means they do not change the packaged plugin at all.
 
 Nothing yet.
 
+## [3.0.1] — 2026-08-30
+
+### Fixed
+
+- **The dial action's tooltip still described the dial that 3.0.0 removed** — "press it to swap between
+  one-second and one-minute steps, or hold it for one hour". That text is what Stream Deck shows beside
+  the action in its list, so it was the one place a user could still be told to use gestures that no
+  longer exist. It now describes the dial as it is: press to start or pause, turn for seconds, push in
+  and turn for minutes.
+
+  Nothing else changed. 3.0.0 was tagged but not submitted to Marketplace, so this is the build to ship.
+
 ## [3.0.0] — 2026-08-30
 
 ### Changed
@@ -283,7 +295,9 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v2.0.1...HEAD
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.0.1...HEAD
+[3.0.1]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.0.1
+[3.0.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.0.0
 [2.0.1]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v2.0.1
 [2.0.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v2.0.0
 [1.5.1]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v1.5.1

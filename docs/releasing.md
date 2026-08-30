@@ -26,9 +26,9 @@ Ordinary semver, read from the user's side rather than the API's, because a plug
 
 | | When | Example |
 | --- | --- | --- |
-| **MAJOR** | The user has to relearn or reconfigure something. A gesture now does something different, settings do not survive the upgrade, an action is removed or its UUID changes. | `1.0.0` — the double tap stopped starting the timer |
+| **MAJOR** | The user has to relearn or reconfigure something. A gesture now does something different, settings do not survive the upgrade, an action is removed or its UUID changes. | `3.0.0` — the dial's press became start/pause, and the step stopped being a mode |
 | **MINOR** | New behaviour the user would notice, and nothing they knew is now wrong. A new setting, a new gesture, a reworked control. | `1.1.0` — the dial changes gear on speed, and stops overwriting presets |
-| **PATCH** | A fix, with no new behaviour to learn. | `0.7.1` |
+| **PATCH** | A fix, with no new behaviour to learn. | `3.0.1` — an action tooltip still described the old dial |
 
 Two judgement calls worth writing down, because both have come up:
 
@@ -88,9 +88,29 @@ mkdir -p /tmp/a /tmp/b
 diff -rq /tmp/a /tmp/b
 ```
 
-Identical means no release. Note that PNGs carry a creation timestamp, so a regenerated icon can
-differ as bytes while being the same picture — `compare -metric AE old.png new.png null:` returns 0
-when the pixels match.
+Identical means no release, and a plain `sha256sum` settles it: **`npm run icons` is reproducible** —
+headless Chromium writes no `tIME` chunk, so re-running it on an unchanged mark produces byte-identical
+PNGs. If an icon's bytes moved, its pixels moved.
+
+(This used not to hold. ImageMagick stamped a creation time into every PNG, so the advice here was to
+compare pixels with `compare -metric AE old.png new.png null:` — which is now doubly wrong, since
+ImageMagick is not installed on the dev box either.)
+
+### If the icons changed, find out why before accepting it
+
+`npm run icons` rasterises with the **headless Chromium in Playwright's cache**, not ImageMagick,
+which is not installed on the dev box. That is not a preference — swapping the rasteriser is how a
+long-standing bug was found, and the same trap is waiting for whoever swaps it again.
+
+**The mark is 118 wide by 100 tall, and `bareMark` sizes by `viewBox` while the call site forces
+`width` and `height` to the same number.** A rasteriser that honours `preserveAspectRatio` *fits* it;
+ImageMagick *stretched* it to fill the square. Measured on the dial's icon: old ink bounding box
+71×69, new 70×60. Every icon had been about 18% too tall since the files were created — in the Stream
+Deck application and on both static key faces — and nobody spotted it because the shape was plausible.
+
+So a diff that shows changed icons is a question, not a formality. Render the old and new side by
+side and look, and check the ink bounding box if the difference is subtle. A rasteriser that silently
+distorts artwork produces files that pass `streamdeck validate` and look wrong on the hardware.
 
 What is packaged is `manifest.json`, `bin/`, `imgs/`, `layouts/`, `sounds/` and `ui/`. What is not:
 `src/`, `test/`, `tools/`, `assets/`, `docs/`, and every file at the repo root except the manifest's
