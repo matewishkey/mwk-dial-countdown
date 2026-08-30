@@ -110,6 +110,21 @@ export function soundExists(path: string | undefined): boolean {
 }
 
 /**
+ * Whether a sound was asked for at all.
+ *
+ * **There are two ways to ask for silence, and neither one is a failure:** pick *No sound* in the
+ * picker, or pull the volume to zero. This exists because only one of them was being honoured — a
+ * timer set to *No sound* still took the "the alert did not play" branch and raised Stream Deck's
+ * error triangle on every finish, on a countdown that had done exactly what it was configured to do.
+ *
+ * Kept here, next to {@link playSound}, because it answers a question about the same settings and
+ * has to stay true as they change. See the alert in `actions/countdown-action.ts`.
+ */
+export function wantsSound(path: string | undefined, volumePercent: number): boolean {
+	return path !== undefined && path !== NO_SOUND && volumePercent > 0;
+}
+
+/**
  * Plays a sound, detached, and never throws — a timer that finishes silently is a disappointment,
  * but one that crashes the plugin is a bug.
  *

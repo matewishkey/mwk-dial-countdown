@@ -1,5 +1,6 @@
 import commonjs from "@rollup/plugin-commonjs";
 import nodeResolve from "@rollup/plugin-node-resolve";
+import replace from "@rollup/plugin-replace";
 import terser from "@rollup/plugin-terser";
 import typescript from "@rollup/plugin-typescript";
 import path from "node:path";
@@ -29,6 +30,18 @@ const config = {
 		},
 		typescript({
 			mapRoot: isWatching ? "./" : undefined
+		}),
+		/*
+			Build flags, substituted into the emitted JavaScript. Declared to TypeScript as globals (see
+			`declare const __DEV__` in src/plugin.ts) so this stays type-checked rather than becoming a
+			hole in the type system, and placed after `typescript` so it rewrites the output rather than
+			the source it was checked against.
+		*/
+		replace({
+			preventAssignment: true,
+			values: {
+				__DEV__: JSON.stringify(isWatching)
+			}
 		}),
 		nodeResolve({
 			browser: false,

@@ -337,7 +337,20 @@
 				soundRepeat: 1
 			};
 
-			let state = { ...DEFAULTS };
+			/**
+			 * A complete settings object, with the defaults filled in — and a **copy** of the presets.
+			 *
+			 * The copy is the whole point. A spread is shallow, so `{ ...DEFAULTS, ...settings }` shares
+			 * `DEFAULTS.presets` itself whenever the incoming settings carry none, and every edit below
+			 * — `push`, `splice`, `presets[index] = …` — would then rewrite the defaults for the rest of
+			 * the session, leaving each later load starting from settings the user never chose.
+			 */
+			function withDefaults(settings) {
+				const given = settings ?? {};
+				return { ...DEFAULTS, ...given, presets: [...(given.presets ?? DEFAULTS.presets)] };
+			}
+
+			let state = withDefaults();
 			let lastSounds = [];
 
 			const el = (id) => document.getElementById(id);
@@ -571,7 +584,7 @@
 			}
 
 			function load(settings) {
-				state = { ...DEFAULTS, ...(settings ?? {}) };
+				state = withDefaults(settings);
 				renderPresets();
 				renderControls();
 			}

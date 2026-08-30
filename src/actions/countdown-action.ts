@@ -22,7 +22,7 @@ import { Countdown } from "../countdown";
 import { FLASH_MS } from "../feedback";
 import { type Gesture, TapResolver } from "../gestures";
 import { NO_SOUND, normaliseSettings, type DialCountdownSettings } from "../settings";
-import { listSounds, playSound, resolveSound, soundExists } from "../sound";
+import { listSounds, playSound, resolveSound, soundExists, wantsSound } from "../sound";
 
 /**
  * Render cadence. Marketplace guidelines cap touchscreen updates at 10 per second; 4 is plenty to
@@ -107,6 +107,15 @@ export abstract class CountdownAction<
 			return;
 		}
 
+		// Stream Deck normally pairs an appearance with a disappearance, but nothing here is in a
+		// position to rely on it, and the cost of being wrong is not a stale object — it is a 4 Hz
+		// `setInterval` drawing to a control for ever with its handle no longer reachable by anything.
+		// Tearing down first makes a second `willAppear` a replacement rather than a leak.
+		const existing = this.#instances.get(ev.action.id);
+		if (existing !== undefined) {
+			this.#teardown(existing);
+		}
+
 		// Settings arriving from an older build are rebuilt rather than trusted, then written straight
 		// back, so a fresh install ends up with a complete, valid set on disk instead of nothing.
 		const settings = normaliseSettings(ev.payload.settings);
@@ -148,21 +157,40 @@ export abstract class CountdownAction<
 			return;
 		}
 
+		this.#teardown(instance);
+	}
+
+	/**
+	 * Stops everything an instance started, and forgets it.
+	 *
+	 * **The pending settings write is flushed, not dropped.** {@link CountdownAction.scheduleSave}
+	 * holds a write back by {@link SETTINGS_DEBOUNCE_MS} so that spinning the dial does not go to disk
+	 * on every tick, which is right — but teardown is the one moment that debounce must not swallow.
+	 * Dropping it is what lost a preset selection made in the four hundred milliseconds before the
+	 * user flipped to another page: the gesture had happened, the acknowledgement had been drawn, and
+	 * the write was silently binned on the way out.
+	 */
+	#teardown(instance: I): void {
 		this.detach(instance);
 		instance.taps.cancel();
+
 		if (instance.renderHandle !== null) {
 			clearInterval(instance.renderHandle);
 			instance.renderHandle = null;
 		}
-		for (const handle of [instance.saveHandle, instance.flashHandle]) {
-			if (handle !== null) {
-				clearTimeout(handle);
-			}
-		}
-		instance.saveHandle = null;
-		instance.flashHandle = null;
 
-		this.#instances.delete(ev.action.id);
+		if (instance.saveHandle !== null) {
+			clearTimeout(instance.saveHandle);
+			instance.saveHandle = null;
+			this.#save(instance);
+		}
+
+		if (instance.flashHandle !== null) {
+			clearTimeout(instance.flashHandle);
+			instance.flashHandle = null;
+		}
+
+		this.#instances.delete(instance.action.id);
 	}
 
 	/** Picks up preset and appearance edits made in the property inspector. */
@@ -250,16 +278,21 @@ export abstract class CountdownAction<
 	protected refresh(instance: I, force = false): void {
 		if (instance.countdown.settle()) {
 			const { settings } = instance.countdown;
-			const played = playSound(resolveSound(settings), settings.volume, settings.soundRepeat);
+			const path = resolveSound(settings);
+			const played = playSound(path, settings.volume, settings.soundRepeat);
 
 			// The alert sound is the only thing here that can fail outside the plugin's control: a
 			// custom file that has since been moved or renamed, or a platform with no player to hand
 			// it to. Elgato's guidelines ask for `showAlert` when an action was unsuccessful, and this
 			// is the case that most needs it — a timer that finishes in silence when it was asked to
 			// make a noise is indistinguishable from a timer that has not finished yet, which is the
-			// one thing an alarm must never be. A volume of zero is silence the user asked for, so it
-			// is not a failure.
-			if (!played && settings.volume > 0) {
+			// one thing an alarm must never be.
+			//
+			// Which is exactly why it has to know the difference between a sound that failed and a
+			// sound nobody asked for. `wantsSound` is that question, and getting it half right is what
+			// put an error triangle on every finish of a timer set to *No sound*: the volume check was
+			// here, the picker check was not. See `../sound`.
+			if (wantsSound(path, settings.volume) && !played) {
 				instance.action.showAlert().catch((err) => streamDeck.logger.error("Failed to show alert", err));
 			}
 		}
@@ -274,10 +307,15 @@ export abstract class CountdownAction<
 		}
 		instance.saveHandle = setTimeout(() => {
 			instance.saveHandle = null;
-			instance.action
-				.setSettings(instance.countdown.persistable)
-				.catch((err) => streamDeck.logger.error("Failed to save settings", err));
+			this.#save(instance);
 		}, SETTINGS_DEBOUNCE_MS);
+	}
+
+	/** The write itself, so the debounce and the teardown flush cannot come to disagree about it. */
+	#save(instance: I): void {
+		instance.action
+			.setSettings(instance.countdown.persistable)
+			.catch((err) => streamDeck.logger.error("Failed to save settings", err));
 	}
 
 	/**

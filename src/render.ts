@@ -107,9 +107,18 @@ export const THEMES: Record<string, Palette> = {
 	}
 };
 
-/** Resolves a theme id from settings, falling back rather than throwing on an unknown name. */
+/**
+ * Resolves a theme id from settings, falling back rather than throwing on an unknown name.
+ *
+ * `Object.hasOwn`, not a plain lookup. {@link THEMES} is an object literal, so it inherits
+ * `Object.prototype` and every key on it answers truthy: `themeFor("constructor")` returned the
+ * `Object` function, whose `track` and `running` are `undefined`, and the ring was then drawn with
+ * `stroke="undefined"`. A theme id is an unconstrained string by the time it reaches here — see
+ * `settings.ts`, which validates `layout` against its two values and lets `theme` through as any
+ * non-empty string — so the check has to be for a theme *we* declared, not merely for something.
+ */
 export function themeFor(id: string | undefined): Palette {
-	return (id !== undefined && THEMES[id]) || THEMES.default;
+	return id !== undefined && Object.hasOwn(THEMES, id) ? THEMES[id] : THEMES.default;
 }
 
 export type RingState = {

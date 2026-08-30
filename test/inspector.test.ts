@@ -20,7 +20,7 @@ import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 
 import { chromiumPath, startInspector } from "./inspector-harness.mjs";
-import { DEFAULTS, MAX_PRESET_SECONDS, MAX_REPEAT_COUNT, MAX_SOUND_REPEAT } from "../src/settings.ts";
+import { DEFAULT_PRESETS, DEFAULTS, MAX_PRESET_SECONDS, MAX_REPEAT_COUNT, MAX_SOUND_REPEAT } from "../src/settings.ts";
 
 const noBrowser = chromiumPath() === null;
 
@@ -274,6 +274,39 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 			const saved = await lastSaved();
 			assert.deepEqual(saved?.presets, [60]);
 			assert.equal(saved?.presetIndex, 0, "an index pointing past the end would show the wrong preset");
+		});
+
+		it("does not edit its own DEFAULTS when the stored settings carry no presets", async () => {
+			// A spread is shallow. `{ ...DEFAULTS, ...settings }` shared `DEFAULTS.presets` itself
+			// whenever the incoming settings had none — so `push`, `splice` and `presets[i] = …` were
+			// all rewriting the module's defaults, and every later load started from settings the user
+			// had never chosen. Reachable only when the plugin has not yet written a full set back,
+			// which is a guarantee held in another file entirely.
+			await ui.load({});
+
+			await ui.evaluate('document.getElementById("add").click()');
+			await ui.evaluate('document.getElementById("add").click()');
+
+			assert.deepEqual(
+				await ui.evaluate("DEFAULTS.presets"),
+				DEFAULT_PRESETS,
+				"editing the presets rewrote the page's own defaults"
+			);
+			assert.equal(
+				await ui.evaluate("state.presets.length"),
+				DEFAULT_PRESETS.length + 2,
+				"the edits should still have landed on the live state"
+			);
+		});
+
+		it("keeps a loaded preset list independent of the defaults", async () => {
+			// The same hazard from the other side: settings that *do* carry presets must not be able
+			// to reach DEFAULTS either, whatever else is spread around them.
+			await ui.load({ ...DEFAULTS, presets: [60] });
+
+			await ui.evaluate('document.getElementById("add").click()');
+
+			assert.deepEqual(await ui.evaluate("DEFAULTS.presets"), DEFAULT_PRESETS);
 		});
 	});
 

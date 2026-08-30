@@ -118,6 +118,32 @@ describe("themes", () => {
 		assert.equal(themeFor("nope"), THEMES.default);
 		assert.equal(themeFor("ocean"), THEMES.ocean);
 	});
+
+	it("falls back on an id that names something on Object.prototype", () => {
+		// `THEMES` is an object literal, so it inherits `Object.prototype` and every key on it answers
+		// truthy — `THEMES["constructor"]` is the `Object` function. A plain lookup therefore returned
+		// it as though it were a palette, and the ring was drawn with `stroke="undefined"`.
+		//
+		// Not reachable from the dropdown, which is why it went unnoticed. But `normaliseSettings`
+		// validates `layout` against its two values and lets `theme` through as any non-empty string,
+		// and settings outlive the build that wrote them — so "no user would type that" is not a
+		// property this can rely on.
+		for (const id of ["constructor", "toString", "hasOwnProperty", "__proto__", "valueOf"]) {
+			assert.equal(themeFor(id), THEMES.default, `${id} resolved to something other than the default`);
+		}
+	});
+
+	it("gives every resolved palette a complete set of colours", () => {
+		// The check that would have caught the above by its consequence rather than its cause: a
+		// palette missing a field renders `stroke="undefined"` into the SVG, which draws nothing and
+		// reports nothing.
+		for (const id of [undefined, "default", "ocean", "nope", "constructor"]) {
+			const resolved = themeFor(id);
+			for (const key of ["running", "elapsed", "idle", "track"] as const) {
+				assert.equal(typeof resolved[key], "string", `theme ${String(id)} has no ${key}`);
+			}
+		}
+	});
 });
 
 describe("the gesture pulse", () => {

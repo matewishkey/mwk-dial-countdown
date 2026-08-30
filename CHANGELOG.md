@@ -9,7 +9,41 @@ this project that generally means they do not change the packaged plugin at all.
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **A timer set to *No sound* flashed an error on every finish.** Ticking *Play a sound when done*
+  and then choosing *No sound* left the plugin treating its own silence as a failure to play, so
+  every completed countdown raised Stream Deck's alert triangle — on a timer that had done exactly
+  what it was told. Silence you asked for is no longer reported as something going wrong. A sound
+  that was genuinely wanted and could not be played still is.
+
+- **A preset chosen just before switching page was forgotten.** Holding to load the next preset
+  schedules the write a fraction of a second later, so that winding the dial does not write to disk
+  on every click. Flipping to another page or profile inside that window threw the write away instead
+  of finishing it, and coming back showed the old preset.
+
+- **The touchscreen could be left drawing a countdown that no longer existed.** If Stream Deck ever
+  announced the same control twice without announcing its removal in between, the first countdown's
+  redraw loop carried on for the life of the plugin with nothing able to stop it.
+
+- **An unrecognised colour theme could blank the ring** instead of falling back to the default one.
+  Only reachable from settings written by another build, but the ring drew as nothing at all when it
+  happened, rather than drawing in the default colours.
+
+- **The property inspector could corrupt its own defaults**, so a later action added on a fresh
+  button started from presets nobody had chosen.
+
+### Changed
+
+- **A released build now logs at `info` rather than `trace`.** Trace logging is a development tool;
+  leaving it on meant every install wrote a line for every frame of a redraw loop that runs four
+  times a second, for as long as the plugin was on screen. `npm run watch` still logs at `trace`.
+
+### Added
+
+- **Tests for the two parts of the plugin that had none** — sound resolution, and the action
+  lifecycle that owns the timers, the redraw loops and the write to disk. All four of the fixes above
+  that live in that half were found there and are now held by a test that fails without them.
 
 ## [3.0.1] — 2026-08-30
 
