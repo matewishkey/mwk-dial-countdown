@@ -232,13 +232,24 @@ export function renderRing(state: RingState): string {
  * The bar layout has no ring to put anything inside, but it needs the same one-glance answer the
  * ring gives: running, paused, done, or sitting idle with the mark on it. Drawn from the very same
  * {@link centre}, so the two layouts cannot come to disagree about what a state looks like.
+ *
+ * **It gets the same pulse, too**, and for a while it did not — which meant that on the progress-bar
+ * display, winding the dial produced no flash at all. The word on the bottom line still named the
+ * step, but that is the half of the acknowledgement you have to stop and read: the pulse is the half
+ * that works in peripheral vision, and it is the one a dial being wound actually needs. See
+ * {@link pulse} and `docs/how-it-works.md`.
+ *
+ * Drawn by the same {@link pulse} at the same proportions, so it lands just outside where the ring's
+ * arc would be if there were one — a hairline circling the glyph rather than a second idea.
  */
 export function renderGlyph(state: RingState): string {
 	const geometry = geometryFor(state.size ?? RING_SIZE);
+	const colour = ringColour(state);
 
 	return [
 		svgOpen(geometry),
-		centre(geometry, { ...state, hollow: false }, ringColour(state), glyphOpacityFor(state)),
+		centre(geometry, { ...state, hollow: false }, colour, glyphOpacityFor(state)),
+		pulse(geometry, state, colour),
 		`</svg>`
 	].join("");
 }

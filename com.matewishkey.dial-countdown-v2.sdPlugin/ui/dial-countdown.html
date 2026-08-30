@@ -52,6 +52,39 @@
 				border-color: #2d9cdb;
 			}
 
+			/*
+				The loaded preset is marked with a filled dot; every other row's dot is the button that
+				loads it. Choosing used to be possible only on the hardware — one forward step per hold,
+				with no way back — so reaching the fourth of four meant three holds. The panel already knew
+				which preset was active and already drew it; it just could not be told.
+			*/
+			.pick {
+				width: 16px;
+				flex: none;
+				padding: 0;
+				background: none;
+				border: 0;
+				color: #4d4d55;
+				cursor: pointer;
+				font-size: 13px;
+				line-height: 1;
+			}
+
+			.pick:hover {
+				color: #9a9aa0;
+			}
+
+			li.active .pick {
+				color: #2d9cdb;
+				cursor: default;
+			}
+
+			/* A setting whose switch is off is dimmed rather than hidden — hiding it moves everything below. */
+			.row.disabled label,
+			.row.disabled .muted {
+				opacity: 0.45;
+			}
+
 			.time {
 				display: flex;
 				align-items: center;
@@ -222,6 +255,11 @@
 		</p>
 
 		<h2>Presets</h2>
+		<p class="hint">
+			<strong>Click a dot</strong> to load that preset onto the control. Holding the
+			<span class="encoder-only">screen</span><span class="key-only">key</span> cycles forward through this list one at
+			a time; here you can go straight to any of them.
+		</p>
 		<ul id="rows"></ul>
 		<div class="actions">
 			<button id="add" type="button">Add preset</button>
@@ -266,7 +304,7 @@
 		<div class="row sub">
 			<label for="warnMin">Start fading at</label>
 			<div class="time">
-				<input type="number" id="warnMin" min="0" max="59" /><span>m</span>
+				<input type="number" id="warnMin" min="0" max="1439" /><span>m</span>
 				<input type="number" id="warnSec" min="0" max="59" /><span>s</span>
 			</div>
 			<span class="muted" id="warnTotal"></span>
@@ -386,6 +424,21 @@
 				}
 
 				const parts = toParts(total);
+
+				const pick = document.createElement("button");
+				pick.type = "button";
+				pick.className = "pick";
+				pick.textContent = index === state.presetIndex ? "\u25c9" : "\u25cb";
+				pick.title = index === state.presetIndex ? "Loaded on the control" : "Load this preset";
+				pick.addEventListener("click", () => {
+					if (index === state.presetIndex) {
+						return;
+					}
+					state.presetIndex = index;
+					save();
+					renderPresets();
+				});
+
 				const box = document.createElement("div");
 				box.className = "time";
 				const fields = {};
@@ -424,7 +477,7 @@
 					renderPresets();
 				}
 
-				row.append(box, summary);
+				row.append(pick, box, summary);
 
 				if (state.presets.length > 1) {
 					const remove = document.createElement("button");
@@ -446,8 +499,32 @@
 				return row;
 			}
 
+			/**
+			 * Redraws the preset rows, putting the caret back where it was.
+			 *
+			 * Every row is rebuilt from scratch, which drops focus out of whatever was being typed in. That
+			 * matters because this is not only called after your own edits: the plugin writes settings of
+			 * its own — loading a preset on the hardware saves the new index — and every one of those comes
+			 * back here as a `didReceiveSettings`. Without this, a preset saved on the device while you were
+			 * halfway through typing another one would take the cursor with it.
+			 */
 			function renderPresets() {
-				el("rows").replaceChildren(...state.presets.map(presetRow));
+				const rows = el("rows");
+				const active = document.activeElement;
+				const row = rows.contains(active) ? active.closest("li") : null;
+				const focused =
+					row === null
+						? null
+						: {
+								row: [...rows.children].indexOf(row),
+								field: [...row.querySelectorAll("input")].indexOf(active)
+							};
+
+				rows.replaceChildren(...state.presets.map(presetRow));
+
+				if (focused !== null && focused.row >= 0) {
+					rows.children[focused.row]?.querySelectorAll("input")[focused.field]?.focus();
+				}
 			}
 
 			function renderControls() {
@@ -466,6 +543,29 @@
 				el("soundRepeat").value = String(state.soundRepeat);
 				el("volume").value = String(state.volume);
 				el("soundId").value = state.soundId;
+				renderEnabled();
+			}
+
+			/**
+			 * Greys out the settings that belong to a switch that is off.
+			 *
+			 * Dimmed and disabled rather than hidden: hiding a row moves everything below it, so a panel
+			 * that hid them would rearrange itself as you ticked boxes. The controls are still legible —
+			 * you can see what a sound *would* be — they just cannot be operated, and the Test button no
+			 * longer plays a sound the timer itself would not.
+			 */
+			function renderEnabled() {
+				for (const [on, ids] of [
+					[state.soundEnabled, ["soundId", "soundRepeat", "browse", "preview", "volume"]],
+					[state.warnEnabled, ["warnMin", "warnSec"]],
+					[state.repeat, ["repeatCount"]]
+				]) {
+					for (const id of ids) {
+						const control = el(id);
+						control.disabled = !on;
+						control.closest(".row").classList.toggle("disabled", !on);
+					}
+				}
 			}
 
 			// Every plain control writes the one field it owns, then saves.
@@ -485,6 +585,7 @@
 				el(id).addEventListener("change", () => {
 					state[key] = read(el(id));
 					save();
+					renderEnabled();
 				});
 			}
 

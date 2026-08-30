@@ -180,6 +180,31 @@ describe("the gesture pulse", () => {
 		const svg = renderRing({ ...base, remainingFraction: 0.1, dimmed: true, flash: true });
 		assert.ok(pulses(svg), "the one moment feedback matters most must not be the moment it disappears");
 	});
+
+	it("reaches the progress-bar layout as well as the ring", () => {
+		// It did not, for a while. The bar layout draws `renderGlyph`, which had no pulse — so on that
+		// display winding the dial produced no flash at all, and the only acknowledgement left was the
+		// word on the bottom line, which is the half you have to stop and read.
+		const glyph = (flash: boolean): string =>
+			renderGlyph({ ...base, remainingFraction: 0.5, status: "running", flash, size: 52 });
+
+		assert.ok(!pulses(glyph(false)), "the glyph should be quiet when nothing has just happened");
+		assert.ok(pulses(glyph(true)), "the bar layout gets no pulse, so a dial wound on it says nothing");
+	});
+
+	it("stays inside the glyph's own box, which is smaller than the ring's", () => {
+		// The bar layout draws the glyph at 52px, not 88. The pulse is placed from the arc's outer
+		// edge, so it scales with everything else — but the box it has to stay inside scales too, and
+		// that is the check.
+		const svg = renderGlyph({ ...base, remainingFraction: 0.5, status: "running", flash: true, size: 52 });
+		const circle = svg.match(
+			/<circle cx="[\d.]+" cy="[\d.]+" r="([\d.]+)"[^>]*stroke-width="([\d.]+)"[^>]*opacity="0\.9"/
+		);
+		assert.ok(circle !== null, "no pulse found on the glyph");
+
+		const outer = Number(circle[1]) + Number(circle[2]) / 2;
+		assert.ok(outer < 26, `the pulse reaches ${outer} of a 26px half-width and would be clipped`);
+	});
 });
 
 describe("the key face", () => {

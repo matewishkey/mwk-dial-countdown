@@ -305,6 +305,52 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 			);
 		});
 
+		it("loads a preset when its dot is clicked", async () => {
+			// Choosing used to be possible only on the hardware, one forward hold at a time with no way
+			// back — so the fourth of four presets took three holds. The panel already knew which was
+			// active and already drew it; it just had no way to be told.
+			await ui.load({ ...DEFAULTS, presets: [60, 120, 180], presetIndex: 0 });
+
+			await ui.evaluate('document.querySelectorAll("#rows .pick")[2].click()');
+
+			assert.equal((await lastSaved())?.presetIndex, 2);
+			assert.equal(
+				await ui.evaluate('document.querySelectorAll("#rows li")[2].classList.contains("active")'),
+				true,
+				"the highlight should follow the selection"
+			);
+		});
+
+		it("does not write when the preset already loaded is clicked again", async () => {
+			await ui.load({ ...DEFAULTS, presets: [60, 120], presetIndex: 1 });
+
+			await ui.evaluate('document.querySelectorAll("#rows .pick")[1].click()');
+
+			assert.equal(await lastSaved(), null, "re-choosing the current preset is not an edit");
+		});
+
+		it("keeps the caret where it was when the plugin writes settings of its own", async () => {
+			// Loading a preset on the hardware saves the new index, and that comes back here as a
+			// didReceiveSettings — which rebuilds every row. Without care that pulls the cursor out of
+			// a preset the user is halfway through typing, for something they did not do.
+			await ui.load({ ...DEFAULTS, presets: [60, 120] });
+
+			await ui.evaluate('document.querySelectorAll("#rows li")[1].querySelectorAll("input")[1].focus()');
+
+			await ui.evaluate(`window.__subs.didReceiveSettings({
+				payload: { settings: { ...DEFAULTS, presets: [60, 120], presetIndex: 1 } }
+			})`);
+
+			assert.equal(
+				await ui.evaluate(`(() => {
+					const rows = document.querySelectorAll("#rows li");
+					return [...rows[1].querySelectorAll("input")].indexOf(document.activeElement);
+				})()`),
+				1,
+				"the redraw took the cursor with it"
+			);
+		});
+
 		it("keeps a loaded preset list independent of the defaults", async () => {
 			// The same hazard from the other side: settings that *do* carry presets must not be able
 			// to reach DEFAULTS either, whatever else is spread around them.
@@ -313,6 +359,50 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 			await ui.evaluate('document.getElementById("add").click()');
 
 			assert.deepEqual(await ui.evaluate("DEFAULTS.presets"), DEFAULT_PRESETS);
+		});
+	});
+
+	describe("settings that belong to a switch", () => {
+		/** Whether a control can be operated at all. */
+		const disabled = (id: string): Promise<unknown> => ui.evaluate(`document.getElementById("${id}").disabled`);
+
+		it("greys out the sound controls when the sound is switched off", async () => {
+			await ui.load({ ...DEFAULTS, soundEnabled: false });
+
+			for (const id of ["soundId", "soundRepeat", "browse", "preview", "volume"]) {
+				assert.equal(await disabled(id), true, `${id} is still operable with the sound switched off`);
+			}
+
+			// Including the Test button, which would otherwise audition a sound the timer itself would
+			// never play.
+			await change("soundEnabled", true);
+			for (const id of ["soundId", "soundRepeat", "browse", "preview", "volume"]) {
+				assert.equal(await disabled(id), false, `${id} did not come back when the sound was switched on`);
+			}
+		});
+
+		it("greys out the fade threshold and the repeat count with theirs", async () => {
+			await ui.load({ ...DEFAULTS, warnEnabled: false, repeat: false });
+
+			assert.equal(await disabled("warnMin"), true);
+			assert.equal(await disabled("warnSec"), true);
+			assert.equal(await disabled("repeatCount"), true);
+
+			await change("warnEnabled", true);
+			assert.equal(await disabled("warnMin"), false);
+			assert.equal(await disabled("repeatCount"), true, "one switch must not answer for another");
+		});
+
+		it("dims the row rather than hiding it, so nothing below moves", async () => {
+			// A panel that hid disabled rows would rearrange itself as you ticked boxes, and you could
+			// no longer see what a setting was set to without switching it on.
+			await ui.load({ ...DEFAULTS, soundEnabled: false });
+
+			assert.equal(await ui.evaluate('getComputedStyle(document.getElementById("volume")).display !== "none"'), true);
+			assert.equal(
+				await ui.evaluate('document.getElementById("volume").closest(".row").classList.contains("disabled")'),
+				true
+			);
 		});
 	});
 

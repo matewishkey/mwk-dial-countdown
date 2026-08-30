@@ -72,6 +72,8 @@ A **hold** does not wait, because there is nothing ambiguous about it — and a 
 There is none to be had: `@elgato/streamdeck` exposes no haptic command, and the hardware has no motor to drive if it did. Two things stand in for it, and they are doing different jobs.
 
 - **The ring pulses** — a hairline that appears just outside the arc for 200 ms, on every gesture and every tick of the dial. It carries no information beyond "that registered", which is exactly what makes it work in peripheral vision. You cannot read a word per tick while winding a dial; you can see the ring answer each one.
+
+  **On the progress-bar display the same hairline circles the state glyph**, drawn by the same code at the same proportions. It did not, for a while, and the omission was invisible from the inside: the bar layout has no ring, so nothing looked missing — a dial wound on that display simply said nothing back, and the only acknowledgement left was the word, which is the half you have to stop and read.
 - **A line names the action** — `+10s`, `start`, `pause`, `resume`, `reset`, `preset · 20m`, `next · 20m` — for 900 ms. It is drawn where the finish time normally sits on a dial, and under the clock on a key.
 
 The pulse is drawn as its own hairline rather than by brightening the arc, for two reasons: an event should not look like a change of state, and it has to remain visible during the end-of-timer fade, which is the one moment feedback matters most and the arc is already being dimmed.
@@ -109,6 +111,7 @@ A preset is **just a duration**. There is no name, because a countdown's length 
 Out of the box: **5, 20, 30 and 40 minutes**.
 
 - **Edit them in the property inspector**, as hours, minutes and seconds. Add as many as you like; remove any but the last.
+- **Load any of them from the property inspector too**, by clicking the dot beside it. The hold only ever moves forward one at a time, so the fourth of four used to be three holds away with no way back; the panel already drew which one was active, and now it can be told.
 - **Hold the screen** — or the key itself — for the next one. The dial's press starts and pauses the clock instead; see above.
 - Anything from **one second to twenty-four hours**.
 
@@ -167,6 +170,12 @@ Idle is the empty state: nothing running, nothing to resume, nothing finished. I
 A square rather than a tick for *finished*, because the ring behind it is already full and already in the elapsed colour — the glyph only has to say "stopped", which is what the same shape says on every transport control ever made. A tick would claim the timer had *succeeded*, and a countdown is in no position to judge that.
 
 **The progress-bar layout shows exactly the same glyph**, drawn from the same function with the ring left off. That is not a coincidence to be maintained by hand: `renderGlyph` and the ring's own middle are one code path, so the two views cannot come to disagree about what a paused timer looks like.
+
+### The ring empties and the bar fills
+
+Deliberately, and they are named for it. A **countdown ring** shows what is left, so a full ring means a full timer and it drains as the clock runs — which is the way round people expect a countdown to look. A **progress bar** shows how far through you are, so it fills. Reversing either one to match the other would leave a control doing the opposite of what its own name says.
+
+The consequence worth knowing: switching display does not just restyle the indicator, it inverts what it means. Everything else — the clock, the glyph, the two lines of text, the colours — is identical between them.
 
 ### Why the bar was never coloured
 
