@@ -120,8 +120,14 @@ npm run watch                                       # rebuild + restart on save
 npm run version:check                               # package.json ↔ manifest.json
 node tools/check-version.mjs v3.1.0                 # ...and the tag you are about to cut
 npx streamdeck validate com.matewishkey.dial-countdown-v2.sdPlugin
-npx streamdeck pack com.matewishkey.dial-countdown-v2.sdPlugin
+npx streamdeck pack com.matewishkey.dial-countdown-v2.sdPlugin --force
+npx prettier --write com.matewishkey.dial-countdown-v2.sdPlugin/manifest.json
 ```
+
+That last line is not optional. **`streamdeck pack` rewrites `manifest.json` in place** — it re-emits
+the JSON with `Controllers` inlined and no trailing newline, which is not the formatting the repo
+keeps, so the commit you tag fails CI on formatting. `build` and `validate` leave it alone; only
+`pack` does this. It is how v3.1.0 came to be tagged on a red build.
 
 **[docs/releasing.md](docs/releasing.md)** is the whole policy, and the one rule it turns on is this: *the version number describes the `.streamDeckPlugin` file and nothing else*. Repo-only work — tests, docs, tooling — lands in [CHANGELOG.md](CHANGELOG.md) under *Unreleased* and rides the next real release, because the number is what the Stream Deck application shows the user and every Marketplace version is a human review.
 
@@ -201,7 +207,7 @@ This plugin was built the same way. Every episode's code is public, and so is th
 
 ## Contributing
 
-Issues and pull requests are welcome. Please run `npm test` and `npx streamdeck validate` before opening one.
+Issues and pull requests are welcome. Please run **`npm run check`** before opening one — it is typecheck, lint, formatting, the tests and the version check in one, and it is exactly what CI gates on, so anything it passes will not come back red.
 
 If you fork this into your own plugin, change the UUID in `manifest.json` and replace the brand assets — see [NOTICE.md](NOTICE.md).
 

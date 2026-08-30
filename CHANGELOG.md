@@ -9,7 +9,14 @@ this project that generally means they do not change the packaged plugin at all.
 
 ## [Unreleased]
 
-Nothing yet.
+Nothing that changes what the plugin does. `manifest.json`'s formatting was restored after
+`streamdeck pack` rewrote it while packaging 3.1.0 — whitespace only, and the packaged manifest
+parses to the same JSON either way. Recorded rather than skipped because `manifest.json` is a file
+that ships, so a byte comparison against the 3.1.0 package would show it.
+
+Whether entries like this belong here at all is
+[an open question](https://github.com/matewishkey/mwk-dial-countdown/issues/14) — `docs/releasing.md`
+currently says two incompatible things about repo-only work.
 
 ## [3.1.0] — 2026-08-30
 

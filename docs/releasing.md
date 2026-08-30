@@ -81,6 +81,7 @@ what is already published:
 
 ```sh
 npm run build && npx streamdeck pack com.matewishkey.dial-countdown-v2.sdPlugin --force
+npx prettier --write com.matewishkey.dial-countdown-v2.sdPlugin/manifest.json  # pack rewrites it
 gh release download <last-tag> -D /tmp/released
 mkdir -p /tmp/a /tmp/b
 ( cd /tmp/a && unzip -oq /tmp/released/com.matewishkey.dial-countdown-v2.streamDeckPlugin )
