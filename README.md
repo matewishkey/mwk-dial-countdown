@@ -84,10 +84,20 @@ Stream Deck runs on macOS and Windows only, so the plugin cannot be *run* on Lin
 ```sh
 npm install
 npm run build      # bundle into com.matewishkey.dial-countdown-v2.sdPlugin/bin
-npm test           # 164 tests — 27 of them drive the property inspector in a browser
+npm test           # 202 tests — 35 of them drive the property inspector in a browser
+npm run check      # everything CI runs: typecheck, lint, format, tests, versions
 npm run demo       # scripted gesture pass, prints one frame per step
 npm run mock       # the same harness, driven from the keyboard
 ```
+
+`npm run check` is the one to run before pushing; [CI](.github/workflows/ci.yml) runs exactly the same
+list on every push, Chromium included, so the browser suite is never quietly skipped there.
+
+Two of those deserve a note. **`npm run typecheck` uses `tsconfig.test.json`, not `tsconfig.json`** —
+the latter covers `src/` only, because that is what rollup bundles, and for a long time it meant the
+tests were stripped of their types without anything checking them. **Prettier does not touch
+Markdown**: it rewrites `*emphasis*` as `_emphasis_` and re-pads every table, which is churn in a repo
+where the prose is written rather than generated.
 
 `tools/mock-host.mjs` impersonates the Stream Deck application. A plugin is only a Node process launched with `-port`, `-pluginUUID`, `-registerEvent` and `-info` that connects back to `ws://127.0.0.1:<port>`, so the harness plays that role: it spawns the built plugin, answers the registration handshake, sends real dial events, and draws whatever comes back on the touchscreen. That covers everything except how the screen actually looks.
 
@@ -134,6 +144,8 @@ The version lives in three places in three formats — `1.1.0`, `1.1.0.0`, `v1.1
 | `test/inspector-harness.mjs` | Drives the property inspector in a real browser, so its inline JavaScript can be tested. |
 | `tools/make-icons.mjs` | Draws every icon from `assets/mwk-mark.svg` — white for the app, red for the hardware. The plugin's own icon is the countdown ring, drawn by `renderRing`. Rasterises with headless Chromium; see [docs/releasing.md](docs/releasing.md). |
 | `tools/check-version.mjs` | Holds `package.json`, `manifest.json` and the git tag to the same version. |
+| `tsconfig.test.json` | The typecheck config: `src/` **and** `test/`. `tsconfig.json` is rollup's, and covers only what it bundles. |
+| `eslint.config.mjs` | Type-aware lint rules. Formatting is left entirely to Prettier, so the two cannot disagree. |
 | `assets/mwk-mark.svg` | The brand's own mark, as supplied. The one source the artwork is generated from. |
 
 A few decisions worth knowing before changing things:

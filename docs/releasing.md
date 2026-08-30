@@ -120,12 +120,16 @@ own tree. So a change confined to the second list is by definition not a release
 
 1. **Decide the number** from the table above, against what is actually in the diff.
 2. **Bump both files together** — `package.json` and `manifest.json`. Never one alone.
-3. `npm test` and `npm run demo` — the demo drives the built plugin end to end, which the unit tests
-   deliberately do not.
+3. `npm run check` and `npm run demo`. `check` is typecheck, lint, formatting, the tests and
+   `version:check` in one — and [CI](../.github/workflows/ci.yml) has already run all of it on the
+   commit you are about to tag, so this is a confirmation rather than the first time of asking. The
+   demo is the part CI does not do: it drives the *built* plugin end to end over a real WebSocket,
+   which the unit tests deliberately do not.
 4. `npx streamdeck validate com.matewishkey.dial-countdown-v2.sdPlugin`. Bear in mind this is a
    **structural** check: schema, file presence, sizes. It has never looked at icon colours, and it
    passed the build Elgato rejected for them. It is a floor, not a review.
-5. `node tools/check-version.mjs v<version>`.
+5. `node tools/check-version.mjs v<version>` — with the tag, which is the part `npm run check`
+   cannot do for you, since it does not know which tag you are about to cut.
 6. `npm run build` then `npx streamdeck pack … --force`.
 7. Move the changelog's *Unreleased* entries under the new version, with today's date.
 8. Commit, tag `v<version>`, push both.
