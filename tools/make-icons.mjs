@@ -21,17 +21,27 @@
  * The dial action is the bare mark; the key action is the same mark inside the rounded square that
  * says "this one goes on a button", so the two are told apart in a list where they sit side by side.
  *
- *   node tools/make-icons.mjs
+ * The **plugin icon** — the one Stream Deck shows in its preferences — is the countdown ring itself,
+ * with the mark inside it. Elgato's guideline asks that it "accurately portray what your plugin
+ * does", and a monogram portrays the organisation instead. It is not a drawing of the ring either:
+ * it calls `renderRing` from `src/render.ts`, the very function the plugin draws with, so the icon
+ * and the running plugin are the same artwork by construction rather than by promise.
  *
- * The mark itself is not redrawn here: it is the same path data `src/render.ts` uses for the ring,
- * so the artwork and the running plugin cannot drift apart. SVG is written directly; the PNGs are
- * rasterised by `convert` (ImageMagick), the one external tool involved, and skipped without it.
+ *   npm run icons
+ *
+ * The mark is likewise not redrawn: it is read from `assets/mwk-mark.svg`, the brand's own file.
+ * SVG is written directly; the PNGs are rasterised by headless Chromium — the copy Playwright
+ * already keeps on this machine — rather than ImageMagick, which is not installed and is not
+ * something a repo should require for `npm run icons` to work.
  */
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+import { renderRing } from "../src/render.ts";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const IMGS = resolve(ROOT, "com.matewishkey.dial-countdown-v2.sdPlugin/imgs");
@@ -129,6 +139,55 @@ function boxedMark(colour, size, markWidth) {
 	].join("");
 }
 
+/**
+ * The plugin icon: the countdown ring, on brand red, with the mark inside it.
+ *
+ * Every part of this is the plugin's own. `renderRing` is the function that draws the touchscreen
+ * four times a second, called here with a white palette instead of a theme — so the ring's weight,
+ * its radius, the arc's round caps and the mark's placement inside it are not measurements copied
+ * into an icon, they are the same code path. Change the ring and the icon changes with it.
+ *
+ * `idle` because that is the state whose middle holds the mark; anything else would draw a play
+ * triangle or a pause glyph, which is the right behaviour on hardware and the wrong picture for an
+ * icon. The arc is left three-quarters full: a complete circle reads as a doughnut, and a countdown
+ * ring that has visibly counted is the thing being portrayed.
+ *
+ * The track is painted in the background red so it disappears. It has to be *some* colour — the ring
+ * always draws one — and matching the ground is how you get none.
+ */
+const ICON_REMAINING = 0.78;
+
+/** The ring is drawn at 84 of the icon's 100 units, which leaves it 8 units of air on every side. */
+const ICON_RING_SIZE = 84;
+
+function ringIcon(size) {
+	const inset = round(((100 - ICON_RING_SIZE) / 2) * (size / 100));
+	const ring = renderRing({
+		remainingFraction: ICON_REMAINING,
+		status: "idle",
+		dimmed: false,
+		logo: true,
+		size: round(ICON_RING_SIZE * (size / 100)),
+		palette: { running: WHITE, elapsed: WHITE, idle: WHITE, track: RED }
+	});
+
+	// Unwrap the ring's own <svg> and re-anchor its contents inside the red tile.
+	const inner = ring
+		.replace(/^<svg[^>]*>/, "")
+		.replace(/<\/svg>$/, "")
+		// The mark is drawn slightly held back on hardware, so it sits behind a themed ring rather
+		// than competing with it. An icon has no ring to defer to and no theme to sit behind, and at
+		// 256px the same restraint just reads as a pink smudge on the red. Full white here.
+		.replace(/(<g transform="[^"]*")\s+opacity="[\d.]+"/, '$1 opacity="1"');
+
+	return (
+		`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">` +
+		`<rect width="${size}" height="${size}" fill="${RED}"/>` +
+		`<g transform="translate(${inset} ${inset})">${inner}</g>` +
+		`</svg>`
+	);
+}
+
 const written = [];
 
 function writeSvg(path, svg) {
@@ -138,7 +197,39 @@ function writeSvg(path, svg) {
 	written.push(path);
 }
 
-/** Rasterises an SVG at both the standard and the high-DPI size, on a transparent background. */
+/**
+ * Finds the Chromium that Playwright keeps in its own cache.
+ *
+ * Newest first, since several versions accumulate there. Returns `null` rather than throwing so the
+ * SVG icons — which need no rasteriser at all — are still written on a machine without one.
+ */
+function findChromium() {
+	const cache = resolve(homedir(), ".cache/ms-playwright");
+	if (!existsSync(cache)) {
+		return null;
+	}
+
+	const builds = readdirSync(cache)
+		.filter((name) => /^chromium-\d+$/.test(name))
+		.sort((a, b) => Number(b.split("-")[1]) - Number(a.split("-")[1]));
+
+	for (const build of builds) {
+		const binary = resolve(cache, build, "chrome-linux64/chrome");
+		if (existsSync(binary)) {
+			return binary;
+		}
+	}
+	return null;
+}
+
+const CHROMIUM = findChromium();
+
+/**
+ * Rasterises an SVG at both the standard and the high-DPI size, on a transparent background.
+ *
+ * `--default-background-color=00000000` is what keeps it transparent; without it Chromium paints its
+ * own white page behind the artwork, and a white box is exactly what the guidelines reject.
+ */
 function writePng(path, size, svgFor) {
 	for (const [name, edge] of [
 		[path, size],
@@ -146,13 +237,33 @@ function writePng(path, size, svgFor) {
 	]) {
 		const file = resolve(IMGS, name);
 		mkdirSync(dirname(file), { recursive: true });
+
+		if (CHROMIUM === null) {
+			console.warn(`! could not rasterise ${name} — no Chromium found under ~/.cache/ms-playwright`);
+			continue;
+		}
+
 		const scratch = `${file}.svg`;
 		writeFileSync(scratch, svgFor(edge));
 		try {
-			execFileSync("convert", ["-background", "none", scratch, "-resize", `${edge}x${edge}`, file]);
+			execFileSync(
+				CHROMIUM,
+				[
+					"--headless",
+					"--disable-gpu",
+					"--no-sandbox",
+					"--hide-scrollbars",
+					"--default-background-color=00000000",
+					"--force-device-scale-factor=1",
+					`--window-size=${edge},${edge}`,
+					`--screenshot=${file}`,
+					`file://${scratch}`
+				],
+				{ stdio: "ignore" }
+			);
 			written.push(name);
-		} catch {
-			console.warn(`! could not rasterise ${name} — is ImageMagick's \`convert\` installed?`);
+		} catch (err) {
+			console.warn(`! could not rasterise ${name}: ${err.message}`);
 		}
 		rmSync(scratch, { force: true });
 	}
@@ -169,6 +280,12 @@ writeSvg("actions/key/icon.svg", boxedMark(WHITE, 100, 46));
 
 // The circular canvas standing in for the dial in the application's layout view.
 writePng("actions/timer/encoder-icon.png", 72, (edge) => bareMark(WHITE).replace("<svg ", `<svg width="${edge}" height="${edge}" `));
+
+// ── The plugin's own icon, in Stream Deck's preferences and on the Marketplace listing ───────────
+
+// 256 and 512, which is what the manifest's `Icon` resolves to. Elgato's guideline asks that this
+// one "accurately portray what your plugin does" — so it is the ring, not the monogram.
+writePng("plugin/marketplace.png", 256, ringIcon);
 
 // ── On the hardware: brand red ───────────────────────────────────────────────────────────────────
 

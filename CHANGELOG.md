@@ -11,7 +11,7 @@ this project that generally means they do not change the packaged plugin at all.
 
 Nothing yet.
 
-## [3.0.0] — 2026-08-29
+## [3.0.0] — 2026-08-30
 
 ### Changed
 
@@ -43,6 +43,11 @@ Nothing yet.
   and running, idle and finished were told apart only by colour. The setting is now labelled *Logo on
   an idle clock*.
 
+- **The plugin's icon** — the one Stream Deck shows in its preferences — is now the countdown ring
+  with the mark inside it, rather than the mark alone. Elgato's guideline asks that it "accurately
+  portray what your plugin does", and a monogram portrays the organisation instead. It is drawn by
+  the plugin's own `renderRing`, so the icon cannot drift from the thing it depicts.
+
 ### Fixed
 
 - **A finished repeating timer said nothing to say it had finished.** It sat on `×3/3` for ever,
@@ -61,6 +66,24 @@ Nothing yet.
 
 - **The lap counter appeared a run late.** It read `×0/3` for the whole of the first run and only
   reached `×1/3` once that run had ended. It now reads from one.
+
+- **Every icon was very slightly the wrong shape.** The brand mark is wider than it is tall, and the
+  tool that rasterised the icons stretched it to fill a square instead of fitting it — about 18% too
+  tall, on the dial's icon in the Stream Deck application and on both static key faces. Rasterising
+  is now done by headless Chromium, which respects the artwork's proportions. Nothing was redrawn;
+  the shapes are simply no longer distorted.
+
+### Internal
+
+- **The property inspector's inline JavaScript has tests now** (27 of them). It is a plain page
+  Stream Deck loads, so it cannot import from `src/` and carries its own copy of the settings shape —
+  a copy nothing checked. `test/inspector.test.ts` drives the real page in headless Chromium over the
+  DevTools protocol, and the first thing it asserts is that the page's `DEFAULTS` still match
+  `src/settings.ts`. Closes #6.
+- The TypeScript target moved from Node 20 to Node 24, which is the runtime the manifest declares.
+  Closes #7.
+- Icons are rasterised by headless Chromium rather than ImageMagick, which is not installed on the
+  build machine — `npm run icons` now works without it.
 
 ## [2.0.1] — 2026-08-20
 

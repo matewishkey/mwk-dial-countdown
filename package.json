@@ -10,7 +10,8 @@
 		"test": "node --import ./test/ts-resolve.mjs --test \"test/*.test.ts\"",
 		"version:check": "node tools/check-version.mjs",
 		"mock": "node tools/mock-host.mjs",
-		"demo": "node tools/mock-host.mjs --demo"
+		"demo": "node tools/mock-host.mjs --demo",
+		"icons": "node --import ./test/ts-resolve.mjs tools/make-icons.mjs"
 	},
 	"devDependencies": {
 		"@elgato/cli": "^1.8.0",
@@ -18,7 +19,7 @@
 		"@rollup/plugin-node-resolve": "^15.2.2",
 		"@rollup/plugin-terser": "^1.0.0",
 		"@rollup/plugin-typescript": "^12.1.0",
-		"@tsconfig/node20": "^20.1.2",
+		"@tsconfig/node24": "^24.0.5",
 		"@types/node": "~24.1.0",
 		"rollup": "^4.0.2",
 		"tslib": "^2.6.2",
