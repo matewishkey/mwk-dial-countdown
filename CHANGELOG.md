@@ -9,14 +9,48 @@ this project that generally means they do not change the packaged plugin at all.
 
 ## [Unreleased]
 
-Nothing that changes what the plugin does. `manifest.json`'s formatting was restored after
-`streamdeck pack` rewrote it while packaging 3.1.0 — whitespace only, and the packaged manifest
-parses to the same JSON either way. Recorded rather than skipped because `manifest.json` is a file
-that ships, so a byte comparison against the 3.1.0 package would show it.
+### Added
 
-Whether entries like this belong here at all is
-[an open question](https://github.com/matewishkey/mwk-dial-countdown/issues/14) — `docs/releasing.md`
-currently says two incompatible things about repo-only work.
+- **A title.** Name a timer `Tea` and the line under the clock says so, on the dial and on the key
+  alike, instead of the preset's length. Leave it empty and the length comes back, exactly as before.
+
+  It is the plugin's own field, in the property inspector — Stream Deck's Title box stays switched
+  off, because neither control can use it. A key draws its whole face as one image and the
+  application composites a native title straight over the clock; a dial's touchscreen layouts are the
+  plugin's own files with no `title` item and no room for one. This was reported as *the title is
+  disabled and I cannot update it*, and it was: `UserTitleEnabled` has been false since 3.1.0. The
+  field is now somewhere it can actually work.
+
+  A named timer still reports the drift. `Tea · from 20m` on the dial once the clock has been wound
+  off its preset — the name replacing the length must not take the warning with it.
+
+- **Clear itself when finished**, after a wait you set. A finished timer otherwise sits reading
+  `done` until somebody presses it, which is right for a timer you are watching and wrong for one on
+  a page you left. Switched on, it goes back to a full, stopped clock — repeat tally included — on
+  its own.
+
+  It waits for the **whole** job: a repeating timer's earlier laps restart themselves and never reach
+  it, so nothing is cleared mid-job. It is silent, since the words under the clock name the gesture
+  you just made and nobody made this one. Any press, turn or reset in the meantime calls it off. And
+  a timer that ran out while its page was elsewhere is timed from the moment the page came back —
+  otherwise it would clear itself on the one frame where seeing `done` is the point.
+
+### Changed
+
+- **_Show the title_ is now _Show the label_.** It never named a title: what it switches is the line
+  under the clock, which is where the title now goes. Settings written by an older build are carried
+  across, so an install that had the line switched off does not come back with it switched on.
+
+- **The label rule lives in one file.** `src/label.ts` holds what the line says; the dial and the key
+  each take the part that fits the room they have. It was two copies in two actions, and they had
+  already drifted apart once over how a finished repeating timer reads.
+
+- **`manifest.json`'s formatting was restored** after `streamdeck pack` rewrote it while packaging
+  3.1.0 — whitespace only, and the packaged manifest parses to the same JSON either way. Recorded
+  rather than skipped because `manifest.json` is a file that ships, so a byte comparison against the
+  3.1.0 package would show it. Whether an entry like this belongs here at all is
+  [an open question](https://github.com/matewishkey/mwk-dial-countdown/issues/14) —
+  `docs/releasing.md` currently says two incompatible things about repo-only work.
 
 ## [3.1.0] — 2026-08-30
 

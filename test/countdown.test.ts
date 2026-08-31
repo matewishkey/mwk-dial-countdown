@@ -679,3 +679,145 @@ describe("settings arriving from the inspector", () => {
 		assert.equal(saved.volume, 100, "while the untouched settings come along unchanged");
 	});
 });
+
+describe("the auto-reset", () => {
+	/** A ten-second timer that clears itself a minute after the whole job ends. */
+	function clearing(overrides: Record<string, unknown> = {}): {
+		countdown: Countdown;
+		advance: (ms: number) => void;
+	} {
+		let now = 1_000_000;
+		const countdown = new Countdown(
+			normaliseSettings({
+				presets: [10],
+				presetIndex: 0,
+				soundId: "none",
+				autoResetEnabled: true,
+				autoResetSeconds: 60,
+				...overrides
+			}),
+			() => now
+		);
+		return { countdown, advance: (ms: number) => void (now += ms) };
+	}
+
+	/** Runs the timer out and settles it, which is the state the auto-reset waits in. */
+	function finish({ countdown, advance }: ReturnType<typeof clearing>): void {
+		countdown.toggle();
+		advance(10_000);
+		countdown.settle();
+	}
+
+	it("leaves a freshly finished timer alone, so `done` is actually seen", () => {
+		const state = clearing();
+		finish(state);
+
+		state.advance(59_000);
+		state.countdown.settle();
+
+		assert.equal(state.countdown.timer.status, "elapsed", "a minute has not passed yet");
+	});
+
+	it("puts the clock back to full and stopped once the wait is up", () => {
+		const state = clearing();
+		finish(state);
+
+		state.advance(60_000);
+		state.countdown.settle();
+
+		assert.equal(state.countdown.timer.status, "idle");
+		assert.equal(state.countdown.timer.remainingMs, 10_000, "a full clock, not the one that ran out");
+		assert.equal(state.countdown.onPreset, true, "which is the state it started in");
+	});
+
+	it("does nothing at all when it is switched off", () => {
+		// The positive control for every test above: the clock is driven exactly as far, and stays.
+		const state = clearing({ autoResetEnabled: false });
+		finish(state);
+
+		state.advance(60 * 60_000);
+		state.countdown.settle();
+
+		assert.equal(state.countdown.timer.status, "elapsed", "a finished timer waits for a finger by default");
+	});
+
+	it("says nothing when it fires — nobody made this gesture", () => {
+		const state = clearing();
+		finish(state);
+
+		state.advance(60_000);
+		state.countdown.settle();
+
+		assert.equal(state.countdown.toast, "", "the words under the clock name what you just did");
+	});
+
+	it("waits for the whole job, not for one lap of it", () => {
+		// The case the setting is worded for. A repeating timer's earlier laps restart themselves, and
+		// clearing the clock on one of them would end a job that was still running.
+		const state = clearing({ repeat: true, repeatCount: 3 });
+		state.countdown.toggle();
+
+		// Three ten-second laps, a second at a time — well past the sixty the reset is waiting for, and
+		// through two elapses it must not act on.
+		for (let second = 1; second <= 30; second++) {
+			state.advance(1_000);
+			state.countdown.settle();
+			assert.notEqual(state.countdown.timer.status, "idle", `cleared itself ${second}s in, mid-job`);
+		}
+		assert.equal(state.countdown.finished, true, "precondition: all three laps have run");
+
+		state.advance(60_000);
+		state.countdown.settle();
+		assert.equal(state.countdown.timer.status, "idle", "and now that the job is over, it clears");
+	});
+
+	it("takes the lap tally back to the start with it", () => {
+		const state = clearing({ repeat: true, repeatCount: 2 });
+
+		state.countdown.toggle();
+		for (let i = 0; i < 4 && !state.countdown.finished; i++) {
+			state.advance(10_000);
+			state.countdown.settle();
+		}
+		assert.equal(state.countdown.lap, 2, "precondition: the repeats ran out");
+
+		state.advance(60_000);
+		state.countdown.settle();
+
+		assert.equal(state.countdown.timer.status, "idle");
+		assert.equal(state.countdown.lap, 1, "×2/2 on a clock that has been put back to the start is not a lap");
+	});
+
+	it("is called off the moment somebody restarts the timer by hand", () => {
+		const state = clearing();
+		finish(state);
+
+		state.advance(30_000);
+		state.countdown.toggle();
+		assert.equal(state.countdown.timer.status, "running", "precondition: a fresh run, started by hand");
+
+		// Past the old deadline, but well inside the new run.
+		state.advance(5_000);
+		state.countdown.settle();
+
+		assert.equal(state.countdown.timer.status, "running", "a pending reset must not reach into the next run");
+	});
+
+	it("measures its wait from the moment a page comes back, not from a finish nobody watched", () => {
+		// A countdown set aside for an off-screen control keeps time with nothing running, so it comes
+		// back already elapsed and `resume` is the first thing that sees it. Dating the finish back to
+		// when it actually happened would clear the clock on the first frame — the one frame where
+		// seeing `done` is the whole point.
+		const state = clearing();
+		state.countdown.toggle();
+		state.advance(10_000 + 60 * 60_000);
+		state.countdown.resume();
+
+		state.countdown.settle();
+		assert.equal(state.countdown.timer.status, "elapsed", "an hour late, and it still shows what happened");
+
+		state.advance(60_000);
+		state.countdown.settle();
+		assert.equal(state.countdown.timer.status, "idle", "and clears itself a minute after being looked at");
+	});
+});

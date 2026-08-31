@@ -444,17 +444,18 @@ export function renderKey(state: KeyState): string {
 	const geometry = geometryFor(KEY_SIZE);
 	const { centre: c } = geometry;
 	const colour = ringColour(state);
+	const caption = fitKeyCaption(state.caption);
 
 	return [
 		renderRing({ ...state, size: KEY_SIZE, hollow: true }).replace(/<\/svg>$/, ""),
 		text(state.value, c, round(c + KEY_VALUE_BASELINE), keyValueFontSize(state.value), 600, "#FFFFFF"),
-		state.caption === ""
+		caption === ""
 			? ""
 			: text(
-					state.caption,
+					caption,
 					c,
 					round(c + KEY_CAPTION_BASELINE),
-					keyCaptionFontSize(state.caption),
+					keyCaptionFontSize(caption),
 					400,
 					state.accent ? colour : KEY_CAPTION_COLOUR
 				),
@@ -495,9 +496,27 @@ const KEY_CAPTION_WIDTH = 88;
 const KEY_CAPTION_SIZE_MAX = 19;
 const KEY_CAPTION_SIZE_MIN = 11;
 
+/**
+ * The longest caption the smallest font still fits, in characters.
+ *
+ * Shrinking the font has a floor — below about 11px a caption on a key is not read, only noticed —
+ * so past this length there is nothing left to give and the text simply runs out through the ring's
+ * stroke. It never used to: every caption the plugin composed was a handful of characters. A title
+ * is typed, so it is bounded here instead.
+ */
+const KEY_CAPTION_MAX_CHARS = Math.floor((KEY_CAPTION_WIDTH * 2) / KEY_CAPTION_SIZE_MIN);
+
 export function keyCaptionFontSize(caption: string): number {
 	const fitted = Math.floor((KEY_CAPTION_WIDTH * 2) / Math.max(1, caption.length));
 	return Math.max(KEY_CAPTION_SIZE_MIN, Math.min(KEY_CAPTION_SIZE_MAX, fitted));
+}
+
+/** Clips a caption to what the key can actually show, marking that it was clipped. */
+export function fitKeyCaption(caption: string): string {
+	if (caption.length <= KEY_CAPTION_MAX_CHARS) {
+		return caption;
+	}
+	return `${caption.slice(0, KEY_CAPTION_MAX_CHARS - 1).trimEnd()}\u2026`;
 }
 
 /**

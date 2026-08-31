@@ -52,6 +52,16 @@ export class Countdown {
 	 */
 	#completed = 0;
 
+	/**
+	 * When the whole job finished, or `null` when it has not.
+	 *
+	 * Only set on the elapse that ends the *last* run — a repeating timer's earlier laps restart
+	 * themselves and never come through here. It is the clock the auto-reset delay is measured from,
+	 * and it is cleared the moment the timer is anything but elapsed, so a finished timer somebody
+	 * restarted by hand does not carry a pending reset into its next run.
+	 */
+	#finishedAt: number | null = null;
+
 	#ack: Acknowledgement | null = null;
 
 	readonly #now: Clock;
@@ -233,6 +243,11 @@ export class Countdown {
 	resume(): void {
 		if (this.timer.status === "elapsed") {
 			this.#alerted = true;
+
+			// The auto-reset's delay starts now rather than whenever the timer actually ran out. Nothing
+			// was running to notice that moment, and dating the finish back to it would clear the clock
+			// the instant the page came back — the one frame where seeing `done` is the whole point.
+			this.#finishedAt = this.#now();
 		}
 	}
 
@@ -364,7 +379,15 @@ export class Countdown {
 	 * which sound to play in one place rather than half here and half there.
 	 */
 	settle(): boolean {
-		if (this.timer.status !== "elapsed" || this.#alerted) {
+		if (this.timer.status !== "elapsed") {
+			this.#finishedAt = null;
+			return false;
+		}
+
+		// Already announced, so the only thing left that can happen to this timer without a finger on
+		// it is the auto-reset falling due.
+		if (this.#alerted) {
+			this.#autoReset();
 			return false;
 		}
 
@@ -377,9 +400,39 @@ export class Countdown {
 			this.#alerted = false;
 			this.timer.reset();
 			this.timer.start();
+			return true;
 		}
 
+		// The end of the whole job, laps included — which is the only thing the auto-reset waits for.
+		this.#finishedAt = this.#now();
 		return true;
+	}
+
+	/**
+	 * Puts a long-finished timer back to the start, if it has been asked to.
+	 *
+	 * A countdown that has run out otherwise sits reading `done` until somebody presses it, which is
+	 * right for a timer you are watching and wrong for one on a page you left — you come back to a
+	 * used clock and have to clear it before it is a timer again. After the delay it clears itself:
+	 * full clock, stopped, tally back to zero. Exactly the double tap, and deliberately so — the same
+	 * state, arrived at two ways, rather than a second idea of what "the start" means.
+	 *
+	 * Silent, with no acknowledgement drawn. The words under the clock name the gesture you just
+	 * made, and nobody made this one.
+	 */
+	#autoReset(): void {
+		if (!this.#settings.autoResetEnabled || this.#finishedAt === null) {
+			return;
+		}
+
+		if (this.#now() - this.#finishedAt < this.#settings.autoResetSeconds * 1000) {
+			return;
+		}
+
+		this.#finishedAt = null;
+		this.timer.reset();
+		this.#completed = 0;
+		this.#alerted = false;
 	}
 
 	#say(text: string): void {

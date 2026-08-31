@@ -156,6 +156,7 @@
 			}
 
 			select,
+			.row input[type="text"],
 			.row input[type="number"] {
 				box-sizing: border-box;
 				background: #2d2d2d;
@@ -165,8 +166,13 @@
 				padding: 4px 6px;
 			}
 
-			select {
+			select,
+			.row input[type="text"] {
 				width: 158px;
+			}
+
+			.row input[type="text"]::placeholder {
+				color: #6e6e76;
 			}
 
 			.row input[type="number"] {
@@ -266,6 +272,18 @@
 		</div>
 
 		<h2>Appearance</h2>
+		<div class="row">
+			<label for="title">Title</label>
+			<input type="text" id="title" maxlength="32" placeholder="Preset length" />
+		</div>
+		<p class="hint">
+			<strong>Name the timer</strong> and the line under the clock says it — <em>Tea</em> rather than <em>20m</em>.
+			Leave it empty and the preset's own length goes there, as before. This is the plugin's field, not Stream Deck's
+			Title box: the <span class="encoder-only">touchscreen layout has nowhere to put a native title</span
+			><span class="key-only"
+				>key draws its whole face as one image, so a native title would land on top of the clock</span
+			>.
+		</p>
 		<div class="row dial-only">
 			<label for="layout">Display</label>
 			<select id="layout">
@@ -286,8 +304,8 @@
 			</select>
 		</div>
 		<div class="row">
-			<label for="showTitle">Show the title</label>
-			<input type="checkbox" id="showTitle" />
+			<label for="showLabel">Show the label</label>
+			<input type="checkbox" id="showLabel" />
 		</div>
 		<div class="row dial-only">
 			<label for="showLogo">Logo on an idle clock</label>
@@ -320,6 +338,23 @@
 			<input type="number" id="repeatCount" min="1" max="10" step="1" />
 			<span class="muted">times in total</span>
 		</div>
+		<div class="row">
+			<label for="autoResetEnabled">Clear itself when finished</label>
+			<input type="checkbox" id="autoResetEnabled" />
+		</div>
+		<div class="row sub">
+			<label for="autoResetMin">Wait</label>
+			<div class="time">
+				<input type="number" id="autoResetMin" min="0" max="1439" /><span>m</span>
+				<input type="number" id="autoResetSec" min="0" max="59" /><span>s</span>
+			</div>
+			<span class="muted" id="autoResetTotal"></span>
+		</div>
+		<p class="hint">
+			A finished timer otherwise sits reading <em>done</em> until you press it. Switch this on and it puts itself back
+			to a full, stopped clock after the wait — repeat tally included — so you come back to a timer rather than to a
+			used one. It waits for the <em>whole</em> job, repeats and all.
+		</p>
 
 		<h2>Sound</h2>
 		<div class="row">
@@ -347,6 +382,7 @@
 
 		<script>
 			const MAX_PRESET_SECONDS = 24 * 60 * 60;
+			const MAX_TITLE_LENGTH = 32;
 
 			/**
 			 * Mirrors `src/settings.ts`. The plugin sanitises everything it is given and writes the
@@ -357,13 +393,16 @@
 				presetIndex: 0,
 				layout: "ring",
 				theme: "default",
+				title: "",
 				showLogo: true,
-				showTitle: true,
+				showLabel: true,
 				showFinishTime: false,
 				warnEnabled: false,
 				warnSeconds: 60,
 				repeat: false,
 				repeatCount: 3,
+				autoResetEnabled: false,
+				autoResetSeconds: 60,
 				soundId: "default",
 				customSoundPath: "",
 				volume: 100,
@@ -525,7 +564,14 @@
 			function renderControls() {
 				el("layout").value = state.layout;
 				el("theme").value = state.theme;
-				el("showTitle").checked = state.showTitle;
+				// Skipped while it has the caret. This runs on every `didReceiveSettings`, and the plugin
+				// writes settings of its own — loading a preset on the hardware saves the new index — so
+				// without the guard a save made on the device would overwrite a title halfway through
+				// being typed. The preset rows have the same problem and solve it the same way.
+				if (document.activeElement !== el("title")) {
+					el("title").value = state.title;
+				}
+				el("showLabel").checked = state.showLabel;
 				el("showLogo").checked = state.showLogo;
 				el("showFinishTime").checked = state.showFinishTime;
 				el("warnEnabled").checked = state.warnEnabled;
@@ -534,6 +580,10 @@
 				el("warnTotal").textContent = `left · ${label(state.warnSeconds)}`;
 				el("repeat").checked = state.repeat;
 				el("repeatCount").value = String(state.repeatCount);
+				el("autoResetEnabled").checked = state.autoResetEnabled;
+				el("autoResetMin").value = String(Math.floor(state.autoResetSeconds / 60));
+				el("autoResetSec").value = String(state.autoResetSeconds % 60);
+				el("autoResetTotal").textContent = `after · ${label(state.autoResetSeconds)}`;
 				el("soundRepeat").value = String(state.soundRepeat);
 				el("volume").value = String(state.volume);
 				el("soundId").value = state.soundId;
@@ -553,7 +603,8 @@
 			function renderEnabled() {
 				for (const [on, ids] of [
 					[state.warnEnabled, ["warnMin", "warnSec"]],
-					[state.repeat, ["repeatCount"]]
+					[state.repeat, ["repeatCount"]],
+					[state.autoResetEnabled, ["autoResetMin", "autoResetSec"]]
 				]) {
 					for (const id of ids) {
 						const control = el(id);
@@ -567,12 +618,14 @@
 			for (const [id, key, read] of [
 				["layout", "layout", (i) => i.value],
 				["theme", "theme", (i) => i.value],
-				["showTitle", "showTitle", (i) => i.checked],
+				["title", "title", (i) => i.value.trim().slice(0, MAX_TITLE_LENGTH)],
+				["showLabel", "showLabel", (i) => i.checked],
 				["showLogo", "showLogo", (i) => i.checked],
 				["showFinishTime", "showFinishTime", (i) => i.checked],
 				["warnEnabled", "warnEnabled", (i) => i.checked],
 				["repeat", "repeat", (i) => i.checked],
 				["repeatCount", "repeatCount", (i) => clamp(Math.round(Number(i.value) || 1), 1, 10)],
+				["autoResetEnabled", "autoResetEnabled", (i) => i.checked],
 				["soundRepeat", "soundRepeat", (i) => clamp(Math.round(Number(i.value) || 1), 1, 10)],
 				["volume", "volume", (i) => clamp(Number(i.value) || 0, 0, 100)]
 			]) {
@@ -583,14 +636,23 @@
 				});
 			}
 
-			// The fade threshold is minutes *and* seconds: it is often well under a minute, and just as
+			// Two durations are minutes *and* seconds: both are often well under a minute and just as
 			// often a couple of minutes, and one field alone could not express both without decimals.
-			for (const id of ["warnMin", "warnSec"]) {
-				el(id).addEventListener("change", () => {
-					state.warnSeconds = Math.max(1, (Number(el("warnMin").value) || 0) * 60 + (Number(el("warnSec").value) || 0));
-					save();
-					renderControls();
-				});
+			for (const [key, minId, secId] of [
+				["warnSeconds", "warnMin", "warnSec"],
+				["autoResetSeconds", "autoResetMin", "autoResetSec"]
+			]) {
+				for (const id of [minId, secId]) {
+					el(id).addEventListener("change", () => {
+						state[key] = clamp(
+							Math.max(1, (Number(el(minId).value) || 0) * 60 + (Number(el(secId).value) || 0)),
+							1,
+							MAX_PRESET_SECONDS
+						);
+						save();
+						renderControls();
+					});
+				}
 			}
 
 			el("add").addEventListener("click", () => {

@@ -749,18 +749,30 @@ async function runDemo() {
 			}
 		],
 
-		// Title off, logo on, brand theme.
+		// Label off, logo on, brand theme.
 		[
-			"title hidden, logo on, brand theme",
+			"label hidden, logo on, brand theme",
 			async () => {
 				applySettings({
 					presets: [600],
 					presetIndex: 0,
 					warnEnabled: false,
-					showTitle: false,
+					showLabel: false,
 					showLogo: true,
 					theme: "mwk"
 				});
+				await wait(300);
+			}
+		],
+
+		// A named timer. The label says what it is rather than how long it is, and keeps saying so once
+		// the dial has wound the clock off the preset — which is the half a name could have taken away.
+		[
+			"titled `Tea`, then dialled off its preset",
+			async () => {
+				applySettings({ presets: [1200], presetIndex: 0, title: "Tea", showLabel: true, theme: "default" });
+				await wait(300);
+				gestures.rotate(3, false);
 				await wait(300);
 			}
 		],
@@ -772,7 +784,7 @@ async function runDemo() {
 			"alarm set to play 3 times, 2s timer → runs out",
 			async () => {
 				const before = alertCount;
-				applySettings({ presets: [2], presetIndex: 0, soundRepeat: 3, showTitle: true });
+				applySettings({ presets: [2], presetIndex: 0, title: "", soundRepeat: 3, showLabel: true });
 				await wait(300);
 				gestures.touch(false);
 				await wait(2600);
@@ -829,6 +841,38 @@ async function runDemo() {
 				console.log(`\n   label on restart: "${restarted}", one lap later: "${screen.label}"`);
 				console.log(
 					`   ${restarted.includes("\u00d71/2") && !restarted.includes("done") && screen.label.includes("\u00d72/2") ? "\u2713 counter reset, and it repeats again" : "\u2717 the spent lap count stuck"}`
+				);
+			}
+		],
+
+		// Auto-reset: the other end of a finished timer. Repeat starts the next run at once; this waits
+		// for the whole job to be over and then clears the clock, so a page you left has a timer on it
+		// rather than a used one.
+		[
+			"auto-reset on, 1s wait, 3s preset → runs out, says `done`, then clears itself",
+			async () => {
+				// Three seconds, not the two the step above used: an unchanged duration is not a reload,
+				// so a 2s preset here would leave the previous step's clock running rather than start one.
+				applySettings({
+					presets: [3],
+					presetIndex: 0,
+					repeat: false,
+					showLogo: true,
+					soundId: "none",
+					autoResetEnabled: true,
+					autoResetSeconds: 1
+				});
+				await wait(300);
+				gestures.touch(false);
+				await wait(3400);
+				const atFinish = `${screen.value} / "${screen.label}" / glyph "${screen.glyph}"`;
+				const finished = screen.label.includes("done") && screen.glyph === "done";
+
+				await wait(1400);
+				console.log(`\n   at the finish: ${atFinish}`);
+				console.log(`   a second later: ${screen.value} / "${screen.label}" / glyph "${screen.glyph}"`);
+				console.log(
+					`   ${finished && screen.glyph === "logo" && screen.value === "0:03" ? "\u2713 done was shown, then the clock went back to full and idle on its own" : "\u2717 the finished timer did not clear itself"}`
 				);
 			}
 		],
@@ -892,7 +936,7 @@ async function runDemo() {
 		[
 			"key: one press → starts",
 			async () => {
-				applySettings({ presets: [600, 1200], presetIndex: 0, repeat: false, soundId: "none", showTitle: true });
+				applySettings({ presets: [600, 1200], presetIndex: 0, repeat: false, soundId: "none", showLabel: true });
 				await wait(400);
 				await keyPress(60);
 			}

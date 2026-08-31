@@ -15,8 +15,28 @@ export type DialCountdownSettings = {
 	presetIndex: number;
 	layout: "ring" | "bar";
 	theme: string;
+	/**
+	 * A name for this timer, drawn on the label line — `Tea` rather than `20m`.
+	 *
+	 * The plugin's own field rather than Stream Deck's Title box, which stays switched off in the
+	 * manifest. Both controls draw their own text: the key's whole face is one image, and neither
+	 * touchscreen layout has a `title` item for the application to fill. A native title therefore had
+	 * nowhere to land on a dial and could only land *on top of* the clock on a key. Owning the field
+	 * is what lets the same name appear in the same place on both.
+	 *
+	 * Empty means unnamed, and an unnamed timer falls back to its preset's length.
+	 */
+	title: string;
 	showLogo: boolean;
-	showTitle: boolean;
+	/**
+	 * Whether the line under the clock is drawn at all — the title or preset length, and the lap
+	 * tally with it.
+	 *
+	 * Called `showTitle` until the title became a real thing you can type. It never named a title:
+	 * what it switches is the label line, so it is called that now, and {@link normaliseSettings}
+	 * carries the old name across.
+	 */
+	showLabel: boolean;
 	showFinishTime: boolean;
 	warnEnabled: boolean;
 	warnSeconds: number;
@@ -28,6 +48,17 @@ export type DialCountdownSettings = {
 	 * times: the third repeat was still under the limit.
 	 */
 	repeatCount: number;
+	/**
+	 * Whether a timer that has finished for good puts itself back to the start after a while.
+	 *
+	 * Distinct from repeat, which starts the next run immediately and keeps counting. This is the
+	 * opposite end: the job is over, the tally is spent, and the clock is left reading `done` until
+	 * somebody comes back to it. Switching this on means it tidies up after itself instead —
+	 * full clock, stopped, tally back to zero, exactly where it started.
+	 */
+	autoResetEnabled: boolean;
+	/** How long a finished timer waits before it resets itself, in seconds. */
+	autoResetSeconds: number;
 	/**
 	 * Which sound plays when the timer finishes, or {@link NO_SOUND} for none.
 	 *
@@ -56,6 +87,15 @@ export const MAX_PRESET_SECONDS = 24 * 60 * 60;
 
 export const MAX_SOUND_REPEAT = 10;
 
+/**
+ * Longest title kept, in characters.
+ *
+ * Not a display limit — the dial's label ellipsises and the key's caption shrinks to fit, so a long
+ * title degrades on its own. It is a limit on what is *stored*, so a paragraph pasted into the field
+ * cannot sit in the settings for ever being ellipsised down to three characters.
+ */
+export const MAX_TITLE_LENGTH = 32;
+
 /** A repeating timer is deliberately bounded: nothing here should still be going tomorrow. */
 export const MAX_REPEAT_COUNT = 10;
 
@@ -64,13 +104,16 @@ export const DEFAULTS: DialCountdownSettings = {
 	presetIndex: 0,
 	layout: "ring",
 	theme: "default",
+	title: "",
 	showLogo: true,
-	showTitle: true,
+	showLabel: true,
 	showFinishTime: false,
 	warnEnabled: false,
 	warnSeconds: 60,
 	repeat: false,
 	repeatCount: 3,
+	autoResetEnabled: false,
+	autoResetSeconds: 60,
 	soundId: DEFAULT_SOUND,
 	customSoundPath: "",
 	volume: 100,
@@ -88,13 +131,18 @@ export function normaliseSettings(raw: unknown): DialCountdownSettings {
 		presetIndex: clampIndex(input.presetIndex, presets.length),
 		layout: input.layout === "bar" ? "bar" : "ring",
 		theme: typeof input.theme === "string" && input.theme.length > 0 ? input.theme : DEFAULTS.theme,
+		title: title(input.title),
 		showLogo: bool(input.showLogo, DEFAULTS.showLogo),
-		showTitle: bool(input.showTitle, DEFAULTS.showTitle),
+		// The old name is honoured, since settings outlive the build that wrote them: an install that
+		// had the label switched off must not come back with it switched on.
+		showLabel: bool(input.showLabel, bool(input.showTitle, DEFAULTS.showLabel)),
 		showFinishTime: bool(input.showFinishTime, DEFAULTS.showFinishTime),
 		warnEnabled: bool(input.warnEnabled, DEFAULTS.warnEnabled),
 		warnSeconds: int(input.warnSeconds, DEFAULTS.warnSeconds, 1, MAX_PRESET_SECONDS),
 		repeat: bool(input.repeat, DEFAULTS.repeat),
 		repeatCount: int(input.repeatCount, DEFAULTS.repeatCount, 1, MAX_REPEAT_COUNT),
+		autoResetEnabled: bool(input.autoResetEnabled, DEFAULTS.autoResetEnabled),
+		autoResetSeconds: int(input.autoResetSeconds, DEFAULTS.autoResetSeconds, 1, MAX_PRESET_SECONDS),
 		soundId: soundIdFrom(input),
 		customSoundPath: typeof input.customSoundPath === "string" ? input.customSoundPath : "",
 		volume: int(input.volume, DEFAULTS.volume, 0, 100),
@@ -140,6 +188,19 @@ function soundIdFrom(input: Record<string, unknown>): string {
 		return NO_SOUND;
 	}
 	return typeof input.soundId === "string" && input.soundId.length > 0 ? input.soundId : DEFAULTS.soundId;
+}
+
+/**
+ * A title, trimmed and capped. Anything that is not a string is no title at all.
+ *
+ * Trimmed because a title that is only spaces would count as set — it would win the label line and
+ * then draw nothing, leaving the preset length gone with no way to see why.
+ */
+function title(value: unknown): string {
+	if (typeof value !== "string") {
+		return DEFAULTS.title;
+	}
+	return value.trim().slice(0, MAX_TITLE_LENGTH);
 }
 
 function bool(value: unknown, fallback: boolean): boolean {

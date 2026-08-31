@@ -9,6 +9,7 @@ import {
 	MAX_PRESET_SECONDS,
 	MAX_REPEAT_COUNT,
 	MAX_SOUND_REPEAT,
+	MAX_TITLE_LENGTH,
 	normalisePresets,
 	normaliseSettings
 } from "../src/settings.ts";
@@ -24,7 +25,8 @@ describe("normaliseSettings", () => {
 			const settings = normaliseSettings(rubbish);
 			assert.deepEqual(settings.presets, DEFAULT_PRESETS, `presets not restored for ${JSON.stringify(rubbish)}`);
 			assert.equal(typeof settings.volume, "number");
-			assert.equal(typeof settings.showTitle, "boolean");
+			assert.equal(typeof settings.showLabel, "boolean");
+			assert.equal(typeof settings.title, "string");
 		}
 	});
 
@@ -85,6 +87,48 @@ describe("normaliseSettings", () => {
 	});
 });
 
+describe("the title", () => {
+	it("is empty out of the box, so an unnamed timer still shows its preset length", () => {
+		assert.equal(DEFAULTS.title, "");
+	});
+
+	it("keeps what was typed", () => {
+		assert.equal(normaliseSettings({ title: "Tea" }).title, "Tea");
+	});
+
+	it("trims it, since a title of spaces would win the label line and then draw nothing", () => {
+		assert.equal(normaliseSettings({ title: "  Tea  " }).title, "Tea");
+		assert.equal(normaliseSettings({ title: "   " }).title, "", "whitespace alone is not a title");
+	});
+
+	it("caps what is stored, so a pasted paragraph does not live in the settings for ever", () => {
+		const long = "x".repeat(MAX_TITLE_LENGTH + 40);
+		assert.equal(normaliseSettings({ title: long }).title.length, MAX_TITLE_LENGTH);
+	});
+
+	it("treats anything that is not a string as no title at all", () => {
+		for (const rubbish of [42, null, {}, ["Tea"], true]) {
+			assert.equal(normaliseSettings({ title: rubbish }).title, "");
+		}
+	});
+});
+
+describe("the auto-reset", () => {
+	it("is off out of the box — a finished timer stays finished until it is told otherwise", () => {
+		assert.equal(DEFAULTS.autoResetEnabled, false);
+	});
+
+	it("waits a minute by default", () => {
+		assert.equal(DEFAULTS.autoResetSeconds, 60);
+	});
+
+	it("measures its wait in seconds, clamped like every other duration", () => {
+		assert.equal(normaliseSettings({ autoResetSeconds: 15 }).autoResetSeconds, 15);
+		assert.equal(normaliseSettings({ autoResetSeconds: 0 }).autoResetSeconds, 1);
+		assert.equal(normaliseSettings({ autoResetSeconds: 99_999_999 }).autoResetSeconds, MAX_PRESET_SECONDS);
+	});
+});
+
 describe("normalisePresets", () => {
 	it("discards entries that are not usable durations", () => {
 		assert.deepEqual(normalisePresets([60, "90", null, -5, 0, Number.NaN, 120]), [60, 120]);
@@ -134,6 +178,27 @@ describe("settings written by an older build", () => {
 
 		assert.equal(normaliseSettings({ soundEnabled: true, soundId: chosen }).soundId, chosen);
 		assert.equal(normaliseSettings({ soundId: chosen }).soundId, chosen, "no flag at all is not a flag set to false");
+	});
+
+	it("carries a label switch that was turned off across its rename", () => {
+		// `showTitle` never named a title — it switched the label line, and now that a title is a real
+		// thing you can type, keeping the old name would have been a lie. An install that had the line
+		// switched off must not come back with it switched on.
+		assert.equal(normaliseSettings({ showTitle: false }).showLabel, false);
+	});
+
+	it("leaves a label switch that was turned on alone", () => {
+		// The positive control, again: a migration that fired unconditionally would pass the test above.
+		assert.equal(normaliseSettings({ showTitle: true }).showLabel, true);
+		assert.equal(normaliseSettings({}).showLabel, true, "no flag at all is not a flag set to false");
+	});
+
+	it("prefers the new name when both are present", () => {
+		assert.equal(normaliseSettings({ showTitle: true, showLabel: false }).showLabel, false);
+	});
+
+	it("does not resurrect the old label switch either", () => {
+		assert.ok(!("showTitle" in normaliseSettings({ showTitle: false })));
 	});
 
 	it("does not resurrect the flag itself", () => {

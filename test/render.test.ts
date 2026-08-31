@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 
 import {
 	asDataUri,
+	fitKeyCaption,
 	KEY_SIZE,
 	keyCaptionFontSize,
 	keyValueFontSize,
@@ -253,6 +254,27 @@ describe("the key face", () => {
 		for (const caption of ["20m", "paused", "next · 40m", "1h 10m 10s", "×10/10", "reset"]) {
 			const width = (caption.length * keyCaptionFontSize(caption)) / 2;
 			assert.ok(width <= 90, `"${caption}" needs about ${Math.round(width)}px and would foul the ring`);
+		}
+	});
+
+	it("clips a caption the smallest font still cannot fit, since shrinking has a floor", () => {
+		// Every caption the plugin composes is a handful of characters, so this never came up until a
+		// title became something you type. Past the floor the font stops giving way and the text simply
+		// runs out through the ring.
+		const long = "Sunday afternoon pasta";
+		const fitted = fitKeyCaption(long);
+
+		assert.notEqual(fitted, long);
+		assert.ok(fitted.endsWith("\u2026"), "and it says it was clipped rather than just stopping");
+		assert.ok((fitted.length * keyCaptionFontSize(fitted)) / 2 <= 90, "what is left has to fit");
+		assert.ok(renderKey({ ...key, caption: long }).includes(fitted), "the drawn face uses the clipped form");
+	});
+
+	it("leaves a caption that already fits exactly as it was", () => {
+		// The positive control: a clipper with an off-by-one would trim these too, and the test above
+		// would not notice.
+		for (const caption of ["20m", "paused", "next · 40m", "done ×10/10", "Tea"]) {
+			assert.equal(fitKeyCaption(caption), caption);
 		}
 	});
 

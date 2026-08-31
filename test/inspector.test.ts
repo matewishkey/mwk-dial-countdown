@@ -20,7 +20,14 @@ import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 
 import { chromiumPath, startInspector } from "./inspector-harness.mjs";
-import { DEFAULT_PRESETS, DEFAULTS, MAX_PRESET_SECONDS, MAX_REPEAT_COUNT, MAX_SOUND_REPEAT } from "../src/settings.ts";
+import {
+	DEFAULT_PRESETS,
+	DEFAULTS,
+	MAX_PRESET_SECONDS,
+	MAX_REPEAT_COUNT,
+	MAX_SOUND_REPEAT,
+	MAX_TITLE_LENGTH
+} from "../src/settings.ts";
 
 const noBrowser = chromiumPath() === null;
 
@@ -75,6 +82,12 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 			await ui.load({});
 			assert.equal(await ui.evaluate('document.getElementById("repeatCount").max'), String(MAX_REPEAT_COUNT));
 			assert.equal(await ui.evaluate('document.getElementById("soundRepeat").max'), String(MAX_SOUND_REPEAT));
+		});
+
+		it("agrees on the longest title, which the field enforces before anything is typed", async () => {
+			await ui.load({});
+			assert.equal(await ui.evaluate("MAX_TITLE_LENGTH"), MAX_TITLE_LENGTH);
+			assert.equal(await ui.evaluate('document.getElementById("title").maxLength'), MAX_TITLE_LENGTH);
 		});
 	});
 
@@ -156,13 +169,16 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 				presetIndex: 1,
 				layout: "bar",
 				theme: "mwk",
+				title: "Tea",
 				showLogo: false,
-				showTitle: false,
+				showLabel: false,
 				showFinishTime: true,
 				warnEnabled: true,
 				warnSeconds: 125,
 				repeat: true,
 				repeatCount: MAX_REPEAT_COUNT,
+				autoResetEnabled: true,
+				autoResetSeconds: 300,
 				soundId: "custom",
 				customSoundPath: "/tmp/ding.wav",
 				volume: 0,
@@ -170,8 +186,8 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 			};
 			await ui.load(stored);
 
-			await change("showTitle", true);
-			assert.deepEqual(await lastSaved(), { ...stored, showTitle: true });
+			await change("showLabel", true);
+			assert.deepEqual(await lastSaved(), { ...stored, showLabel: true });
 		});
 
 		it("clamps a repeat count typed outside its range", async () => {
@@ -219,6 +235,74 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 			})()`);
 
 			assert.equal((await lastSaved())?.warnSeconds, 1);
+		});
+
+		it("combines the auto-reset's minutes and seconds too, and does not cross-wire them with the fade", async () => {
+			// The two durations share one handler now. The check that matters is that each writes its
+			// own key: a loop that closed over the wrong id would leave both fields editing one setting.
+			await ui.load({ ...DEFAULTS, warnSeconds: 45 });
+
+			await ui.evaluate(`(() => {
+				document.getElementById("autoResetMin").value = "2";
+				document.getElementById("autoResetSec").value = "30";
+				document.getElementById("autoResetSec").dispatchEvent(new Event("change", { bubbles: true }));
+				return true;
+			})()`);
+
+			const saved = await lastSaved();
+			assert.equal(saved?.autoResetSeconds, 150);
+			assert.equal(saved?.warnSeconds, 45, "the fade must not have moved");
+			assert.equal(await ui.evaluate('document.getElementById("autoResetTotal").textContent'), "after · 2m 30s");
+		});
+	});
+
+	describe("the title", () => {
+		it("saves what was typed", async () => {
+			await ui.load({ ...DEFAULTS });
+
+			await change("title", "Tea");
+			assert.equal((await lastSaved())?.title, "Tea");
+		});
+
+		it("trims it, the way the plugin will anyway", async () => {
+			await ui.load({ ...DEFAULTS });
+
+			await change("title", "  Tea  ");
+			assert.equal((await lastSaved())?.title, "Tea");
+
+			await change("title", "   ");
+			assert.equal((await lastSaved())?.title, "", "whitespace alone is not a title");
+		});
+
+		it("shows a stored title in the field", async () => {
+			await ui.load({ ...DEFAULTS, title: "Pasta" });
+			assert.equal(await text('document.getElementById("title").value'), "Pasta");
+		});
+
+		it("does not overwrite a title being typed when the plugin saves settings of its own", async () => {
+			// The plugin writes settings itself — loading a preset on the hardware saves the new index —
+			// and every one of those comes back here as a `didReceiveSettings`, which redraws the panel.
+			// Without the focus guard that redraw takes whatever is half-typed with it.
+			await ui.load({ ...DEFAULTS, title: "Tea" });
+
+			await ui.evaluate(`(() => {
+				const field = document.getElementById("title");
+				field.focus();
+				field.value = "Pas";
+				return true;
+			})()`);
+
+			await ui.evaluate(`(() => {
+				window.__subs.didReceiveSettings({ payload: { settings: { ...window.__initial, theme: "ocean" } } });
+				return true;
+			})()`);
+
+			assert.equal(await text('document.getElementById("title").value'), "Pas", "the caret's field is left alone");
+			assert.equal(
+				await text('document.getElementById("theme").value'),
+				"ocean",
+				"positive control: the redraw did run, it just skipped the one field with the caret in it"
+			);
 		});
 	});
 

@@ -82,13 +82,51 @@ The pulse is drawn as its own hairline rather than by brightening the arc, for t
 
 The key action is the same countdown with the turning taken away — press, press twice, hold. Presets are edited in the property inspector, since there is nothing on a key to wind them with.
 
-It draws its **whole face as one SVG**, digits included, rather than using `setTitle`. Stream Deck stops honouring a plugin's title the moment the user types one of their own, and a clock that silently stops being a clock because somebody labelled the button is not a clock. The title is left free for whatever you want it for.
+It draws its **whole face as one SVG**, digits included, rather than using `setTitle`. Stream Deck stops honouring a plugin's title the moment the user types one of their own, and a clock that silently stops being a clock because somebody labelled the button is not a clock. `UserTitleEnabled` is false in the manifest for exactly that reason, and the title you can type lives in the property inspector instead — see [Naming a timer](#naming-a-timer).
 
 That image is sent as a **data URI**, never as raw markup — `asDataUri`, the same wrapper the touchscreen ring uses.
 
 This is worth stating carefully, because the obvious explanation is not proven. The key action originally sent bare `<svg>` markup and did nothing at all on hardware: no ring, no clock, and every gesture invisible because nothing it drew ever reached the screen. Sending a data URI fixed it. But Elgato's own documentation disagrees with itself on whether raw markup was ever valid — the WebSocket reference lists only a file path or "a base64 encoded string with the mime type declared", while the SDK's JSDoc for `setImage` explicitly allows "an SVG `string`". So the data URI is the form known to work, and the raw string is the form known to have failed; which of the two facts explains the other is not settled.
 
-With no room for a glyph behind the digits, the line under the clock carries the state instead: the gesture you just made, then `paused` if it is paused, then the preset's length.
+With no room for a glyph behind the digits, the line under the clock carries the state instead: the gesture you just made, then `paused` if it is paused, then the lap tally, then what the timer is called.
+
+## Naming a timer
+
+A preset carries no name of its own, so the line under the clock has always been the preset's length — `20m`. A **title** replaces it: type `Tea` and that is what the line says, on the dial and on the key alike. Leave it empty and the length comes back.
+
+**It is the plugin's field, not Stream Deck's.** The native Title box is switched off on both actions, and neither control could have used it. On a key, Stream Deck composites the user's title over whatever the plugin drew, so a native title would land on top of the clock — the very thing drawing the whole face as one image exists to prevent. On a dial there is no `title` item in either layout, both of which are the plugin's own files with every text box already spoken for, so a native title would have nowhere to land at all. Owning the field is what lets one name appear in one place on both.
+
+The rule lives in `src/label.ts` rather than in the two actions, which is where it used to live in two copies that had already drifted apart once over how a finished repeating timer reads. Each control takes the part of it that fits the room it has:
+
+| | Dial | Key |
+| --- | --- | --- |
+| Unnamed | `20m` | `20m` |
+| Named | `Tea` | `Tea` |
+| Dialled off the preset | `Tea · from 20m` | `Tea` |
+| Repeating | `Tea · ×2/3` | `×2/3`, once it is running |
+| Finished | `Tea · ×3/3 · done` | `done ×3/3` |
+
+The drift note is the one thing the key cannot say: `from 20m` needs both halves, and a key has one line. The clock above it is the whole of what a key says about its duration.
+
+**A long title is clipped on a key**, at about sixteen characters, with an ellipsis to say so. The caption's font shrinks to fit and has a floor — below about 11px a caption on a key is not read, only noticed — so past that length there is nothing left to give and the text would run out through the ring's stroke. It never came up before, because every caption the plugin composed was a handful of characters. The dial's label ellipsises in the layout itself and needs no help. Thirty-two characters is what is *stored*, so nothing longer sits in the settings for ever being ellipsised down.
+
+The switch that hides the line is called **Show the label**. It was called *Show the title* and never named a title — it switched this line — so it was renamed when the title became a real thing you can type. `normaliseSettings` carries the old key across, since an install that had the line switched off must not come back with it switched on.
+
+## Clearing itself when it is finished
+
+A finished timer sits reading `done` until somebody presses it. That is right for a timer you are watching and wrong for one on a page you left: you come back to a used clock and have to clear it before it is a timer again.
+
+**Clear itself when finished** waits a set time after the end of the job and then puts the countdown back where it started — full clock, stopped, repeat tally at zero. It is exactly the double tap, deliberately: the same state, arrived at two ways, rather than a second idea of what "the start" means.
+
+Three things about the timing.
+
+**It waits for the whole job, repeats and all.** A repeating timer's earlier laps restart themselves and never reach this; only the elapse that ends the last run starts the clock on it. Clearing between laps would end a job that was still running.
+
+**It is silent.** The words under the clock name the gesture you just made, and nobody made this one.
+
+**It is called off the moment anybody touches the timer.** A press, a turn, a reset, a preset load — anything that moves the countdown off `elapsed` drops the pending reset, so it cannot reach into the run that follows.
+
+The delay is measured from the finish, with one exception: a timer that ran out while its page was elsewhere is dated from **the moment the page came back**. Nothing was running to notice the real moment, and dating it back would clear the clock on the first frame you see — the one frame where `done` is the whole point.
 
 ## Flipping to another page does not lose the timer
 

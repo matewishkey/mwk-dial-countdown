@@ -19,11 +19,11 @@ import streamDeck, {
 	type KeyUpEvent
 } from "@elgato/streamdeck";
 
-import type { Countdown } from "../countdown";
 import { LONG_PRESS_MS } from "../gestures";
+import { keyCaption } from "../label";
 import { asDataUri, renderKey, themeFor } from "../render";
 import type { DialCountdownSettings } from "../settings";
-import { formatDuration, formatPresetLabel } from "../timer";
+import { formatDuration } from "../timer";
 import { CountdownAction, type Instance } from "./countdown-action";
 
 type Key = KeyAction<DialCountdownSettings>;
@@ -100,8 +100,8 @@ export class KeyCountdown extends CountdownAction<Key, KeyInstance> {
 		const toast = countdown.toast;
 
 		// One line, three jobs, in order of urgency: what you just did, then the fact that it is
-		// paused, then — when there is nothing to report — which preset this is.
-		const caption = toast || (status === "paused" ? "paused" : captionFor(countdown, status));
+		// paused, then — when there is nothing to report — what this timer is.
+		const caption = toast || (status === "paused" ? "paused" : keyCaption(countdown, status));
 		const accent = toast !== "" || status === "paused";
 
 		const signature = `${value}|${caption}|${accent}|${status}|${dimmed}|${flash}|${settings.theme}`;
@@ -126,25 +126,4 @@ export class KeyCountdown extends CountdownAction<Key, KeyInstance> {
 		// leaves the key showing the static image from the manifest and looking completely dead.
 		instance.action.setImage(asDataUri(svg)).catch((err) => streamDeck.logger.error("Failed to set key image", err));
 	}
-}
-
-/**
- * What the key says when nothing is happening: the preset, its lap count, or that it is done.
- *
- * A key's caption is one short line with no room for both, so a finished repeating timer says
- * `done ×3/3` — the fact first, the tally after it. Saying only `×3/3`, as it used to, left a
- * finished job looking exactly like one still on its final lap.
- */
-function captionFor(countdown: Countdown, status: string): string {
-	if (status === "elapsed") {
-		return countdown.laps > 0 ? `done ×${countdown.lap}/${countdown.laps}` : "done";
-	}
-
-	// Only once it is actually under way. The dial can append the tally to its label and keep both;
-	// a key has one line, so showing `×1/3` on a clock that has not been started yet would cost it
-	// the one thing it says when nothing is happening — which preset it is.
-	if (countdown.laps > 0 && status !== "idle") {
-		return `×${countdown.lap}/${countdown.laps}`;
-	}
-	return countdown.settings.showTitle ? formatPresetLabel(countdown.presetSeconds * 1000) : "";
 }

@@ -67,13 +67,15 @@ There is no haptic feedback to be had on this hardware — the SDK exposes no su
 
 ## Features
 
-- **Presets** — 5, 20, 30 and 40 minutes out of the box, edited as hours, minutes and seconds. They carry no names: a timer's length is its own label, so the display reads `20m`, or `20m 30s` once nudged off a round number. The dial cannot overwrite them.
+- **Presets** — 5, 20, 30 and 40 minutes out of the box, edited as hours, minutes and seconds. They carry no names of their own, so an unnamed timer is labelled by its length: the display reads `20m`, or `20m 30s` once nudged off a round number. The dial cannot overwrite them.
+- **A title**, if you want one — `Tea` on the line under the clock rather than `20m`. It is the plugin's own field, not Stream Deck's Title box; see *The key draws its own text*, below, for why.
 - **Countdown ring** that empties as the timer runs, with the clock beside it. A progress bar is available instead.
 - **Seven colour themes**. The middle of the ring shows the state — running, paused, done — and, on an idle clock, an optional logo instead.
 - **A pause glyph** rather than a colour change, so the state is stated outright.
 - **Fade near the end** — the same colour, shaded and unshaded, from a threshold you set in minutes and seconds, capped at half the preset's own length so a fresh timer never starts already fading.
 - **Sound when finished**, repeatable up to ten times, at a volume you set. Choose a bundled sound, any sound already installed on your machine, or your own file.
 - **Auto-repeat**, counting laps on screen — `×2/3` while it runs, `done ×3/3` once it is over. The limit is a total number of runs, and it is a limit because nothing here should still be going tomorrow.
+- **Clear itself when finished**, after a wait you set. A finished timer otherwise sits reading `done` until somebody presses it, which is right for a timer you are watching and wrong for one on a page you left; switch this on and it goes back to a full, stopped clock — repeat tally included — on its own. It waits for the whole job, repeats and all.
 - **Finish time** — `ends 14:35`, more useful than a raw remaining count on a long timer.
 - **Timers survive a page or profile switch** — flip away and back and the clock is where you left it, still counting. They do not survive the plugin restarting, and one that ran out while you were away comes back silent rather than sounding an alarm for a moment that has passed.
 - Anything up to **24 hours**.
@@ -85,7 +87,7 @@ Stream Deck runs on macOS and Windows only, so the plugin cannot be *run* on Lin
 ```sh
 npm install
 npm run build      # bundle into com.matewishkey.dial-countdown-v2.sdPlugin/bin
-npm test           # 212 tests — 35 of them drive the property inspector in a browser
+npm test           # 256 tests — 41 of them drive the property inspector in a browser
 npm run check      # everything CI runs: typecheck, lint, format, tests, versions
 npm run demo       # scripted gesture pass, prints one frame per step
 npm run mock       # the same harness, driven from the keyboard
@@ -144,6 +146,7 @@ The version lives in three places in three formats — `1.1.0`, `1.1.0.0`, `v1.1
 | `src/sound.ts` | Hands a sound file to the platform's own player. |
 | `src/gestures.ts` | Turns raw presses into `toggle` / `reset` / `next`, double taps included. |
 | `src/feedback.ts` | How long a gesture is acknowledged for, and in what words. |
+| `src/label.ts` | The line under the clock — the rule both controls share, and how each narrows it. |
 | `src/countdown.ts` | Everything a countdown *is*, minus the Stream Deck — shared by both actions. |
 | `src/actions/countdown-action.ts` | The half of an action that does not care which control it is on. |
 | `src/actions/dial-countdown.ts` | Dial events, and the touchscreen layout. |
@@ -170,7 +173,9 @@ A few decisions worth knowing before changing things:
 
 **A finished timer fills the ring** rather than emptying it. Drawn literally, the moment that most needs to be seen would be blank.
 
-**The key draws its own text.** `setTitle` is the only text facility a key has, and Stream Deck stops honouring it the moment the user types a title of their own — a clock that silently stops being a clock because someone labelled the button is not a clock. So the key face is one SVG, digits included, and the title is left free for whatever the user wants it for.
+**The key draws its own text, and so the title is the plugin's own field.** `setTitle` is the only text facility a key has, and Stream Deck stops honouring it the moment the user types a title of their own — a clock that silently stops being a clock because someone labelled the button is not a clock. So the key face is one SVG, digits included, and `UserTitleEnabled` is false in the manifest.
+
+That leaves the title to the property inspector, which turns out to be the better place for it anyway. The dial could not have used the native field either: neither touchscreen layout has a `title` item, so a title typed into Stream Deck had nowhere to land on a dial and could only land *on top of* the clock on a key. Owning the field is what lets the same name appear in the same place on both, and it is why the switch that used to be called *Show the title* is now *Show the label* — it never named a title, it switched the line the title now goes on. `normaliseSettings` carries the old key across.
 
 **Send `setImage` a data URI, not raw SVG markup** — and be careful what you conclude from that. Elgato's two sources disagree: the WebSocket reference says the field takes a file path or "a base64 encoded string with the mime type declared", while the SDK's own JSDoc for `setImage` says a path, base64, "or an SVG `string`". The key action shipped raw markup and did nothing on hardware; it works sending the same SVG through `asDataUri`, which is the form the touchscreen ring has always used. What is *not* established is that raw markup was the cause — only that the data URI works. Do not "simplify" it back.
 

@@ -10,9 +10,10 @@ import streamDeck, {
 } from "@elgato/streamdeck";
 
 import type { Countdown } from "../countdown";
+import { dialLabel } from "../label";
 import { asDataUri, renderGlyph, renderRing, ringColour, themeFor } from "../render";
 import type { DialCountdownSettings } from "../settings";
-import { formatClockTime, formatDuration, formatPresetLabel } from "../timer";
+import { formatClockTime, formatDuration } from "../timer";
 import { CountdownAction, type Instance } from "./countdown-action";
 
 export type { DialCountdownSettings };
@@ -175,15 +176,11 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 		const status = timer.status;
 		const remainingMs = timer.remainingMs;
 
-		// The label shows the preset's own length — as configured, never as the dial has since left it.
-		// Once the two disagree it says so, because the gap is otherwise invisible: the clock reads
-		// 23:00, the settings still say 20m, and holding the screen is what closes it.
-		const label = `${countdown.drifted ? "from " : ""}${formatPresetLabel(countdown.presetSeconds * 1000)}`;
 		const value = formatDuration(remainingMs);
 		const dimmed = countdown.dimmed;
 		const flash = countdown.flashing;
 		const toast = countdown.toast;
-		const title = settings.showTitle ? `${label}${suffixFor(countdown, status)}` : "";
+		const label = dialLabel(countdown, status);
 
 		// One spare line, two claimants. What you just did wins for a second; after that, the finish
 		// time, which is the useful thing on a running clock. The dial's step used to have a claim here
@@ -191,7 +188,7 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 		// is nothing left to remind you of.
 		const footer = toast || finishText(countdown, remainingMs, status);
 
-		const signature = `${instance.lastLayout}|${title}|${value}|${status}|${dimmed}|${flash}|${footer}|${settings.showLogo}|${settings.theme}`;
+		const signature = `${instance.lastLayout}|${label}|${value}|${status}|${dimmed}|${flash}|${footer}|${settings.showLogo}|${settings.theme}`;
 		if (!force && signature === instance.last) {
 			return;
 		}
@@ -218,14 +215,14 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 							bar_fill_c: colour,
 							bar_bg_c: palette.track
 						},
-						label: title,
+						label,
 						finish: footer
 					}
 				: {
 						ring: asDataUri(renderRing({ remainingFraction, status, dimmed, flash, palette, logo: settings.showLogo })),
 						// The clock is sent as a full item definition so its size can shrink for `1:10:10`.
 						value: { value, font: { size: valueFontSize(value) } },
-						label: title,
+						label,
 						finish: footer
 					};
 
@@ -242,29 +239,6 @@ function finishText(countdown: Countdown, remainingMs: number, status: string): 
 		return "";
 	}
 	return `ends ${formatClockTime(Date.now() + remainingMs)}`;
-}
-
-/**
- * A repeating timer counts its laps; a finished one says so — **and a finished repeating timer says
- * both.**
- *
- * That last case is the one that was missing. The lap count used to win outright whenever it was
- * non-zero, so a timer that had run its last repeat and stopped for good showed `×3/3`, which is
- * character-for-character what it showed while that last repeat was still counting down. There was
- * no way to tell a job that was finished from one that had one lap left to go.
- *
- * The tally is shown on an idle clock too — `20m · ×1/3` before it is started. It is the only thing
- * on screen that says repeat is switched on at all, and the dial's label has room to append it
- * without displacing the preset. The key's one-line caption does not, so it waits until the timer is
- * running; see `captionFor` there.
- */
-function suffixFor(countdown: Countdown, status: string): string {
-	const done = status === "elapsed" ? " · done" : "";
-
-	if (countdown.laps > 0) {
-		return ` · ×${countdown.lap}/${countdown.laps}${done}`;
-	}
-	return done;
 }
 
 /** Shrinks the clock as it gets longer, so `1:10:10` fits the same box as `5:00`. */
