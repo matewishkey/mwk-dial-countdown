@@ -31,6 +31,10 @@ this project that generally means they do not change the packaged plugin at all.
   The decision is pure (`tools/publish-plan.mjs`) because none of those refusals can be tested by
   trying them; `test/publish-plan.test.ts` drives all of them with no network and no repository.
 
+- **`README.md` says how a tool gets types.** `tools/` is in `tsconfig.test.json` and the modules a
+  test imports carry JSDoc annotations. Without both, every value crossing that import is `any` —
+  which does not fail a typecheck, it *disables* the type-aware lint rules wherever it lands.
+
 - **`npm run release -- --no-gates` now runs the release check.** It was skipped along with the
   gates, which broke the one flow it exists for: `docs/releasing.md` says to re-run the page after
   publishing so the check goes green, and the re-run reported "not checked" for exactly that

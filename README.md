@@ -203,6 +203,14 @@ That leaves the title to the property inspector, which turns out to be the bette
 
 **The property inspector cannot import from `src/`.** It is a plain HTML page loaded by Stream Deck, not part of the rollup bundle, so anything it needs it carries as inline JavaScript — the preset clamps, `MAX_PRESET_SECONDS`, and its own `toParts`. That duplication is forced, and the trap is subtle: `src/settings.ts` once carried `toParts`/`fromParts` too, with tests over them, and *nothing in the plugin called either*. The tested copy was not the running copy, which reads like coverage and is worse than none. Those are gone. If you add a helper the inspector needs, either it goes inline and stays untested, or it goes in `src/` and something in `src/` had better call it.
 
+**A tool that a test imports must carry JSDoc types, and be in `tsconfig.test.json`.** `tools/` is in
+that config's `include` and both released-notes modules are annotated, and neither is decoration.
+Without them every value crossing a tool import is `any` — and `any` does not fail a typecheck, it
+*disables* the type-aware lint rules wherever it lands. `test/release-notes.test.ts` was passing
+`any` through a dozen assertions with the linter silent about all of it, which is a more expensive
+version of the trap two paragraphs down: it does not merely lack checking, it reads as checked.
+`checkJs` stays false — the tools are inferred from, not checked.
+
 **The tests resolve imports through a hook.** `src/` is written for rollup, which fills in file extensions; Node's ESM resolver deliberately does not, so `test/ts-resolve.mjs` does that one job and nothing else.
 
 **A test cannot import either action subclass.** `DialCountdown` and `KeyCountdown` carry an `@action` decorator, and Node's type stripping does exactly what it says — it erases types and leaves decorators standing, so importing `src/actions/dial-countdown.ts` from a test is a `SyntaxError` rather than a test. `test/actions.test.ts` therefore drives `CountdownAction`, the abstract base, through a minimal subclass it declares itself. That reaches everything the two share — the instance map, teardown, the debounced save, suspend and revive, the alert — and reaches none of their own event handlers, which is a real gap and is why `npm run demo` matters. The SDK itself imports fine: `streamDeck.connect()` is a separate call the entry point makes, so nothing connects to anything just by importing it.
