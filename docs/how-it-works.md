@@ -237,7 +237,7 @@ Both layouts are the plugin's own files now (`layouts/ring.json`, `layouts/bar.j
 
 ## Try it without hardware
 
-`npm run mock` drives the whole thing from the keyboard with no Stream Deck attached, and `npm run demo` plays a scripted pass of 26 checks across 37 steps. It prints a labelled ASCII frame per step; the dial's step shows up across three of them:
+`npm run mock` drives the whole thing from the keyboard with no Stream Deck attached, and `npm run demo` plays a scripted pass of 27 checks across 39 steps. It prints a labelled ASCII frame per step; the dial's step shows up across three of them:
 
 | Step | What it shows |
 | --- | --- |
@@ -276,5 +276,19 @@ It also walks the gesture vocabulary and asserts the parts a person would otherw
    layout "layouts/bar.json", bar idle #7C4DFF (glyph "logo") → running #00E5FF (glyph "play")
    ✓ the bar is coloured, and follows both the theme and the state
 ```
+
+### Adding a step to the demo
+
+**Give it a duration the step before it did not use.** `applySettings` reloads the clock only when the
+*selected preset's length* changed — deliberately, so that nudging an unrelated setting cannot reset a
+running timer — which means a step that reuses the previous step's preset inherits its clock, running
+and part-spent, rather than starting a fresh one. The symptom is a step that looks like it never
+pressed anything: the first gesture lands on a clock already in motion and reads as the opposite of
+what it meant. It cost a debugging pass on the auto-reset step, which reused a 2s preset and so paused
+the previous step's timer instead of starting its own.
+
+Assert something, rather than only printing a frame. A step that prints is a step somebody has to
+read; a step that ends in `✓` or `✗` is one the release gate can fail on, and
+`node tools/release-page.mjs` keeps the whole log either way.
 
 The step is `src/step.ts` — two pure functions with no state and no clock, so everything above is asserted in `test/step.test.ts` rather than described and hoped for. The gesture checks quoted above come from `tools/mock-host.mjs`, which drives the built plugin end to end.

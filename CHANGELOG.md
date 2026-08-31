@@ -9,7 +9,15 @@ this project that generally means they do not change the packaged plugin at all.
 
 ## [Unreleased]
 
-Nothing yet.
+### Internal
+
+Nothing that changes what the plugin does.
+
+- **`docs/how-it-works.md` says how to add a demo step**, and its count of the pass was two steps
+  behind. A step that reuses the previous step's preset length inherits that step's clock rather
+  than starting a fresh one — `applySettings` reloads only when the *selected* length changed — so
+  its first gesture lands on a timer already in motion and reads as the opposite of what it meant.
+  It cost a debugging pass while the auto-reset step was being written.
 
 ## [3.2.0] — 2026-08-31
 
