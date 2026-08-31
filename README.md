@@ -87,7 +87,7 @@ Stream Deck runs on macOS and Windows only, so the plugin cannot be *run* on Lin
 ```sh
 npm install
 npm run build      # bundle into com.matewishkey.dial-countdown-v2.sdPlugin/bin
-npm test           # 256 tests — 41 of them drive the property inspector in a browser
+npm test           # 289 tests — 41 of them drive the property inspector in a browser
 npm run check      # everything CI runs: typecheck, lint, format, tests, versions
 npm run demo       # scripted gesture pass, prints one frame per step
 npm run mock       # the same harness, driven from the keyboard
@@ -119,24 +119,22 @@ npm run watch                                       # rebuild + restart on save
 ### Packaging and releasing
 
 ```sh
-npm run version:check                               # package.json ↔ manifest.json
-node tools/check-version.mjs v<version>             # ...and the tag you are about to cut
-npx streamdeck validate com.matewishkey.dial-countdown-v2.sdPlugin
-npx streamdeck pack com.matewishkey.dial-countdown-v2.sdPlugin --force
-npx prettier --write com.matewishkey.dial-countdown-v2.sdPlugin/manifest.json
-npm run release:page                                # gates, logs, and the notes to paste
+npm run release          # check, build, pack, validate, demo, verify, and write the page
 ```
 
-The `prettier` line is not optional. **`streamdeck pack` rewrites `manifest.json` in place** — it
-re-emits the JSON with `Controllers` inlined and no trailing newline, which is not the formatting the
-repo keeps, so the commit you tag fails CI on formatting. `build` and `validate` leave it alone; only
-`pack` does this. It is how v3.1.0 came to be tagged on a red build.
+One command, in one order, every time — because six commands typed by hand end up in a different
+order each time. It runs `npm run check`, the version check against the tag, the build, `streamdeck
+pack` (paired with `prettier`, since pack rewrites the manifest on its way past and that is how
+v3.1.0 was tagged on a red build), `streamdeck validate`, the demo pass against the built plugin, and
+then asks GitHub whether this version is published and whether the published asset is this same
+build. The first failure stops it, and every step's whole output is kept.
 
-`release:page` re-runs every gate, keeps the whole of each one's output, and writes the page carrying
-the notes for the two steps that cannot be automated: the GitHub release, and the Marketplace
-submission. It exits non-zero if a gate failed, so it cannot quietly produce a page for a build that
-did not pass. **A pushed tag is not a release** — the two are separate acts on separate systems with
-nothing linking them, and v3.2.0 reached Marketplace while `gh release create` had never run.
+**A pushed tag is not a release** — the two are separate acts on separate systems with nothing linking
+them, and v3.2.0 reached Marketplace while `gh release create` had never run. That last check is
+there so the gap is visible rather than silent.
+
+It writes a page to the shared drive with the notes for the two steps that cannot be automated: the
+GitHub release, and the Marketplace submission.
 
 **[docs/releasing.md](docs/releasing.md)** is the whole policy, and the one rule it turns on is this: *the version number describes the `.streamDeckPlugin` file and nothing else*. Repo-only work — tests, docs, tooling — lands in [CHANGELOG.md](CHANGELOG.md) under *Unreleased* and rides the next real release, because the number is what the Stream Deck application shows the user and every Marketplace version is a human review.
 
@@ -164,7 +162,9 @@ The version lives in three places in three formats — `1.1.0`, `1.1.0.0`, `v1.1
 | `test/inspector-harness.mjs` | Drives the property inspector in a real browser, so its inline JavaScript can be tested. |
 | `tools/make-icons.mjs` | Draws every icon from `assets/mwk-mark.svg` — white for the app, red for the hardware. The plugin's own icon is the countdown ring, drawn by `renderRing`. Rasterises with headless Chromium; see [docs/releasing.md](docs/releasing.md). |
 | `tools/check-version.mjs` | Holds `package.json`, `manifest.json` and the git tag to the same version. |
-| `tools/release-page.mjs` | Builds a release's page: every gate re-run with its full log kept, the packaged plugin, and the notes to paste — trimmed to the listing's 1500-character limit without cutting a word. |
+| `tools/release.mjs` | The release, in one command and one order: check, build, pack, validate, demo, then ask GitHub whether it is published and whether that is this build. Writes the page. |
+| `tools/release-notes.mjs` | Turns a changelog entry into the two shapes a release needs — whole for GitHub, and cut to 1500 characters for Marketplace without cutting a word. |
+| `tools/package-id.mjs` | A reproducible id for a packaged plugin. `pack` stamps the packing time into every entry, so the file's own hash is not reproducible; this hashes the contents instead. |
 | `tsconfig.test.json` | The typecheck config: `src/` **and** `test/`. `tsconfig.json` is rollup's, and covers only what it bundles. |
 | `eslint.config.mjs` | Type-aware lint rules. Formatting is left entirely to Prettier, so the two cannot disagree. |
 | `assets/mwk-mark.svg` | The brand's own mark, as supplied. The one source the artwork is generated from. |

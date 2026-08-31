@@ -9,6 +9,10 @@ this project that generally means they do not change the packaged plugin at all.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [3.3.0] — 2026-08-31
+
 ### Changed
 
 - **A reset now goes back to the preset, not to wherever the dial left the clock.** Wind a 5 minute
@@ -48,10 +52,33 @@ Nothing that changes what the plugin does.
   with nothing linking them, and a tag without a release is invisible to both tools — no error
   anywhere, because nothing is wrong from either one's point of view. v3.2.0 went to Marketplace off
   the release page while `gh release create` had never run, so the version in front of Elgato briefly
-  had no artefact of record. The doc now carries the three-way `sha256sum` check that settles it, and
+  had no artefact of record. The doc now carries the check that settles it, and
   `README.md` says it in a line — where a hygiene sweep also caught the previous commit having added
   the `pack` warning back beside the one already there, with two pointers to `docs/releasing.md` a
   paragraph apart.
+
+- **The release is one command — `npm run release`.** Check, version-against-the-tag, build, pack,
+  validate, demo, then ask GitHub whether this version is published and whether the published asset
+  is this same build. The first failure stops it and every step's whole output is kept. Six commands
+  typed by hand end up in a different order each time, which is how v3.2.0 reached Marketplace with
+  no GitHub release behind it.
+
+- **A packaged plugin has a reproducible id** — `tools/package-id.mjs`. The `.streamDeckPlugin`'s own
+  sha256 is not reproducible and cannot be made so: `streamdeck pack` writes the moment of packing
+  into every zip entry, so two packs of a byte-identical tree differ. Measured at 21 of 21 entries
+  with matching content and 21 of 21 with differing timestamps; normalising the source tree's mtimes
+  first does not help, because the stamp is the pack time. So the id hashes the archive's contents
+  instead, and `docs/releasing.md`'s "is this a release?" check uses it — replacing a recipe built on
+  `unzip`, which is not installed on the dev box, where a `diff` of two directories that failed to
+  populate reports them as identical.
+
+- **The release notes reduction has tests, and had two bugs.** An entry's bold lead gained a second
+  full stop when it already ended in one, so `A title.` became `A title..` in notes bound for a
+  public listing. And the changelog's link-reference block — the `[3.2.0]: https://…/compare/…`
+  definitions at the foot of the file — was being swept into the oldest version as a 1195-character
+  entry that was a wall of URLs. Neither had ever been run against a real entry. The reduction also
+  gained intermediate steps and a promotion pass, so it now fills the budget rather than stepping
+  over it: 3.1.0's entry went from 1385 characters to 1493 of 1500, with nothing dropped.
 
 ## [3.2.0] — 2026-08-31
 

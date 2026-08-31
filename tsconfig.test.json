@@ -1,5 +1,5 @@
 {
-	"$comment": "Typechecks the tests as well as the source. Kept separate from tsconfig.json so that rollup, which reads that one, still sees only the files it bundles. See the `typecheck` script.",
+	"$comment": "Typechecks the tests and the tools as well as the source. Kept separate from tsconfig.json so that rollup, which reads that one, still sees only the files it bundles. `tools/` is here so that a test importing a tool gets real inferred types rather than `any` \u2014 without it, every value crossing that import defeats the type-aware lint rules silently. `checkJs` stays false: the tools are inferred from, not checked. See the `typecheck` script.",
 	"extends": "./tsconfig.json",
 	"compilerOptions": {
 		"noEmit": true,
@@ -7,5 +7,5 @@
 		"allowJs": true,
 		"checkJs": false
 	},
-	"include": ["src/**/*.ts", "test/**/*.ts", "test/**/*.mjs"]
+	"include": ["src/**/*.ts", "test/**/*.ts", "test/**/*.mjs", "tools/**/*.mjs"]
 }

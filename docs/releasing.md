@@ -83,19 +83,37 @@ what is already published:
 npm run build && npx streamdeck pack com.matewishkey.dial-countdown-v2.sdPlugin --force
 npx prettier --write com.matewishkey.dial-countdown-v2.sdPlugin/manifest.json  # pack rewrites it
 gh release download <last-tag> -D /tmp/released
-mkdir -p /tmp/a /tmp/b
-( cd /tmp/a && unzip -oq /tmp/released/com.matewishkey.dial-countdown-v2.streamDeckPlugin )
-( cd /tmp/b && unzip -oq com.matewishkey.dial-countdown-v2.streamDeckPlugin )
-diff -rq /tmp/a /tmp/b
+
+node tools/package-id.mjs /tmp/released/com.matewishkey.dial-countdown-v2.streamDeckPlugin
+node tools/package-id.mjs com.matewishkey.dial-countdown-v2.streamDeckPlugin
 ```
 
-Identical means no release, and a plain `sha256sum` settles it: **`npm run icons` is reproducible** —
-headless Chromium writes no `tIME` chunk, so re-running it on an unchanged mark produces byte-identical
-PNGs. If an icon's bytes moved, its pixels moved.
+Two identical **content ids** mean nothing shipped, so there is no release to cut. `--list` prints
+every file's own hash when they differ and the question is which.
 
-(This used not to hold. ImageMagick stamped a creation time into every PNG, so the advice here was to
-compare pixels with `compare -metric AE old.png new.png null:` — which is now doubly wrong, since
-ImageMagick is not installed on the dev box either.)
+### Why a content id and not `sha256sum` on the package
+
+Because **the package's own hash is not reproducible, and cannot be made so.** `streamdeck pack`
+writes the moment of packing into every zip entry, so two packs of a byte-identical tree produce two
+different files. Measured: 21 of 21 entries with matching content, matching order and matching
+compression, and 21 of 21 with differing timestamps. `touch`ing the source tree to a fixed date first
+does not help — the stamp is the pack time, not the file's.
+
+What *is* reproducible is everything that matters. `rollup` emits a byte-identical `bin/plugin.js`
+from the same source, and **`npm run icons` is reproducible** too — headless Chromium writes no `tIME`
+chunk, so re-running it on an unchanged mark produces byte-identical PNGs. If an icon's bytes moved,
+its pixels moved.
+
+So `tools/package-id.mjs` hashes the archive's *contents* — every entry's path and content, sorted,
+with the timestamps that carry no meaning left out. Same tree in, same id out, on any machine at any
+hour. The package's own sha256 is still worth recording, because it answers a narrower question:
+whether the file that was uploaded is the file that was built.
+
+(The recipe here used to unzip both builds into temp directories and `diff -rq` them. That needed
+`unzip`, **which is not installed on this box** — and a `diff` of two directories that failed to
+populate reports them as identical, so the check could not fail. It also used to say to compare
+pixels with ImageMagick's `compare`, which is not installed either. A comparison that cannot run is
+worse than no comparison, because it reports success.)
 
 ### If the icons changed, find out why before accepting it
 
@@ -121,38 +139,57 @@ own tree. So a change confined to the second list is by definition not a release
 
 1. **Decide the number** from the table above, against what is actually in the diff.
 2. **Bump both files together** — `package.json` and `manifest.json`. Never one alone.
-3. `npm run check` and `npm run demo`. `check` is typecheck, lint, formatting, the tests and
-   `version:check` in one — and [CI](../.github/workflows/ci.yml) has already run all of it on the
-   commit you are about to tag, so this is a confirmation rather than the first time of asking. The
-   demo is the part CI does not do: it drives the *built* plugin end to end over a real WebSocket,
-   which the unit tests deliberately do not.
-4. `npx streamdeck validate com.matewishkey.dial-countdown-v2.sdPlugin`. Bear in mind this is a
-   **structural** check: schema, file presence, sizes. It has never looked at icon colours, and it
-   passed the build Elgato rejected for them. It is a floor, not a review.
-5. `node tools/check-version.mjs v<version>` — with the tag, which is the part `npm run check`
-   cannot do for you, since it does not know which tag you are about to cut.
-6. `npm run build` then `npx streamdeck pack … --force`.
-
-   **`pack` rewrites `manifest.json` in place** — it re-emits the JSON with `Controllers` arrays
-   inlined and no trailing newline, which is not the formatting the repo keeps. `build` and
-   `validate` leave it alone; only `pack` does this. So **run `npx prettier --write
-   com.matewishkey.dial-countdown-v2.sdPlugin/manifest.json` after packing**, or the commit you tag
-   fails CI on formatting — which is exactly how v3.1.0 was cut with a red build. The rewrite is
-   whitespace only, so the packaged plugin is unaffected either way; it is the repo that ends up
-   inconsistent with itself.
-7. Move the changelog's *Unreleased* entries under the new version, with today's date.
-8. Commit, tag `v<version>`, push both.
-9. **`npm run release:page`** — see below. It re-runs every gate, keeps the logs, and writes the page
-   that carries the notes for the two steps that follow.
-10. `gh release create v<version> com.matewishkey.dial-countdown-v2.streamDeckPlugin` with the notes
-    from the page's second box — the changelog entry in full.
-11. **Submit to Marketplace by hand**, through the Maker dashboard, with the notes from the page's
-    first box. There is no API for it, and it is the only step here that is not automatable.
+3. **Move the changelog's *Unreleased* entries** under the new version, with today's date.
+4. **`npm run release`.** Everything that can be automated, in one order, every time.
+5. **Commit, tag `v<version>`, push both.**
+6. **`npm run release` again**, so the page's release check goes green and its logs describe the
+   commit actually being tagged.
+7. `gh release create v<version> com.matewishkey.dial-countdown-v2.streamDeckPlugin` with the notes
+   from the page's second box — the changelog entry in full.
+8. **Submit to Marketplace by hand**, through the Maker dashboard, with the notes from the page's
+   first box. There is no API for it, and it is the only step here that is not automatable.
 
 The `.streamDeckPlugin` itself is gitignored. The GitHub release asset is the artefact of record, and
 the copy on the release page is the one to upload.
 
-### A pushed tag is not a release, and step 11 can overtake step 10
+## What `npm run release` does
+
+Step 4 used to be six commands typed by hand, and typing six commands by hand is how they end up in a
+different order each time. It is one command now, and the order is code:
+
+| | | |
+| --- | --- | --- |
+| 1 | `npm run check` | typecheck, lint, formatting, the tests, and the two version files agreeing |
+| 2 | `check-version v<version>` | ...and the tag about to be cut, which `check` cannot know about |
+| 3 | `npm run build` | rollup → `bin/` |
+| 4 | `streamdeck pack` **and** `prettier` | paired, because pack rewrites the manifest on its way past |
+| 5 | `streamdeck validate` | structural: schema, files, sizes. A floor, not a review |
+| 6 | `npm run demo` | the built plugin, end to end, over a real socket |
+| 7 | the release check | is it published, and is it this build? |
+
+The first failure stops the run, and the whole of every step's output is kept in `logs/` and copied
+beside the page. `npm run check` prints 289 passing tests nobody reads — right up until the release
+where one of them did not pass, and the question is which.
+
+**Step 4 is two commands on purpose.** `streamdeck pack` rewrites `manifest.json` in place as it
+goes, re-emitting the JSON with `Controllers` inlined and no trailing newline, which is not the
+formatting the repo keeps — so the commit being tagged fails CI on formatting. `build` and `validate`
+leave it alone; only `pack` does this, and it is how v3.1.0 came to be tagged on a red build. Pairing
+them here is what stops it depending on somebody remembering.
+
+**Step 7 has three outcomes, not two.** *No release yet* is the expected state before step 7 of
+*Cutting one* and is reported as work still to do. *Published and matching* is the tick. *Published
+and different* is loud, because that one cannot be repaired: the packed file is gitignored, so once
+the wrong build is the release asset there is no copy of the right one to put back. It needs `gh` and
+a network, so it degrades to "not checked" rather than failing an offline build — every other step is
+local, deliberately. And it checks **GitHub, not Marketplace**; the listing cannot be inspected from
+here at all, which is exactly why the notes on the page are notes to paste.
+
+`npm run release -- --no-gates` rebuilds the page from the logs already in `logs/`, for when it is
+the wording that changed and not the build. `--out <dir>` puts it somewhere other than the shared
+drive.
+
+### A pushed tag is not a release, and the last step can overtake the one before it
 
 These are two separate acts on two different systems, and nothing links them. `git push --tags`
 publishes a tag; `gh release create` publishes a release. A tag with no release shows up in
@@ -161,46 +198,54 @@ not mention it — there is no error anywhere, because nothing is wrong from eit
 view.
 
 It has happened. v3.2.0 was tagged and pushed, the release page was generated, and the **Marketplace
-submission went in off that page** — step 11 — while step 10 had never run. So for a while the version
+submission went in off that page** while `gh release create` had never run. So for a while the version
 in front of Elgato had no artefact of record at all, which is the one thing this document says the
-release asset is for. Step 11 does not depend on step 10: the package it needs exists from step 6, so
-a human working off the page can do the manual step and skip the automatable one in front of it.
+release asset is for. The submission does not depend on the release: the package it needs exists as soon as
+`npm run release` has run, so a human working off the page can do the manual step and skip the
+automatable one in front of it. **That is now step 7 of `npm run release`** — the page says outright
+whether a release exists and whether it is this build, so skipping it is visible rather than silent.
 
-**Before submitting, check the release exists, and check it is the right bytes.** The package passes
-through three places and they must agree:
-
-```sh
-sha256sum com.matewishkey.dial-countdown-v2.streamDeckPlugin          # what pack built
-sha256sum ~/share/work/<own>-<repo>/<date>_v<version>/*.streamDeckPlugin  # what was uploaded from
-gh release download v<version> -D /tmp/verify && sha256sum /tmp/verify/*.streamDeckPlugin
-```
-
-Three identical hashes means what Elgato has is what is in the repo. Anything else means the upload
-and the release are different builds, which is unrecoverable after the fact — the packed file is
-gitignored and a rebuild is not guaranteed byte-identical the moment anything in `bin/` changes.
+Running `npm run release` a second time, after the tag is pushed, is what turns that check green —
+and it is cheap, because the only thing that changed is the answer to the one question the first run
+could not answer yet.
 
 ## The release page
 
-`npm run release:page` builds one page per version and puts it on the shared drive, under
+`npm run release` puts one page per version on the shared drive, under
 `work/<own>-<repo>/<date>_v<version>/`. Open `report.html`; `README.md` beside it is what the folder
 index shows.
 
-It exists because **step 11 cannot be automated.** Marketplace submission is a form a human fills in,
-and the last useful thing this repo can do is hand that human everything the form wants in a shape
-that can be copied rather than retyped.
+It exists because **the last step cannot be automated.** Marketplace submission is a form a human
+fills in, and the last useful thing this repo can do is hand that human everything the form wants in
+a shape that can be copied rather than retyped.
 
-What it produces:
-
-- **The Marketplace notes, at most 1500 characters.** Built from the version's changelog entry, which
-  is already written for whoever installs the plugin. Over budget it shortens rather than truncates —
-  each entry drops to its first sentence, then to its bold lead, and only then goes altogether, taking
-  from the longest entry first so the budget is actually used. A word is never cut in half.
+- **The Marketplace notes, at most 1500 characters**, in a box with a Copy button. Built from the
+  version's changelog entry, which is already written for whoever installs the plugin. Over budget it
+  shortens rather than truncates — see below.
 - **The GitHub notes** — the same entry in full, for `gh release create`.
-- **Every gate, re-run, with the whole of its output kept** as a downloadable log: `npm run check`,
-  `check-version` against the tag, `streamdeck validate`, and `npm run demo`. It exits non-zero if one
-  failed, so it cannot quietly produce a page for a red build.
-- **The packaged plugin and its sha256**, since the `.streamDeckPlugin` is gitignored and this copy
-  and the GitHub asset are the only two that exist.
+- **Every step's whole output**, downloadable, and the release check's verdict.
+- **The packaged plugin, its content id and its sha256.**
+
+### How the notes are cut to 1500 characters
+
+Never mid-word. Every entry starts in full; while the text is over budget the **longest** entry that
+can still be shortened gives up a step — a paragraph, then three sentences, two, one, then its bold
+lead alone — and only when nothing is left to shorten does an entry go altogether. Then a promotion
+pass walks back up, restoring whatever fits, because greedy shortening overshoots.
+
+Two things about that are worth keeping.
+
+**Coverage beats detail.** Eight headlines are a better answer to *what changed* than three full
+paragraphs and silence about the rest.
+
+**The budget is meant to be used.** The first version shortened every entry in lockstep, looked
+entirely correct, and threw away two thirds of the room: the step from "all in full" to "all first
+sentences" jumped past the ceiling from over 1500 characters straight down to 332. It produces prose
+either way, so nothing catches that but reading the output — which is why `test/release-notes.test.ts`
+backtests every entry in `CHANGELOG.md` and asserts the property rather than a number: **the room
+left over must be less than the cheapest remaining improvement.** A threshold was tried first and was
+wrong, because entries whose sentences are lumpy cannot always reach the ceiling, and you cannot
+invent text.
 
 ### `### Internal` is left out of the Marketplace notes
 

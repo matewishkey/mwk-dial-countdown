@@ -1,6 +1,6 @@
 {
 	"name": "mwk-dial-countdown",
-	"version": "3.2.0",
+	"version": "3.3.0",
 	"private": true,
 	"description": "Stream Deck countdown timer for dials and keys, with presets, press-to-pause and double-tap-to-reset.",
 	"type": "module",
@@ -14,7 +14,7 @@
 		"format:check": "prettier --check .",
 		"check": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run version:check",
 		"version:check": "node tools/check-version.mjs",
-		"release:page": "node tools/release-page.mjs",
+		"release": "node tools/release.mjs",
 		"mock": "node tools/mock-host.mjs",
 		"demo": "node tools/mock-host.mjs --demo",
 		"icons": "node --import ./test/ts-resolve.mjs tools/make-icons.mjs"
