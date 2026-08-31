@@ -142,12 +142,50 @@ own tree. So a change confined to the second list is by definition not a release
    inconsistent with itself.
 7. Move the changelog's *Unreleased* entries under the new version, with today's date.
 8. Commit, tag `v<version>`, push both.
-9. `gh release create v<version> com.matewishkey.dial-countdown-v2.streamDeckPlugin` with notes written
-   from the changelog — what changed for the *user*, not what changed in the repo.
-10. **Submit to Marketplace by hand**, through the Maker dashboard. There is no API for it, and it is
-    the only step here that is not automatable.
+9. **`npm run release:page`** — see below. It re-runs every gate, keeps the logs, and writes the page
+   that carries the notes for the two steps that follow.
+10. `gh release create v<version> com.matewishkey.dial-countdown-v2.streamDeckPlugin` with the notes
+    from the page's second box — the changelog entry in full.
+11. **Submit to Marketplace by hand**, through the Maker dashboard, with the notes from the page's
+    first box. There is no API for it, and it is the only step here that is not automatable.
 
-The `.streamDeckPlugin` itself is gitignored. The GitHub release asset is the artefact of record.
+The `.streamDeckPlugin` itself is gitignored. The GitHub release asset is the artefact of record, and
+the copy on the release page is the one to upload.
+
+## The release page
+
+`npm run release:page` builds one page per version and puts it on the shared drive, under
+`work/<own>-<repo>/<date>_v<version>/`. Open `report.html`; `README.md` beside it is what the folder
+index shows.
+
+It exists because **step 11 cannot be automated.** Marketplace submission is a form a human fills in,
+and the last useful thing this repo can do is hand that human everything the form wants in a shape
+that can be copied rather than retyped.
+
+What it produces:
+
+- **The Marketplace notes, at most 1500 characters.** Built from the version's changelog entry, which
+  is already written for whoever installs the plugin. Over budget it shortens rather than truncates —
+  each entry drops to its first sentence, then to its bold lead, and only then goes altogether, taking
+  from the longest entry first so the budget is actually used. A word is never cut in half.
+- **The GitHub notes** — the same entry in full, for `gh release create`.
+- **Every gate, re-run, with the whole of its output kept** as a downloadable log: `npm run check`,
+  `check-version` against the tag, `streamdeck validate`, and `npm run demo`. It exits non-zero if one
+  failed, so it cannot quietly produce a page for a red build.
+- **The packaged plugin and its sha256**, since the `.streamDeckPlugin` is gitignored and this copy
+  and the GitHub asset are the only two that exist.
+
+### `### Internal` is left out of the Marketplace notes
+
+Repo-only work goes under an `### Internal` heading in the version's changelog entry — a refactor, a
+formatting fix, a tool. It belongs in the changelog, because repo-only work travels with the next
+release rather than vanishing; it does not belong in front of somebody deciding whether to install an
+update. The generator drops that heading from the Marketplace notes and keeps it in the GitHub ones,
+which is the audience it was written for.
+
+`node tools/release-page.mjs --no-gates` rebuilds the page from the logs already in `logs/`, for when
+it is the wording that changed and not the build. `--out <dir>` puts it somewhere other than the
+shared drive.
 
 ## Changelog
 

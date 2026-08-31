@@ -9,6 +9,10 @@ this project that generally means they do not change the packaged plugin at all.
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [3.2.0] — 2026-08-31
+
 ### Added
 
 - **A title.** Name a timer `Tea` and the line under the clock says so, on the dial and on the key
@@ -41,6 +45,12 @@ this project that generally means they do not change the packaged plugin at all.
   under the clock, which is where the title now goes. Settings written by an older build are carried
   across, so an install that had the line switched off does not come back with it switched on.
 
+### Internal
+
+Nothing here changes what the plugin does, and none of it goes to Marketplace —
+`tools/release-page.mjs` leaves this heading out of the notes it writes for the listing, and keeps it
+in the ones for the GitHub release.
+
 - **The label rule lives in one file.** `src/label.ts` holds what the line says; the dial and the key
   each take the part that fits the room they have. It was two copies in two actions, and they had
   already drifted apart once over how a finished repeating timer reads.
@@ -50,7 +60,12 @@ this project that generally means they do not change the packaged plugin at all.
   rather than skipped because `manifest.json` is a file that ships, so a byte comparison against the
   3.1.0 package would show it. Whether an entry like this belongs here at all is
   [an open question](https://github.com/matewishkey/mwk-dial-countdown/issues/14) —
-  `docs/releasing.md` currently says two incompatible things about repo-only work.
+  `docs/releasing.md` currently says two incompatible things about repo-only work, and *Internal* is
+  half an answer to it.
+
+- **A release page per version** — `node tools/release-page.mjs` runs every gate, keeps the whole of
+  each one's output, packages the notes to paste into the two places that want them, and puts the
+  lot on the shared drive. See `docs/releasing.md`.
 
 ## [3.1.0] — 2026-08-30
 
