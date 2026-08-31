@@ -127,18 +127,16 @@ npx prettier --write com.matewishkey.dial-countdown-v2.sdPlugin/manifest.json
 npm run release:page                                # gates, logs, and the notes to paste
 ```
 
-`pack` rewrites `manifest.json` on its way past, which is what the `prettier` line is for — and how
-v3.1.0 came to be tagged on a red build. `release:page` re-runs every gate, keeps the whole of each
-one's output, and writes the page carrying the notes for the two steps that cannot be automated: the
-GitHub release, and the Marketplace submission. It exits non-zero if a gate failed, so it cannot
-quietly produce a page for a build that did not pass.
-
-**[docs/releasing.md](docs/releasing.md)** is the order to do all of it in, and why.
-
-That last line is not optional. **`streamdeck pack` rewrites `manifest.json` in place** — it re-emits
-the JSON with `Controllers` inlined and no trailing newline, which is not the formatting the repo
-keeps, so the commit you tag fails CI on formatting. `build` and `validate` leave it alone; only
+The `prettier` line is not optional. **`streamdeck pack` rewrites `manifest.json` in place** — it
+re-emits the JSON with `Controllers` inlined and no trailing newline, which is not the formatting the
+repo keeps, so the commit you tag fails CI on formatting. `build` and `validate` leave it alone; only
 `pack` does this. It is how v3.1.0 came to be tagged on a red build.
+
+`release:page` re-runs every gate, keeps the whole of each one's output, and writes the page carrying
+the notes for the two steps that cannot be automated: the GitHub release, and the Marketplace
+submission. It exits non-zero if a gate failed, so it cannot quietly produce a page for a build that
+did not pass. **A pushed tag is not a release** — the two are separate acts on separate systems with
+nothing linking them, and v3.2.0 reached Marketplace while `gh release create` had never run.
 
 **[docs/releasing.md](docs/releasing.md)** is the whole policy, and the one rule it turns on is this: *the version number describes the `.streamDeckPlugin` file and nothing else*. Repo-only work — tests, docs, tooling — lands in [CHANGELOG.md](CHANGELOG.md) under *Unreleased* and rides the next real release, because the number is what the Stream Deck application shows the user and every Marketplace version is a human review.
 

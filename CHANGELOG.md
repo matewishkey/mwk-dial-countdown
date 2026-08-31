@@ -28,7 +28,10 @@ Nothing that changes what the plugin does.
   with nothing linking them, and a tag without a release is invisible to both tools — no error
   anywhere, because nothing is wrong from either one's point of view. v3.2.0 went to Marketplace off
   the release page while `gh release create` had never run, so the version in front of Elgato briefly
-  had no artefact of record. The doc now carries the three-way `sha256sum` check that settles it.
+  had no artefact of record. The doc now carries the three-way `sha256sum` check that settles it, and
+  `README.md` says it in a line — where a hygiene sweep also caught the previous commit having added
+  the `pack` warning back beside the one already there, with two pointers to `docs/releasing.md` a
+  paragraph apart.
 
 ## [3.2.0] — 2026-08-31
 
