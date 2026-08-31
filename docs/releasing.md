@@ -152,6 +152,33 @@ own tree. So a change confined to the second list is by definition not a release
 The `.streamDeckPlugin` itself is gitignored. The GitHub release asset is the artefact of record, and
 the copy on the release page is the one to upload.
 
+### A pushed tag is not a release, and step 11 can overtake step 10
+
+These are two separate acts on two different systems, and nothing links them. `git push --tags`
+publishes a tag; `gh release create` publishes a release. A tag with no release shows up in
+`git ls-remote --tags origin` looking exactly like every other one, and `gh release list` simply does
+not mention it — there is no error anywhere, because nothing is wrong from either tool's point of
+view.
+
+It has happened. v3.2.0 was tagged and pushed, the release page was generated, and the **Marketplace
+submission went in off that page** — step 11 — while step 10 had never run. So for a while the version
+in front of Elgato had no artefact of record at all, which is the one thing this document says the
+release asset is for. Step 11 does not depend on step 10: the package it needs exists from step 6, so
+a human working off the page can do the manual step and skip the automatable one in front of it.
+
+**Before submitting, check the release exists, and check it is the right bytes.** The package passes
+through three places and they must agree:
+
+```sh
+sha256sum com.matewishkey.dial-countdown-v2.streamDeckPlugin          # what pack built
+sha256sum ~/share/work/<own>-<repo>/<date>_v<version>/*.streamDeckPlugin  # what was uploaded from
+gh release download v<version> -D /tmp/verify && sha256sum /tmp/verify/*.streamDeckPlugin
+```
+
+Three identical hashes means what Elgato has is what is in the repo. Anything else means the upload
+and the release are different builds, which is unrecoverable after the fact — the packed file is
+gitignored and a rebuild is not guaranteed byte-identical the moment anything in `bin/` changes.
+
 ## The release page
 
 `npm run release:page` builds one page per version and puts it on the shared drive, under
