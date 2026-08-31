@@ -120,11 +120,20 @@ npm run watch                                       # rebuild + restart on save
 
 ```sh
 npm run version:check                               # package.json ↔ manifest.json
-node tools/check-version.mjs v3.1.0                 # ...and the tag you are about to cut
+node tools/check-version.mjs v<version>             # ...and the tag you are about to cut
 npx streamdeck validate com.matewishkey.dial-countdown-v2.sdPlugin
 npx streamdeck pack com.matewishkey.dial-countdown-v2.sdPlugin --force
 npx prettier --write com.matewishkey.dial-countdown-v2.sdPlugin/manifest.json
+npm run release:page                                # gates, logs, and the notes to paste
 ```
+
+`pack` rewrites `manifest.json` on its way past, which is what the `prettier` line is for — and how
+v3.1.0 came to be tagged on a red build. `release:page` re-runs every gate, keeps the whole of each
+one's output, and writes the page carrying the notes for the two steps that cannot be automated: the
+GitHub release, and the Marketplace submission. It exits non-zero if a gate failed, so it cannot
+quietly produce a page for a build that did not pass.
+
+**[docs/releasing.md](docs/releasing.md)** is the order to do all of it in, and why.
 
 That last line is not optional. **`streamdeck pack` rewrites `manifest.json` in place** — it re-emits
 the JSON with `Controllers` inlined and no trailing newline, which is not the formatting the repo
@@ -157,6 +166,7 @@ The version lives in three places in three formats — `1.1.0`, `1.1.0.0`, `v1.1
 | `test/inspector-harness.mjs` | Drives the property inspector in a real browser, so its inline JavaScript can be tested. |
 | `tools/make-icons.mjs` | Draws every icon from `assets/mwk-mark.svg` — white for the app, red for the hardware. The plugin's own icon is the countdown ring, drawn by `renderRing`. Rasterises with headless Chromium; see [docs/releasing.md](docs/releasing.md). |
 | `tools/check-version.mjs` | Holds `package.json`, `manifest.json` and the git tag to the same version. |
+| `tools/release-page.mjs` | Builds a release's page: every gate re-run with its full log kept, the packaged plugin, and the notes to paste — trimmed to the listing's 1500-character limit without cutting a word. |
 | `tsconfig.test.json` | The typecheck config: `src/` **and** `test/`. `tsconfig.json` is rollup's, and covers only what it bundles. |
 | `eslint.config.mjs` | Type-aware lint rules. Formatting is left entirely to Prettier, so the two cannot disagree. |
 | `assets/mwk-mark.svg` | The brand's own mark, as supplied. The one source the artwork is generated from. |

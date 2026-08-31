@@ -19,6 +19,11 @@ Nothing that changes what the plugin does.
   its first gesture lands on a timer already in motion and reads as the opposite of what it meant.
   It cost a debugging pass while the auto-reset step was being written.
 
+- **`README.md` catches up with the release procedure** — `npm run release:page` was missing from
+  the packaging section and `tools/release-page.mjs` from the file table, so the README and
+  `docs/releasing.md` described two different releases. The `check-version` example is written
+  `v<version>` now rather than naming a release it will fall behind.
+
 ## [3.2.0] — 2026-08-31
 
 ### Added
