@@ -7,6 +7,12 @@ What changed, for whoever installs the plugin. Format follows
 Entries under **Unreleased** have landed on `main` but are not in any `.streamDeckPlugin` yet — for
 this project that generally means they do not change the packaged plugin at all.
 
+Two things about the shape of this file. **It starts at 0.10.0**: `v0.6.0` through `v0.9.0` are
+tagged and released on GitHub but were never written up, and they are left that way rather than
+reconstructed from git years later. And **an entry is a record of what shipped**, so it keeps naming
+things as they were called at the time — a file mentioned in the 3.2.0 entry may since have been
+renamed, and rewriting it would make the history describe a repo that never existed.
+
 ## [Unreleased]
 
 ### Internal
@@ -34,6 +40,18 @@ this project that generally means they do not change the packaged plugin at all.
 - **`README.md` says how a tool gets types.** `tools/` is in `tsconfig.test.json` and the modules a
   test imports carry JSDoc annotations. Without both, every value crossing that import is `any` —
   which does not fail a typecheck, it *disables* the type-aware lint rules wherever it lands.
+
+- **`--version` is read-only now, and documented.** It was added when this tool only wrote a page,
+  where naming another version merely read a different changelog section; once `publish` started
+  tagging, it would have offered to tag and publish whatever it was handed. The refusals catch the
+  dangerous half — a version already tagged elsewhere is refused — but a version that had never been
+  cut would have sailed through. A flag whose only use is looking must not be able to publish. It was
+  also the one flag `tools/release.mjs` implemented and nothing documented.
+
+- **`docs/releasing.md`'s release section had two numberings at once** — its prose said "step 4"
+  meaning a row of its own table while "step 4" in *Cutting one* was something else entirely. The
+  command's phases are named rather than numbered now, so they cannot be confused with the steps
+  around them.
 
 - **The rename left dead references behind**, found by a hygiene sweep: a stale duplicate of the
   flags paragraph in `docs/releasing.md` written against `tools/release-page.mjs`, the same dead path

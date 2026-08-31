@@ -5,6 +5,7 @@
  *   npm run release                  # gate, build, pack, publish, verify, write the page
  *   npm run release -- --no-gates    # rebuild the page from logs/, when only wording changed
  *   npm run release -- --no-publish  # run everything, touch nothing outward-facing
+ *   npm run release -- --version <v> # read another version's notes; implies --no-publish
  *   npm run release -- --out <dir>   # put the page somewhere other than the shared drive
  *
  * **It exists because a release done by hand is a release done in a different order each time.**
@@ -79,6 +80,17 @@ const value = (name, fallback) => {
 
 const pkg = JSON.parse(readFileSync(resolve(ROOT, "package.json"), "utf8"));
 const version = value("version", pkg.version);
+
+/**
+ * `--version` is for looking, so it is forced read-only.
+ *
+ * It stopped being harmless the day `publish` started tagging. When this tool only wrote a page,
+ * naming another version merely read a different changelog section; now, left alone, it would offer
+ * to tag and publish whatever it was handed. The refusals catch the dangerous half — a version
+ * already tagged elsewhere is refused — but a version that has *never* been cut would sail straight
+ * through and be released. A flag whose only use is inspection must not be able to publish.
+ */
+const inspecting = version !== pkg.version;
 const today = new Date().toISOString().slice(0, 10);
 
 /**
@@ -300,11 +312,20 @@ const full = section.split("\n").slice(1).join("\n").trim();
 const notesPath = resolve(logDir, "release-notes.md");
 writeFileSync(notesPath, `${full}\n`);
 
-const surveyed = flag("no-publish") || !hasPackage ? null : survey();
+const surveyed = flag("no-publish") || inspecting || !hasPackage ? null : survey();
 
 const published =
 	surveyed === null
-		? { blocked: flag("no-publish") ? "--no-publish" : "nothing was packed", did: [], done: [], reasons: {} }
+		? {
+				blocked: flag("no-publish")
+					? "--no-publish"
+					: inspecting
+						? `--version ${version} is read-only, so nothing was published`
+						: "nothing was packed",
+				did: [],
+				done: [],
+				reasons: {}
+			}
 		: surveyed.reachable
 			? publish(surveyed, notesPath)
 			: { blocked: "gh or the network is unavailable", did: [], done: [], reasons: {} };

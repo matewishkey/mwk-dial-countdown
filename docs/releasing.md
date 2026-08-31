@@ -152,30 +152,31 @@ the copy on the release page is the one to upload.
 
 ## What `npm run release` does
 
-Step 4 used to be six commands typed by hand, and typing six commands by hand is how they end up in a
-different order each time. It is one command now, and the order is code:
+Step 5 of *Cutting one* used to be six commands typed by hand, and typing six commands by hand is
+how they end up in a different order each time. It is one command now, and the order is code. The
+phases below are the command's own; they are not the numbered steps above.
 
 | | | |
 | --- | --- | --- |
-| 1 | `npm run check` | typecheck, lint, formatting, the tests, and the two version files agreeing |
-| 2 | `check-version v<version>` | ...and the tag about to be cut, which `check` cannot know about |
-| 3 | `npm run build` | rollup → `bin/` |
-| 4 | `streamdeck pack` **and** `prettier` | paired, because pack rewrites the manifest on its way past |
-| 5 | `streamdeck validate` | structural: schema, files, sizes. A floor, not a review |
-| 6 | `npm run demo` | the built plugin, end to end, over a real socket |
-| 7 | publish | tag, push the branch, push the tag, create the release — then check that the published asset is this build |
+| **check** | `npm run check` | typecheck, lint, formatting, the tests, and the two version files agreeing |
+| **version** | `check-version v<version>` | ...and the tag about to be cut, which `check` cannot know about |
+| **build** | `npm run build` | rollup → `bin/` |
+| **pack** | `streamdeck pack` **and** `prettier` | paired, because pack rewrites the manifest on its way past |
+| **validate** | `streamdeck validate` | structural: schema, files, sizes. A floor, not a review |
+| **demo** | `npm run demo` | the built plugin, end to end, over a real socket |
+| **publish** | tag, push the branch, push the tag, create the release | ...then check that the published asset is this build |
 
 The first failure stops the run, and the whole of every step's output is kept in `logs/` and copied
 beside the page. `npm run check` prints 305 passing tests nobody reads — right up until the release
 where one of them did not pass, and the question is which.
 
-**Step 4 is two commands on purpose.** `streamdeck pack` rewrites `manifest.json` in place as it
+**`pack` is two commands on purpose.** `streamdeck pack` rewrites `manifest.json` in place as it
 goes, re-emitting the JSON with `Controllers` inlined and no trailing newline, which is not the
 formatting the repo keeps — so the commit being tagged fails CI on formatting. `build` and `validate`
 leave it alone; only `pack` does this, and it is how v3.1.0 came to be tagged on a red build. Pairing
 them here is what stops it depending on somebody remembering.
 
-**Step 7 is idempotent, and that is the whole design.** It is not a script that runs top to bottom;
+**`publish` is idempotent, and that is the whole design.** It is not a script that runs top to bottom;
 it is a plan computed from the current state, where each act happens only if it has not happened.
 Run it once and it publishes. Run it again and it does nothing and says so. That is what lets it live
 inside `npm run release` rather than being a separate ceremony somebody has to remember not to
@@ -197,11 +198,23 @@ of the run still stands, because every other step is local by design. And it pub
 not Marketplace** — the listing cannot be reached from here at all, which is exactly why the notes on
 the page are notes to paste.
 
-`npm run release -- --no-gates` rebuilds the page from the logs already in `logs/`, for when it is
-the wording that changed and not the build. `--no-publish` runs everything and touches nothing
-outward-facing. `--out <dir>` puts the page somewhere other than the shared drive.
+### Flags
 
-### A pushed tag is not a release — which is why step 7 does both
+| | |
+| --- | --- |
+| `--no-gates` | Rebuild the page from the logs already in `logs/`, for when it is the wording that changed and not the build. |
+| `--no-publish` | Run everything and touch nothing outward-facing. |
+| `--version <v>` | Read another version's changelog entry, to see the notes it would produce. **Implies `--no-publish`** — see below. |
+| `--out <dir>` | Put the page somewhere other than the shared drive. |
+
+`--version` is an inspection flag and is forced read-only, because it stopped being harmless the day
+`publish` started tagging. It was added when this tool only wrote a page, where naming another
+version merely read a different changelog section. Left alone it would now offer to tag and publish
+whatever it was handed — and while the refusals catch the dangerous half of that (a version already
+tagged elsewhere is refused), a version that has *never* been cut would sail straight through and be
+released. A flag whose only use is looking must not be able to publish.
+
+### A pushed tag is not a release — which is why `publish` does both
 
 `git push --tags` publishes a tag; `gh release create` publishes a release. They are two acts on two
 systems with nothing linking them, and **a tag with no release is invisible to both tools** — it

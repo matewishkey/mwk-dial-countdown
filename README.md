@@ -119,7 +119,7 @@ npm run watch                                       # rebuild + restart on save
 ### Packaging and releasing
 
 ```sh
-npm run release          # check, build, pack, validate, demo, verify, and write the page
+npm run release          # check, build, pack, validate, demo, tag, push, publish, verify, page
 ```
 
 One command, in one order, every time — because commands typed by hand end up in a different order
