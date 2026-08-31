@@ -3,7 +3,7 @@
 [![MIT](https://img.shields.io/badge/licence-MIT-e2342b)](LICENSE)
 [![Stream Deck +](https://img.shields.io/badge/Stream%20Deck-%2B-101317)](https://www.elgato.com/stream-deck-plus)
 
-A countdown timer for **Stream Deck** dials, and for ordinary keys. Press the dial to start or pause, turn it to adjust by seconds, or push it in and turn to adjust by minutes. On the screen and on a key: tap to pause or resume, tap twice to reset, hold for the next preset.
+A countdown timer for **Stream Deck** dials, and for ordinary keys. Press the dial to start or pause, turn it to adjust by seconds, or push it in and turn to adjust by minutes. On the screen and on a key: tap to pause or resume, tap twice to reset it to the preset, hold for the next preset.
 
 Two actions ship, sharing everything but the control they run on:
 

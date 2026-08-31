@@ -285,16 +285,26 @@ export class Countdown {
 	}
 
 	/**
-	 * Back to a full clock, stopped — the double tap.
+	 * Back to the preset, stopped — the double tap.
+	 *
+	 * **To the preset, not to wherever the dial left the clock.** It used to restore the working
+	 * duration, so a 5m preset wound up to 8m reset to 8m for ever after: the number you configured
+	 * was reachable only by holding the screen, and the number you had nudged to once had quietly
+	 * become the timer's real length. That is a last-used value wearing a preset's clothes. A preset
+	 * that a reset cannot return you to is not a preset, so reset goes where the settings say.
+	 *
+	 * The dialled duration is therefore deliberately not recoverable. That is the trade, and it is the
+	 * right way round: the clock is the scratch value and the preset is the record, so the gesture
+	 * that means *put it back* has exactly one place to put it back to. Nudge it again if you want it
+	 * again — that is one turn of the dial, against a configured length that was otherwise two
+	 * gestures deep.
 	 *
 	 * Deliberately does not start it. Putting a timer back to the top and setting it running are two
 	 * decisions, and a gesture that makes both takes the second one away from you: there is then no
 	 * way to reset without immediately committing to a fresh run.
 	 */
 	reset(): void {
-		this.timer.reset();
-		this.#completed = 0;
-		this.#alerted = false;
+		this.#toPreset();
 		this.#say("reset");
 	}
 
@@ -334,11 +344,27 @@ export class Countdown {
 
 	/** Puts the clock on the selected preset, stopped, and says so. */
 	#load(word: string): void {
+		this.#toPreset();
+		this.#say(`${word} · ${formatPresetLabel(this.presetSeconds * 1000)}`);
+	}
+
+	/**
+	 * The start state: the selected preset, full, stopped, nothing counted.
+	 *
+	 * Three gestures mean this and they now all mean the same thing by construction — the double tap,
+	 * a hold that finds something to put right, and the auto-reset falling due. They used to agree by
+	 * coincidence and did not quite: the double tap restored the *working* duration while the other
+	 * two restored the preset, so `reset` and `hold` disagreed about where the top of the clock was.
+	 * One private method, one answer, and nothing left to drift.
+	 *
+	 * Silent on purpose. What to say about it is the caller's business, and the auto-reset says
+	 * nothing at all.
+	 */
+	#toPreset(): void {
 		this.#loadedSeconds = this.presetSeconds;
 		this.timer.setDuration(this.#loadedSeconds * 1000);
 		this.#alerted = false;
 		this.#completed = 0;
-		this.#say(`${word} · ${formatPresetLabel(this.presetSeconds * 1000)}`);
 	}
 
 	/**
@@ -430,9 +456,7 @@ export class Countdown {
 		}
 
 		this.#finishedAt = null;
-		this.timer.reset();
-		this.#completed = 0;
-		this.#alerted = false;
+		this.#toPreset();
 	}
 
 	#say(text: string): void {

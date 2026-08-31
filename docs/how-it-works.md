@@ -173,6 +173,16 @@ Each dial and each key keeps its own preset list and its own running countdown, 
 
 It used to, and that is covered above under *What a rotation actually changes*. The short version: a preset that the dial rewrites is not a preset, it is a last-used value. Turning moves the clock; the list stays as configured.
 
+### A reset goes to the preset, not to the clock
+
+**The double tap restores the length the property inspector says, not the one the dial last left.** A 5 minute preset wound up to 8 resets to 5.
+
+It did not always. Reset used to restore the *working* duration, which meant a timer nudged once was nudged for good: 8m became the value every later reset returned to, the configured 5m was reachable only by holding the screen, and a number typed into the inspector had quietly lost an argument with a number nudged on the hardware. That is a last-used value wearing a preset's clothes — and the whole point of the dial no longer writing back to the preset list is that those two are different things.
+
+So the rule is one sentence: **the clock is the scratch value, the preset is the record.** Every gesture that means *put it back* has exactly one place to put it back to, and `Countdown#toPreset` is the one method all three of them call — the double tap, a hold that finds something to put right, and the auto-reset falling due. They used to agree by coincidence and did not quite: reset restored the working duration while the other two restored the preset, so which gesture you reached for decided what "the top of the clock" meant.
+
+The dialled length is not recoverable afterwards, and that is the trade. It is the right way round — getting it back is one turn of the dial, while the configured length was otherwise two gestures deep — but it is a real loss and worth saying out loud rather than discovering.
+
 ### Why the hold puts it back before it moves on
 
 Because the dial no longer writes back, a countdown wound from 20 minutes to 23 has nothing that returns it to 20 — the property inspector still says 20, the clock says 23, and there is no gesture that closes the gap. That gap is the direct cost of the change above, so the change has to pay for it.
@@ -182,13 +192,15 @@ Holding the screen pays for it. **If the clock is not sitting stopped and full o
 | The clock is… | Hold the screen | Hold it again |
 | --- | --- | --- |
 | Stopped and full on its preset | Next preset | The one after that |
-| Running | Stopped, back to full | Next preset |
-| Paused, or finished | Stopped, back to full | Next preset |
+| Running | Stopped, back to the preset | Next preset |
+| Paused, or finished | Stopped, back to the preset | Next preset |
 | Dialled off its preset | Back to the preset, stopped | Next preset |
 
 The restore comes first because it is wanted far more often: putting the clock back where it belongs is a thing you do constantly, and moving to a different preset is a thing you do occasionally. Nothing is lost either way — the press that would have advanced still advances, one press later — and the word on screen says which of the two it just did, `preset · 20m` against `next · 30m`.
 
 **This rule was too narrow at first**, and the correction is worth recording. It originally fired only on the last row of that table: the dial had wound the clock off its preset, and nothing else counted. The reasoning was that a *running* timer already has a reset of its own, the double tap, so spending the gesture on one would be redundant.
+
+That reasoning is *more* true now than when it was rejected — the double tap and the hold land in exactly the same place — and the correction still stands. Redundancy is not the problem it looked like: the two gestures live on different controls, and reaching for the dial mid-run and being thrown onto the next preset is precisely the surprise the restore exists to prevent.
 
 In the hand that was wrong. Being thrown onto the next preset because you reached for the control mid-run is precisely the surprise the restore exists to prevent, and a running clock is not sitting on its preset either, whatever its duration says.
 
@@ -202,7 +214,7 @@ The label tracks the *preset's* length rather than the live duration, so you can
 
 Once the two genuinely disagree it says so, reading `from 20m`. That matters more than it used to, because the disagreement is now permanent until you close it — an idle clock showing `23:00` under a label reading `20m`, with the settings agreeing with the label and not the clock, would otherwise just look broken.
 
-It says so for that reason and no other. A timer that is merely *running* has not been dialled anywhere, so it gets no marker, even though holding the screen would still put it back to full. Those are two different questions — "has this been moved?" and "is there anything to put right?" — and only the first belongs on the label.
+It says so for that reason and no other. A timer that is merely *running* has not been dialled anywhere, so it gets no marker, even though holding the screen would still put it back to the preset. Those are two different questions — "has this been moved?" and "is there anything to put right?" — and only the first belongs on the label.
 
 ## What the middle of the ring is saying
 
@@ -237,7 +249,7 @@ Both layouts are the plugin's own files now (`layouts/ring.json`, `layouts/bar.j
 
 ## Try it without hardware
 
-`npm run mock` drives the whole thing from the keyboard with no Stream Deck attached, and `npm run demo` plays a scripted pass of 27 checks across 39 steps. It prints a labelled ASCII frame per step; the dial's step shows up across three of them:
+`npm run mock` drives the whole thing from the keyboard with no Stream Deck attached, and `npm run demo` plays a scripted pass of 29 checks across 40 steps. It prints a labelled ASCII frame per step; the dial's step shows up across three of them:
 
 | Step | What it shows |
 | --- | --- |
@@ -278,6 +290,11 @@ It also walks the gesture vocabulary and asserts the parts a person would otherw
 ```
 
 ### Adding a step to the demo
+
+**Set only what the step needs.** `applySettings` *merges* into one shared settings object, so a key
+set in one step is set for every step after it. Adding `soundId: "none"` to a step about the dial
+silenced the alarm assertion four steps later, which then reported a silent failure that belonged to
+neither — the failing step was correct and the cause was out of sight above it.
 
 **Give it a duration the step before it did not use.** `applySettings` reloads the clock only when the
 *selected preset's length* changed — deliberately, so that nudging an unrelated setting cannot reset a

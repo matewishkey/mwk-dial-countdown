@@ -9,6 +9,26 @@ this project that generally means they do not change the packaged plugin at all.
 
 ## [Unreleased]
 
+### Changed
+
+- **A reset now goes back to the preset, not to wherever the dial left the clock.** Wind a 5 minute
+  preset up to 8 and double-tap: you get 5 minutes.
+
+  It used to restore the *working* duration, which meant a timer nudged once was nudged for good. 8m
+  became the value every later reset returned to, the 5m in the property inspector was reachable only
+  by holding the screen, and a number typed into the settings had quietly lost an argument with a
+  number nudged on the hardware. That is a last-used value wearing a preset's clothes, and the whole
+  reason the dial no longer writes back to the preset list is that those two are different things.
+
+  The clock is the scratch value; the preset is the record. All three gestures that mean *put it
+  back* now land in the same place — the double tap, a hold that finds something to put right, and
+  the auto-reset falling due. They used to agree by coincidence and did not quite, so which one you
+  reached for decided what "the top of the clock" meant.
+
+  **The dialled length is not recoverable afterwards**, which is the trade. It is the right way round
+  — getting it back is one turn of the dial, while the configured length was otherwise two gestures
+  deep — but it is a real loss rather than a free win.
+
 ### Internal
 
 Nothing that changes what the plugin does.

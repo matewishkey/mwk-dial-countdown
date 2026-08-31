@@ -682,6 +682,35 @@ async function runDemo() {
 			}
 		],
 
+		// A reset goes to the PRESET, not to wherever the dial left the clock. It used to restore the
+		// working duration, so a preset nudged once was nudged for good. 11m, because a step that
+		// reuses the previous step's length inherits its clock instead of loading a fresh one.
+		[
+			"two taps on a DIALLED clock → back to the preset, not to the dialled length",
+			async () => {
+				// Only what this step needs. `applySettings` MERGES into the shared settings, so a key set
+				// here is set for every later step — adding `soundId: "none"` silenced the alarm check
+				// four steps down, which then reported a silent failure that was this step's doing.
+				applySettings({ presets: [660], presetIndex: 0 });
+				await wait(400);
+				await spin(3, 1, 200); // +3s, so the clock and the preset disagree
+				await wait(400);
+				const dialled = screen.value;
+				const label = screen.label;
+
+				await doubleTap(() => gestures.touch(false));
+				await wait(700);
+
+				console.log(`\n   dialled to ${dialled} (label "${label}"), after a double tap: ${screen.value}`);
+				console.log(
+					`   ${dialled === "11:03" && screen.value === "11:00" ? "\u2713 back to the preset — the dialled 11:03 is gone, as it should be" : "\u2717 the reset went to the dialled length, not the configured one"}`
+				);
+				console.log(
+					`   ${screen.label === "11m" ? "\u2713 and nothing is left to put right" : `\u2717 label still reads "${screen.label}"`}`
+				);
+			}
+		],
+
 		// The three screen gestures, each doing something the other two do not.
 		[
 			"two taps → back to full, and NOT started",

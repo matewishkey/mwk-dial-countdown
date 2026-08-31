@@ -52,6 +52,70 @@ describe("the gestures a countdown answers to", () => {
 		assert.equal(countdown.toast, "reset");
 	});
 
+	it("resets to the PRESET, not to wherever the dial left the clock", () => {
+		// The case that had no test, which is why the old behaviour survived as long as it did. Reset
+		// used to restore the *working* duration, so a 5m preset wound up to 8m reset to 8m from then
+		// on — the configured length reachable only by holding the screen, and a value nudged to once
+		// quietly promoted to the timer's real length.
+		const { countdown } = fixture([300, 1200]);
+
+		countdown.adjust(180);
+		assert.equal(countdown.timer.durationMs, 480_000, "precondition: dialled from 5m up to 8m");
+		assert.equal(countdown.drifted, true);
+
+		countdown.reset();
+
+		assert.equal(countdown.timer.durationMs, 300_000, "the preset, not the 8m the dial had left");
+		assert.equal(countdown.timer.remainingMs, 300_000);
+		assert.equal(countdown.drifted, false, "and nothing is left to put right");
+		assert.equal(countdown.onPreset, true);
+		assert.equal(countdown.toast, "reset");
+	});
+
+	it("resets a running timer that was dialled off its preset back to the preset", () => {
+		// Adjusting while running only nudges the time left, but it raises the duration as a ceiling —
+		// so the running case drifts by a different route and has to land in the same place.
+		const { countdown, advance } = fixture([300, 1200]);
+
+		countdown.toggle();
+		advance(30_000);
+		countdown.adjust(600);
+		assert.equal(countdown.drifted, true, "precondition: the ceiling moved past the preset");
+
+		countdown.reset();
+
+		assert.equal(countdown.timer.durationMs, 300_000);
+		assert.equal(countdown.timer.status, "idle", "and it is stopped, not carried on at a new length");
+	});
+
+	it("resets to the preset that is selected now, not the one the clock was loaded from", () => {
+		// The positive control for "reset goes where the settings say": move the selection, and the
+		// reset has to follow it rather than returning to a length nothing points at any more.
+		const { countdown } = fixture([300, 1200], 0);
+
+		countdown.adjust(60);
+		countdown.applySettings({ presets: [300, 1200], presetIndex: 1 });
+		assert.equal(countdown.presetSeconds, 1200, "precondition: the selection moved to 20m");
+
+		countdown.reset();
+		assert.equal(countdown.timer.durationMs, 1_200_000);
+	});
+
+	it("agrees with the hold about where the top of the clock is", () => {
+		// These two used to disagree — reset restored the working duration and the hold restored the
+		// preset — so which gesture you reached for decided what "back to the top" meant.
+		const dialled = fixture([300, 1200]);
+		dialled.countdown.adjust(180);
+		dialled.countdown.reset();
+
+		const held = fixture([300, 1200]);
+		held.countdown.adjust(180);
+		held.countdown.cyclePreset(); // not on its preset, so this restores rather than advances
+
+		assert.equal(dialled.countdown.timer.durationMs, held.countdown.timer.durationMs);
+		assert.equal(dialled.countdown.presetIndex, held.countdown.presetIndex, "and neither advanced");
+	});
+
 	it("resets a finished timer back to a full, stopped clock too", () => {
 		const { countdown, advance } = fixture([2]);
 
