@@ -171,7 +171,7 @@ The version lives in three places in three formats — `1.1.0`, `1.1.0.0`, `v1.1
 | `tools/publish-plan.mjs` | What publishing still has to do, and what it must refuse — pure, so every refusal is tested without publishing anything. |
 | `tools/release-notes.mjs` | Turns a changelog entry into the two shapes a release needs — whole for GitHub, and cut to 1500 characters for Marketplace without cutting a word. |
 | `tools/package-id.mjs` | A reproducible id for a packaged plugin. `pack` stamps the packing time into every entry, so the file's own hash is not reproducible; this hashes the contents instead. |
-| `tsconfig.test.json` | The typecheck config: `src/` **and** `test/`. `tsconfig.json` is rollup's, and covers only what it bundles. |
+| `tsconfig.test.json` | The typecheck config: `src/`, `test/` **and** `tools/`. `tsconfig.json` is rollup's, and covers only what it bundles. |
 | `eslint.config.mjs` | Type-aware lint rules. Formatting is left entirely to Prettier, so the two cannot disagree. |
 | `assets/mwk-mark.svg` | The brand's own mark, as supplied. The one source the artwork is generated from. |
 

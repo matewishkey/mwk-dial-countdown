@@ -35,6 +35,13 @@ this project that generally means they do not change the packaged plugin at all.
   test imports carry JSDoc annotations. Without both, every value crossing that import is `any` —
   which does not fail a typecheck, it *disables* the type-aware lint rules wherever it lands.
 
+- **The rename left dead references behind**, found by a hygiene sweep: a stale duplicate of the
+  flags paragraph in `docs/releasing.md` written against `tools/release-page.mjs`, the same dead path
+  in `docs/how-it-works.md`, and — the one that mattered — the generated release page telling every
+  reader to run a command that no longer exists. `--no-publish` was documented everywhere except the
+  tool's own usage header. The changelog's own link definitions had also stopped at 3.1.0, so
+  *Unreleased* was comparing against a two-releases-old tag.
+
 - **`npm run release -- --no-gates` now runs the release check.** It was skipped along with the
   gates, which broke the one flow it exists for: `docs/releasing.md` says to re-run the page after
   publishing so the check goes green, and the re-run reported "not checked" for exactly that
@@ -523,7 +530,9 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.1.0...HEAD
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.3.0...HEAD
+[3.3.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.3.0
+[3.2.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.2.0
 [3.1.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.1.0
 [3.0.1]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.0.1
 [3.0.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.0.0

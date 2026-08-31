@@ -306,6 +306,6 @@ the previous step's timer instead of starting its own.
 
 Assert something, rather than only printing a frame. A step that prints is a step somebody has to
 read; a step that ends in `✓` or `✗` is one the release gate can fail on, and
-`node tools/release-page.mjs` keeps the whole log either way.
+`npm run release` keeps the whole log either way.
 
 The step is `src/step.ts` — two pure functions with no state and no clock, so everything above is asserted in `test/step.test.ts` rather than described and hoped for. The gesture checks quoted above come from `tools/mock-host.mjs`, which drives the built plugin end to end.

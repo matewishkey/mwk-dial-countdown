@@ -266,10 +266,6 @@ release rather than vanishing; it does not belong in front of somebody deciding 
 update. The generator drops that heading from the Marketplace notes and keeps it in the GitHub ones,
 which is the audience it was written for.
 
-`node tools/release-page.mjs --no-gates` rebuilds the page from the logs already in `logs/`, for when
-it is the wording that changed and not the build. `--out <dir>` puts it somewhere other than the
-shared drive.
-
 ## Changelog
 
 [CHANGELOG.md](../CHANGELOG.md), [Keep a Changelog](https://keepachangelog.com) format. Every change
