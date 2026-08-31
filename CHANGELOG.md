@@ -9,7 +9,12 @@ this project that generally means they do not change the packaged plugin at all.
 
 ## [Unreleased]
 
-Nothing yet.
+### Internal
+
+- **`npm run release -- --no-gates` now runs the release check.** It was skipped along with the
+  gates, which broke the one flow it exists for: `docs/releasing.md` says to re-run the page after
+  publishing so the check goes green, and the re-run reported "not checked" for exactly that
+  question. The check depends on nothing the gates produce and costs one API call.
 
 ## [3.3.0] — 2026-08-31
 

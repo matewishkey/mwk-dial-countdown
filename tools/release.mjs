@@ -210,7 +210,11 @@ function checkPublished() {
 		: { state: "differs", detail: `published ${publishedId}, built ${id}` };
 }
 
-const published = flag("no-gates") ? { state: "unchecked", detail: "--no-gates" } : checkPublished();
+// Deliberately runs even under `--no-gates`. It depends on nothing the gates produce beyond the
+// package already on disk, it costs one API call, and re-running the page *after* publishing — to
+// turn this very check green — is the flow `docs/releasing.md` prescribes. Skipping it here made
+// that flow report "not checked" for the one question the re-run existed to answer.
+const published = checkPublished();
 
 const PUBLISHED_WORDING = {
 	none: ["✗", "not published yet — `gh release create` has not run"],
