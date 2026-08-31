@@ -23,7 +23,7 @@
  *   7. `release`             is it published, and is it the same plugin? (see below)
  *
  * The whole of each step's output is kept in `logs/` and copied beside the page. `npm run check`
- * prints 289 passing tests nobody reads, right up until the release where one of them did not pass
+ * prints 303 passing tests nobody reads, right up until the release where one of them did not pass
  * and the question is which.
  *
  * ## What "deterministic" can and cannot mean here
@@ -61,7 +61,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { contentId } from "./package-id.mjs";
-import { changelogSection, fitNotes, NOT_FOR_MARKETPLACE, NOTES_LIMIT, parseSection } from "./release-notes.mjs";
+import { plan } from "./publish-plan.mjs";
+import { changelogSection, fitNotes, lead, NOT_FOR_MARKETPLACE, NOTES_LIMIT, parseSection } from "./release-notes.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const PLUGIN_UUID = "com.matewishkey.dial-countdown-v2";
@@ -165,65 +166,118 @@ if (hasPackage) {
 	console.log(`  file sha256     ${sha}`);
 }
 
-// ── Step 7: is it published, and is it this build? ───────────────────────────
+// ── Step 7: publish, or say why there is nothing left to do ─────────────────
+
+/** Runs a command, returning its trimmed stdout, or `null` if it failed. */
+function run(...argv) {
+	const result = spawnSync(argv[0], argv.slice(1), { cwd: ROOT, encoding: "utf8" });
+	if (result.status !== 0) {
+		return null;
+	}
+	return (result.stdout ?? "").trim();
+}
 
 /**
- * Compares the published release against what was just built.
+ * What the published release contains, or `null` when there is none or it cannot be read.
  *
- * @returns `state` of `"none"` (nothing published yet — expected, and work still to do), `"match"`,
- * `"differs"` (loud: unrepairable, since the packed file is gitignored), or `"unchecked"` when `gh`
- * or the network is unavailable and the run must not fail for it.
+ * A download failure answers `null`, and the plan reads `null` as *do not compare* rather than *they
+ * differ* — refusing to publish because the network was unavailable would be the tool inventing a
+ * conflict out of its own bad luck.
  */
-function checkPublished() {
-	if (!hasPackage) {
-		return { state: "unchecked", detail: "nothing packed to compare against" };
-	}
-
-	const view = spawnSync("gh", ["release", "view", `v${version}`, "--json", "tagName"], {
-		cwd: ROOT,
-		encoding: "utf8"
-	});
-
-	if (view.status !== 0) {
-		const stderr = view.stderr ?? "";
-		if (/release not found/i.test(stderr)) {
-			return { state: "none", detail: `no GitHub release for v${version} yet` };
-		}
-		return { state: "unchecked", detail: stderr.trim().split("\n")[0] || "gh unavailable" };
-	}
-
+function publishedContentId() {
 	const into = resolve(logDir, "published");
 	mkdirSync(into, { recursive: true });
+
 	const got = spawnSync("gh", ["release", "download", `v${version}`, "-D", into, "--clobber"], {
 		cwd: ROOT,
 		encoding: "utf8"
 	});
-
 	const asset = resolve(into, PACKAGE);
-	if (got.status !== 0 || !existsSync(asset)) {
-		return { state: "unchecked", detail: "the release exists but its asset could not be downloaded" };
-	}
 
-	const publishedId = contentId(readFileSync(asset));
-	return publishedId === id
-		? { state: "match", detail: publishedId }
-		: { state: "differs", detail: `published ${publishedId}, built ${id}` };
+	return got.status === 0 && existsSync(asset) ? contentId(readFileSync(asset)) : null;
 }
 
-// Deliberately runs even under `--no-gates`. It depends on nothing the gates produce beyond the
-// package already on disk, it costs one API call, and re-running the page *after* publishing — to
-// turn this very check green — is the flow `docs/releasing.md` prescribes. Skipping it here made
-// that flow report "not checked" for the one question the re-run existed to answer.
-const published = checkPublished();
+/**
+ * Gathers the state the plan is decided from.
+ *
+ * `gh` and the network can be absent — every other step here is local by design — so this reports
+ * `reachable: false` rather than failing, and publishing is skipped with that as its reason.
+ */
+function survey() {
+	const view = spawnSync("gh", ["release", "view", `v${version}`, "--json", "tagName"], {
+		cwd: ROOT,
+		encoding: "utf8"
+	});
+	const releaseExists = view.status === 0;
+	const reachable = releaseExists || /release not found/i.test(view.stderr ?? "");
 
-const PUBLISHED_WORDING = {
-	none: ["✗", "not published yet — `gh release create` has not run"],
-	match: ["✔", "published, and the same plugin as this build"],
-	differs: ["✗", "PUBLISHED RELEASE IS A DIFFERENT BUILD"],
-	unchecked: ["·", "not checked"]
-};
+	const remoteLine = run("git", "ls-remote", "--tags", "origin", `v${version}^{}`);
 
-console.log(`  ${PUBLISHED_WORDING[published.state][0]} release       ${PUBLISHED_WORDING[published.state][1]}`);
+	return {
+		reachable,
+		branch: run("git", "rev-parse", "--abbrev-ref", "HEAD") ?? "HEAD",
+		state: {
+			version,
+			clean: run("git", "status", "--porcelain") === "",
+			headSha: run("git", "rev-parse", "HEAD") ?? "",
+			localTagSha: run("git", "rev-list", "-n", "1", `v${version}`),
+			remoteTagSha: remoteLine === null || remoteLine === "" ? null : remoteLine.split(/\s/)[0],
+			releaseExists,
+			releaseContentId: releaseExists ? publishedContentId() : null,
+			builtContentId: id
+		}
+	};
+}
+
+/**
+ * Does whatever the plan says is left, in order, stopping at the first failure.
+ *
+ * The release body is the changelog entry in full — the same text the page offers for copying, so
+ * the two cannot come to disagree about what a version changed.
+ */
+function publish({ state, branch }, notesPath) {
+	const acts = {
+		tag: () => run("git", "tag", `v${version}`),
+		pushBranch: () => run("git", "push", "origin", branch),
+		pushTag: () => run("git", "push", "origin", `v${version}`),
+		createRelease: () =>
+			run(
+				"gh",
+				"release",
+				"create",
+				`v${version}`,
+				PACKAGE,
+				"--title",
+				`${version} — ${headline()}`,
+				"--notes-file",
+				notesPath
+			)
+	};
+
+	const { blocked, todo, done, reasons } = plan(state);
+	if (blocked !== null) {
+		return { blocked, did: [], done, reasons };
+	}
+
+	const did = [];
+	for (const act of todo) {
+		process.stdout.write(`  ${reasons[act]} … `);
+		if (acts[act]() === null) {
+			console.log("✗");
+			return { blocked: `${act} failed`, did, done, reasons };
+		}
+		console.log("✔");
+		did.push(act);
+	}
+
+	return { blocked: null, did, done, reasons };
+}
+
+/** The headline after the version number, taken from the first entry the listing will show. */
+function headline() {
+	const first = forListing[0]?.bullets[0];
+	return first === undefined ? "a new version" : lead(first[0]).replace(/\.$/, "").toLowerCase();
+}
 
 // ── Notes ────────────────────────────────────────────────────────────────────
 
@@ -239,6 +293,28 @@ const groups = parseSection(section);
 const forListing = groups.filter((group) => !NOT_FOR_MARKETPLACE.includes(group.heading));
 const notes = fitNotes(forListing, NOTES_LIMIT);
 const full = section.split("\n").slice(1).join("\n").trim();
+
+// ── Publishing ───────────────────────────────────────────────────────────────
+
+const notesPath = resolve(logDir, "release-notes.md");
+writeFileSync(notesPath, `${full}\n`);
+
+const surveyed = flag("no-publish") || !hasPackage ? null : survey();
+
+const published =
+	surveyed === null
+		? { blocked: flag("no-publish") ? "--no-publish" : "nothing was packed", did: [], done: [], reasons: {} }
+		: surveyed.reachable
+			? publish(surveyed, notesPath)
+			: { blocked: "gh or the network is unavailable", did: [], done: [], reasons: {} };
+
+if (published.blocked !== null) {
+	console.log(`  ✗ publish        ${published.blocked}`);
+} else if (published.did.length === 0) {
+	console.log(`  ✔ publish        already published, and the same plugin as this build`);
+} else {
+	console.log(`  ✔ publish        ${published.did.join(", ")}`);
+}
 
 // ── The page ─────────────────────────────────────────────────────────────────
 
@@ -368,12 +444,13 @@ ${
 	<tr><td><strong>content id</strong><br><span class="hint">what plugin this is — reproducible</span></td><td class="sha">${id}</td></tr>
 	<tr><td><strong>file sha256</strong><br><span class="hint">what file this is — changes on every pack</span></td><td class="sha">${sha}</td></tr>
 	<tr><td><strong>published</strong></td><td>${
-		{
-			match: '<span style="color:#4ade80">\u2714</span> the release carries this same plugin',
-			none: `<span style="color:#f87171">\u2718</span> no GitHub release for v${version} yet \u2014 <code>gh release create v${version} ${PACKAGE}</code>`,
-			differs: `<span style="color:#f87171">\u2718 the published release is a DIFFERENT build</span><br><span class="hint">${escape(published.detail)}</span>`,
-			unchecked: `<span class="hint">not checked \u2014 ${escape(published.detail)}</span>`
-		}[published.state]
+		published.blocked === null
+			? `<span style="color:#4ade80">\u2714</span> tag, push and GitHub release are done, and the release carries this same plugin${
+					published.did.length === 0
+						? " (nothing was left to do)"
+						: ` \u2014 this run did: ${escape(published.did.join(", "))}`
+				}`
+			: `<span style="color:#f87171">\u2718</span> not published \u2014 ${escape(published.blocked)}`
 	}</td></tr>
 </table>
 <p class="hint"><strong>Two hashes, two questions.</strong> The content id is a hash over every file inside the package, ignoring timestamps \u2014 the same source always gives the same id, so it answers <em>is this the same plugin</em>. The file's own sha256 changes on every pack, because <code>streamdeck pack</code> stamps the moment of packing into all 21 entries; it answers only <em>is this the same file I uploaded</em>. The <code>.streamDeckPlugin</code> is gitignored, so this copy and the release asset are the only ones that exist.</p>`
@@ -381,14 +458,13 @@ ${
 }
 
 <h2>What is left to do by hand</h2>
+${
+	published.blocked === null
+		? `<p><strong>One thing.</strong> Everything else \u2014 the tag, the push, the GitHub release \u2014 <code>npm run release</code> did, and checked afterwards that the published asset is this build.</p>`
+		: `<p><strong>Publishing did not complete</strong>, so the tag and the GitHub release may still be outstanding: ${escape(published.blocked)}. Fix that and run <code>npm run release</code> again \u2014 it is idempotent, and will do only what is left.</p>`
+}
 <ol>
-	<li>Tag and push — <code>git tag v${version} &amp;&amp; git push --tags</code>.</li>
-	<li>${
-		published.state === "match"
-			? `<s>gh release create</s> \u2014 done, and verified as this build.`
-			: `<code>gh release create v${version} ${PACKAGE}</code>, notes from the second box above. <strong>Do this before the next one</strong>, not after: the two are separate acts on separate systems with nothing linking them, and v3.2.0 reached Marketplace while this step had never run.`
-	}</li>
-	<li>Submit to Marketplace through the Maker dashboard, notes from the first box. There is no API for this step, which is the reason this page exists \u2014 and no way to check it from here, so nothing above says anything about the listing.</li>
+	<li>Submit to Marketplace through the Maker dashboard, with the notes from the first box. There is no API for it, which is the reason this page exists \u2014 and no way to check it from here, so nothing above says anything about the listing.</li>
 </ol>
 
 </main>

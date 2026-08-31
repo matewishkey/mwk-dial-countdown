@@ -11,6 +11,22 @@ this project that generally means they do not change the packaged plugin at all.
 
 ### Internal
 
+- **`npm run release` tags, pushes and publishes the GitHub release itself.** It was the last part
+  of a release still typed by hand, and typing it by hand is how v3.2.0 reached Marketplace with no
+  release behind it. Automating the tag push alone would have recreated that exact gap, so the tag,
+  the branch push, the tag push and `gh release create` are one step — followed by downloading the
+  published asset back and checking its content id against the build.
+
+  It is a plan computed from the current state rather than a script, so it is **idempotent**: run it
+  again and it does nothing; run it on a half-finished publish and it finishes it. It **refuses
+  rather than forces** — a dirty tree, a tag already naming a different commit, a tag someone else
+  pushed elsewhere, or a published release carrying a different build each stop it with the reason.
+  A published asset that cannot be downloaded is treated as unknown, not as a conflict, so a flaky
+  network cannot invent one. `--no-publish` runs everything and touches nothing outward-facing.
+
+  The decision is pure (`tools/publish-plan.mjs`) because none of those refusals can be tested by
+  trying them; `test/publish-plan.test.ts` drives all of them with no network and no repository.
+
 - **`npm run release -- --no-gates` now runs the release check.** It was skipped along with the
   gates, which broke the one flow it exists for: `docs/releasing.md` says to re-run the page after
   publishing so the check goes green, and the re-run reported "not checked" for exactly that

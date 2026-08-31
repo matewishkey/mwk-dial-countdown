@@ -87,7 +87,7 @@ Stream Deck runs on macOS and Windows only, so the plugin cannot be *run* on Lin
 ```sh
 npm install
 npm run build      # bundle into com.matewishkey.dial-countdown-v2.sdPlugin/bin
-npm test           # 289 tests — 41 of them drive the property inspector in a browser
+npm test           # 303 tests — 41 of them drive the property inspector in a browser
 npm run check      # everything CI runs: typecheck, lint, format, tests, versions
 npm run demo       # scripted gesture pass, prints one frame per step
 npm run mock       # the same harness, driven from the keyboard
@@ -122,19 +122,24 @@ npm run watch                                       # rebuild + restart on save
 npm run release          # check, build, pack, validate, demo, verify, and write the page
 ```
 
-One command, in one order, every time — because six commands typed by hand end up in a different
-order each time. It runs `npm run check`, the version check against the tag, the build, `streamdeck
-pack` (paired with `prettier`, since pack rewrites the manifest on its way past and that is how
-v3.1.0 was tagged on a red build), `streamdeck validate`, the demo pass against the built plugin, and
-then asks GitHub whether this version is published and whether the published asset is this same
-build. The first failure stops it, and every step's whole output is kept.
+One command, in one order, every time — because commands typed by hand end up in a different order
+each time. It runs `npm run check`, the version check against the tag, the build, `streamdeck pack`
+(paired with `prettier`, since pack rewrites the manifest on its way past and that is how v3.1.0 was
+tagged on a red build), `streamdeck validate` and the demo pass against the built plugin — then
+**tags, pushes, creates the GitHub release, and downloads the published asset back to check it is
+this same build.**
 
-**A pushed tag is not a release** — the two are separate acts on separate systems with nothing linking
-them, and v3.2.0 reached Marketplace while `gh release create` had never run. That last check is
-there so the gap is visible rather than silent.
+That last part is one step rather than two on purpose. **A pushed tag is not a release**: they are
+separate acts on separate systems with nothing linking them, a tag with no release looks identical to
+every other tag, and v3.2.0 reached Marketplace with none behind it. Doing both together closes the
+gap by construction rather than by remembering.
 
-It writes a page to the shared drive with the notes for the two steps that cannot be automated: the
-GitHub release, and the Marketplace submission.
+It is **idempotent** — a plan computed from the current state, where each act happens only if it has
+not happened — so running it again does nothing, and a half-finished publish is fixed by running the
+same command. It **refuses rather than forces**: a dirty tree, a tag already naming a different
+commit, or a published release carrying a different build each stop it with the reason. The one thing
+left by hand is the Marketplace submission, which has no API; the page it writes carries the notes to
+paste.
 
 **[docs/releasing.md](docs/releasing.md)** is the whole policy, and the one rule it turns on is this: *the version number describes the `.streamDeckPlugin` file and nothing else*. Repo-only work — tests, docs, tooling — lands in [CHANGELOG.md](CHANGELOG.md) under *Unreleased* and rides the next real release, because the number is what the Stream Deck application shows the user and every Marketplace version is a human review.
 
@@ -162,7 +167,8 @@ The version lives in three places in three formats — `1.1.0`, `1.1.0.0`, `v1.1
 | `test/inspector-harness.mjs` | Drives the property inspector in a real browser, so its inline JavaScript can be tested. |
 | `tools/make-icons.mjs` | Draws every icon from `assets/mwk-mark.svg` — white for the app, red for the hardware. The plugin's own icon is the countdown ring, drawn by `renderRing`. Rasterises with headless Chromium; see [docs/releasing.md](docs/releasing.md). |
 | `tools/check-version.mjs` | Holds `package.json`, `manifest.json` and the git tag to the same version. |
-| `tools/release.mjs` | The release, in one command and one order: check, build, pack, validate, demo, then ask GitHub whether it is published and whether that is this build. Writes the page. |
+| `tools/release.mjs` | The release, in one command and one order: check, build, pack, validate, demo, tag, push, publish, verify. Writes the page. |
+| `tools/publish-plan.mjs` | What publishing still has to do, and what it must refuse — pure, so every refusal is tested without publishing anything. |
 | `tools/release-notes.mjs` | Turns a changelog entry into the two shapes a release needs — whole for GitHub, and cut to 1500 characters for Marketplace without cutting a word. |
 | `tools/package-id.mjs` | A reproducible id for a packaged plugin. `pack` stamps the packing time into every entry, so the file's own hash is not reproducible; this hashes the contents instead. |
 | `tsconfig.test.json` | The typecheck config: `src/` **and** `test/`. `tsconfig.json` is rollup's, and covers only what it bundles. |

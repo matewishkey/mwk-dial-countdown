@@ -140,13 +140,11 @@ own tree. So a change confined to the second list is by definition not a release
 1. **Decide the number** from the table above, against what is actually in the diff.
 2. **Bump both files together** — `package.json` and `manifest.json`. Never one alone.
 3. **Move the changelog's *Unreleased* entries** under the new version, with today's date.
-4. **`npm run release`.** Everything that can be automated, in one order, every time.
-5. **Commit, tag `v<version>`, push both.**
-6. **`npm run release` again**, so the page's release check goes green and its logs describe the
-   commit actually being tagged.
-7. `gh release create v<version> com.matewishkey.dial-countdown-v2.streamDeckPlugin` with the notes
-   from the page's second box — the changelog entry in full.
-8. **Submit to Marketplace by hand**, through the Maker dashboard, with the notes from the page's
+4. **Commit.** The tree has to be clean, because the next step tags it and a tag naming a commit that
+   is not what was built is worse than no tag.
+5. **`npm run release`.** Everything else: check, build, pack, validate, demo, then tag, push, create
+   the GitHub release, and verify that the published asset is this same build.
+6. **Submit to Marketplace by hand**, through the Maker dashboard, with the notes from the page's
    first box. There is no API for it, and it is the only step here that is not automatable.
 
 The `.streamDeckPlugin` itself is gitignored. The GitHub release asset is the artefact of record, and
@@ -165,10 +163,10 @@ different order each time. It is one command now, and the order is code:
 | 4 | `streamdeck pack` **and** `prettier` | paired, because pack rewrites the manifest on its way past |
 | 5 | `streamdeck validate` | structural: schema, files, sizes. A floor, not a review |
 | 6 | `npm run demo` | the built plugin, end to end, over a real socket |
-| 7 | the release check | is it published, and is it this build? |
+| 7 | publish | tag, push the branch, push the tag, create the release — then check that the published asset is this build |
 
 The first failure stops the run, and the whole of every step's output is kept in `logs/` and copied
-beside the page. `npm run check` prints 289 passing tests nobody reads — right up until the release
+beside the page. `npm run check` prints 303 passing tests nobody reads — right up until the release
 where one of them did not pass, and the question is which.
 
 **Step 4 is two commands on purpose.** `streamdeck pack` rewrites `manifest.json` in place as it
@@ -177,37 +175,50 @@ formatting the repo keeps — so the commit being tagged fails CI on formatting.
 leave it alone; only `pack` does this, and it is how v3.1.0 came to be tagged on a red build. Pairing
 them here is what stops it depending on somebody remembering.
 
-**Step 7 has three outcomes, not two.** *No release yet* is the expected state before step 7 of
-*Cutting one* and is reported as work still to do. *Published and matching* is the tick. *Published
-and different* is loud, because that one cannot be repaired: the packed file is gitignored, so once
-the wrong build is the release asset there is no copy of the right one to put back. It needs `gh` and
-a network, so it degrades to "not checked" rather than failing an offline build — every other step is
-local, deliberately. And it checks **GitHub, not Marketplace**; the listing cannot be inspected from
-here at all, which is exactly why the notes on the page are notes to paste.
+**Step 7 is idempotent, and that is the whole design.** It is not a script that runs top to bottom;
+it is a plan computed from the current state, where each act happens only if it has not happened.
+Run it once and it publishes. Run it again and it does nothing and says so. That is what lets it live
+inside `npm run release` rather than being a separate ceremony somebody has to remember not to
+repeat — and it means a half-finished publish is fixed by running the same command again, which is
+exactly the v3.2.0 shape: tagged and pushed, no GitHub release.
+
+**It refuses rather than forces.** A dirty tree, a tag that already names a different commit, a tag
+someone else pushed elsewhere, or a published release carrying a different build — each stops the run
+and says which. None of them can be tested by trying it, so the decision is pure and lives in
+`tools/publish-plan.mjs`, with `test/publish-plan.test.ts` driving every refusal against no network
+and no repository.
+
+**What it will not treat as a conflict is an unknown.** If the published asset cannot be downloaded,
+that is not evidence the builds differ, and refusing there would let a flaky network invent a
+conflict. `null` means *do not compare*, never *they differ*.
+
+It needs `gh` and a network; without them publishing is skipped with that as its reason and the rest
+of the run still stands, because every other step is local by design. And it publishes to **GitHub,
+not Marketplace** — the listing cannot be reached from here at all, which is exactly why the notes on
+the page are notes to paste.
 
 `npm run release -- --no-gates` rebuilds the page from the logs already in `logs/`, for when it is
-the wording that changed and not the build. `--out <dir>` puts it somewhere other than the shared
-drive.
+the wording that changed and not the build. `--no-publish` runs everything and touches nothing
+outward-facing. `--out <dir>` puts the page somewhere other than the shared drive.
 
-### A pushed tag is not a release, and the last step can overtake the one before it
+### A pushed tag is not a release — which is why step 7 does both
 
-These are two separate acts on two different systems, and nothing links them. `git push --tags`
-publishes a tag; `gh release create` publishes a release. A tag with no release shows up in
-`git ls-remote --tags origin` looking exactly like every other one, and `gh release list` simply does
-not mention it — there is no error anywhere, because nothing is wrong from either tool's point of
-view.
+`git push --tags` publishes a tag; `gh release create` publishes a release. They are two acts on two
+systems with nothing linking them, and **a tag with no release is invisible to both tools** — it
+looks identical to every other tag in `git ls-remote --tags origin`, and `gh release list` simply
+does not mention it. No error anywhere, because nothing is wrong from either one's point of view.
 
-It has happened. v3.2.0 was tagged and pushed, the release page was generated, and the **Marketplace
-submission went in off that page** while `gh release create` had never run. So for a while the version
-in front of Elgato had no artefact of record at all, which is the one thing this document says the
-release asset is for. The submission does not depend on the release: the package it needs exists as soon as
-`npm run release` has run, so a human working off the page can do the manual step and skip the
-automatable one in front of it. **That is now step 7 of `npm run release`** — the page says outright
-whether a release exists and whether it is this build, so skipping it is visible rather than silent.
+It happened. v3.2.0 was tagged and pushed, the release page was generated, and the Marketplace
+submission went in off that page while `gh release create` had never run — so the version in front of
+Elgato had no artefact of record. The submission never depended on the release: the package it needs
+exists as soon as the pack step has run, so a human working off the page can do the manual step and
+skip the automatable one in front of it.
 
-Running `npm run release` a second time, after the tag is pushed, is what turns that check green —
-and it is cheap, because the only thing that changed is the answer to the one question the first run
-could not answer yet.
+That gap is closed by doing both in one step rather than by remembering. What remains worth knowing
+is the check underneath it: the package passes through three places, and `npm run release` compares
+the **content id** of the one it built against the one it downloads back off the release. Identical
+means Elgato has what the repo has. A difference is unrecoverable after the fact — the packed file is
+gitignored, so there is no copy of the right build left to put back.
 
 ## The release page
 
