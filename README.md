@@ -87,7 +87,7 @@ Stream Deck runs on macOS and Windows only, so the plugin cannot be *run* on Lin
 ```sh
 npm install
 npm run build      # bundle into com.matewishkey.dial-countdown-v2.sdPlugin/bin
-npm test           # 303 tests — 41 of them drive the property inspector in a browser
+npm test           # 305 tests — 41 of them drive the property inspector in a browser
 npm run check      # everything CI runs: typecheck, lint, format, tests, versions
 npm run demo       # scripted gesture pass, prints one frame per step
 npm run mock       # the same harness, driven from the keyboard

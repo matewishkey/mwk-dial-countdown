@@ -23,7 +23,7 @@
  *   7. `release`             is it published, and is it the same plugin? (see below)
  *
  * The whole of each step's output is kept in `logs/` and copied beside the page. `npm run check`
- * prints 303 passing tests nobody reads, right up until the release where one of them did not pass
+ * prints 305 passing tests nobody reads, right up until the release where one of them did not pass
  * and the question is which.
  *
  * ## What "deterministic" can and cannot mean here
@@ -254,23 +254,23 @@ function publish({ state, branch }, notesPath) {
 			)
 	};
 
+	// The todo is run even when the plan refuses: a refusal is about this *version*, and the branch
+	// push is not — it is the only act the plan still asks for in that case, and leaving committed
+	// work unpushed because no release was due is the opposite of what automating this was for.
 	const { blocked, todo, done, reasons } = plan(state);
-	if (blocked !== null) {
-		return { blocked, did: [], done, reasons };
-	}
 
 	const did = [];
 	for (const act of todo) {
 		process.stdout.write(`  ${reasons[act]} … `);
 		if (acts[act]() === null) {
 			console.log("✗");
-			return { blocked: `${act} failed`, did, done, reasons };
+			return { blocked: blocked ?? `${act} failed`, did, done, reasons };
 		}
 		console.log("✔");
 		did.push(act);
 	}
 
-	return { blocked: null, did, done, reasons };
+	return { blocked, did, done, reasons };
 }
 
 /** The headline after the version number, taken from the first entry the listing will show. */
@@ -310,6 +310,9 @@ const published =
 
 if (published.blocked !== null) {
 	console.log(`  ✗ publish        ${published.blocked}`);
+	if (published.did.length > 0) {
+		console.log(`    ...but did:    ${published.did.join(", ")}`);
+	}
 } else if (published.did.length === 0) {
 	console.log(`  ✔ publish        already published, and the same plugin as this build`);
 } else {

@@ -84,7 +84,7 @@ describe("what it refuses to do", () => {
 		const { blocked, todo } = plan({ ...FRESH, clean: false });
 
 		assert.match(blocked as string, /uncommitted/);
-		assert.deepEqual(todo, [], "and it does nothing at all, rather than doing the harmless-looking half");
+		assert.deepEqual(todo, ["pushBranch"], "nothing that names this version — but the commits still go up");
 	});
 
 	it("will not move a tag that already names a different commit", () => {
@@ -124,6 +124,35 @@ describe("what it refuses to do", () => {
 
 		assert.ok((blocked as string).includes("bbbb00000"));
 		assert.ok((blocked as string).includes("aaaa00000"));
+	});
+});
+
+describe("the branch push, which is not about this version", () => {
+	it("still happens when publishing is refused", () => {
+		// A run that correctly declines to move a tag must not also leave committed work unpushed —
+		// that is the opposite of what asking for it to be automatic was for.
+		for (const state of [
+			{ ...FRESH, clean: false },
+			{ ...FRESH, localTagSha: OTHER },
+			{ ...FRESH, remoteTagSha: OTHER }
+		]) {
+			const { blocked, todo } = plan(state);
+
+			assert.ok(blocked !== null, "precondition: this state is refused");
+			assert.deepEqual(todo, ["pushBranch"]);
+		}
+	});
+
+	it("is the only thing left once everything else is published", () => {
+		const { todo } = plan({
+			...FRESH,
+			localTagSha: HEAD,
+			remoteTagSha: HEAD,
+			releaseExists: true,
+			releaseContentId: BUILT
+		});
+
+		assert.deepEqual(todo, ["pushBranch"]);
 	});
 });
 

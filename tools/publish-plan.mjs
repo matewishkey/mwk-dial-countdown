@@ -51,8 +51,15 @@ export function plan(state) {
 	const blocked = refusal(state);
 	const reasons = /** @type {Record<string, string>} */ ({});
 
+	// **The branch push survives every refusal.** It is the one act that is not about this version at
+	// all: it puts committed work on the remote, which is wanted whether or not a release is due, and
+	// it is safely repeatable — git says "up to date" and exits zero. Blocking it along with the rest
+	// meant a run that correctly declined to move a tag also quietly left the commits unpushed, which
+	// is the opposite of what "push it for me" is for.
+	reasons.pushBranch = "push the branch, so the tag refers to a commit the remote has";
+
 	if (blocked !== null) {
-		return { blocked, todo: [], done: [], reasons };
+		return { blocked, todo: ["pushBranch"], done: [], reasons };
 	}
 
 	const needed = {
@@ -60,9 +67,8 @@ export function plan(state) {
 		// and a moved tag at worst, and the refusals above have already established it is not moved.
 		tag: state.localTagSha === null,
 
-		// Always. The branch push is the one act that is safely repeatable — git says "up to date" and
-		// exits zero — and skipping it on the belief that it must already be pushed is how a tag ends
-		// up on the remote pointing at a commit that is on no branch there.
+		// Always — see above. Skipping it on the belief that it must already be pushed is also how a
+		// tag ends up on the remote pointing at a commit that is on no branch there.
 		pushBranch: true,
 
 		pushTag: state.remoteTagSha === null,
@@ -70,7 +76,6 @@ export function plan(state) {
 	};
 
 	reasons.tag = needed.tag ? `create v${state.version}` : `v${state.version} already tags this commit`;
-	reasons.pushBranch = "push the branch, so the tag refers to a commit the remote has";
 	reasons.pushTag = needed.pushTag ? `push v${state.version}` : `v${state.version} is already on the remote`;
 	reasons.createRelease = needed.createRelease
 		? `create the GitHub release for v${state.version}`

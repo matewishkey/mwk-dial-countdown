@@ -24,6 +24,10 @@ this project that generally means they do not change the packaged plugin at all.
   A published asset that cannot be downloaded is treated as unknown, not as a conflict, so a flaky
   network cannot invent one. `--no-publish` runs everything and touches nothing outward-facing.
 
+  **The branch push survives a refusal**, because it is the only one of the four acts that is not
+  about this version: a run that correctly declines to move a tag must still put committed work on
+  the remote, or "push it for me" stops being true exactly when there is no release due.
+
   The decision is pure (`tools/publish-plan.mjs`) because none of those refusals can be tested by
   trying them; `test/publish-plan.test.ts` drives all of them with no network and no repository.
 
