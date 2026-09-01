@@ -25,7 +25,7 @@ import { after, before, describe, it } from "node:test";
 
 import { gitState, remoteTagSha } from "../tools/git-state.mjs";
 
-let dir: string;
+let dir: string | undefined;
 let work: string;
 let firstCommit: string;
 
@@ -51,7 +51,13 @@ before(() => {
 	firstCommit = git(work, "rev-parse", "HEAD");
 });
 
-after(() => rmSync(dir, { recursive: true, force: true }));
+after(() => {
+	// Guarded because `before` assigns this and `rmSync` throws a TypeError on `undefined`: a setup
+	// that failed before the temp dir existed would have its real error replaced by that one.
+	if (dir !== undefined) {
+		rmSync(dir, { recursive: true, force: true });
+	}
+});
 
 describe("the remote tag", () => {
 	it("is absent when the version has never been cut", () => {
