@@ -319,5 +319,14 @@ which is the audience it was written for.
 that lands on `main` gets a line under *Unreleased* when it happens, not reconstructed from git log
 at release time — the reason for a change is clear the day it is made and gone a fortnight later.
 
-Write entries for whoever installs the plugin. "The dial no longer overwrites your presets" belongs
-there; "extracted `#load` from `cyclePreset`" does not, and is what the commit message is for.
+Write the user-facing sections for whoever installs the plugin: "The dial no longer overwrites your
+presets", not "extracted `#load` from `cyclePreset`".
+
+That is a rule about *which heading*, not about what is worth recording, and this doc used to blur
+the two — it said repo-only work was "in the git history and in the changelog" in one place and that
+a refactor did not belong in the changelog in another. Both cannot hold, and the project settled it
+in practice long before the sentence was fixed: 3.0.0, 3.2.0 and 3.3.0 all carry `### Internal`
+sections. So a refactor, a tool or a formatting pass goes under `### Internal` in the same entry,
+which the release-notes generator drops from the Marketplace text and keeps in the GitHub one — see
+*`### Internal` is left out of the Marketplace notes* above. Nothing that lands on `main` is left out
+of the changelog; what varies is the audience it is written for.

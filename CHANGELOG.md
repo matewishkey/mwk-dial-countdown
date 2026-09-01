@@ -1,6 +1,8 @@
 # Changelog
 
-What changed, for whoever installs the plugin. Format follows
+What changed. The user-facing sections are written for whoever installs the plugin; `### Internal`
+covers repo-only work — a refactor, a tool, a formatting pass — which travels with the next release
+rather than vanishing, and is left out of the Marketplace notes. Format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/); versioning is explained in
 [docs/releasing.md](docs/releasing.md).
 
@@ -16,6 +18,14 @@ renamed, and rewriting it would make the history describe a repo that never exis
 ## [Unreleased]
 
 ### Internal
+
+- **`docs/releasing.md` no longer contradicts itself about repo-only work.** It said that work was
+  "in the git history and in the changelog" in one place, and that "extracted `#load` from
+  `cyclePreset`" did not belong in the changelog in another. The project had already settled it in
+  practice — 3.0.0, 3.2.0 and 3.3.0 all carry `### Internal` sections, and a later section spelled
+  out that repo-only work goes under that heading — but the contradicting sentence was never
+  updated, so the doc still read as an open question. It now says the one thing: everything that
+  lands on `main` is recorded, and the heading decides the audience.
 
 - **Nothing is published that the gates did not pass.** The verdict on the six gates was computed
   *below* the publish step and acted on in the last four lines of `tools/release.mjs`, so a run with
