@@ -15,8 +15,15 @@
  *
  * It is split out and pure for one reason: the alternative is testing it by publishing things. Every
  * refusal below is a case that must never be discovered in production — force-pushing a tag onto a
- * different commit, releasing a dirty tree, overwriting a release that carries a different build.
- * `test/publish-plan.test.ts` drives all of them with no network and no repository.
+ * different commit, releasing a dirty tree, overwriting a release that carries a different build,
+ * cutting one from a build the gates did not pass. `test/publish-plan.test.ts` drives all of them
+ * with no network and no repository.
+ *
+ * Pure is not the same as covered, though, and the gap between the two hid a bug for a release:
+ * `remoteTagSha` was gathered with a pattern that only matched annotated tags while `publish` cuts
+ * lightweight ones, so the "someone else cut this version" refusal below was unreachable and every
+ * test still passed. Nothing here can be right about a value it is handed wrongly — which is what
+ * `tools/git-state.mjs` and `test/git-state.test.ts` now exist to cover.
  */
 
 /**
@@ -35,6 +42,7 @@
  * @property {boolean} releaseExists whether a GitHub release exists for the tag
  * @property {string | null} releaseContentId the published asset's content id, if one could be read
  * @property {string | null} builtContentId the content id of the package just built
+ * @property {boolean} gatesPassed whether the gates ran in this invocation and every one of them passed
  */
 
 /**
@@ -81,12 +89,34 @@ export function plan(state) {
 		? `create the GitHub release for v${state.version}`
 		: "the GitHub release already exists";
 
-	return {
-		blocked: null,
-		todo: ACTS.filter((act) => needed[act]),
-		done: ACTS.filter((act) => !needed[act]),
-		reasons
-	};
+	const todo = ACTS.filter((act) => needed[act]);
+	const done = ACTS.filter((act) => !needed[act]);
+
+	// **Nothing is released that the gates did not just pass.** There are two ways to arrive here
+	// without that: `--no-gates`, which reuses whatever package happens to be on disk, and a run
+	// where a gate failed. The second was the worse one — `release.mjs` published first and read the
+	// verdict forty lines later, so a red test suite was tagged, pushed and released, and *then* told
+	// "do not cut this". Both are one mistake, publishing a build nothing stands behind, so both are
+	// one flag.
+	//
+	// It withholds rather than refusing outright, because the documented `--no-gates` re-run — the
+	// one that rebuilds the page after publishing so this very check goes green — has nothing left to
+	// do and must still come out green. Withholding an empty list is silence; withholding a real one
+	// is loud. And the branch push is exempt on the same grounds as every other refusal: it is not
+	// about this version, and committed work should not sit unpushed because a gate went red.
+	if (!state.gatesPassed) {
+		const withheld = todo.filter((act) => act !== "pushBranch");
+		if (withheld.length > 0) {
+			return {
+				blocked: `the gates did not pass on this build, so ${withheld.join(", ")} ${withheld.length === 1 ? "was" : "were"} withheld`,
+				todo: ["pushBranch"],
+				done,
+				reasons
+			};
+		}
+	}
+
+	return { blocked: null, todo, done, reasons };
 }
 
 /**

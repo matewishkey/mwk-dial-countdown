@@ -8,6 +8,10 @@
  *   npm run release -- --version <v> # read another version's notes; implies --no-publish
  *   npm run release -- --out <dir>   # put the page somewhere other than the shared drive
  *
+ * Only the first of those can publish. `--no-gates` reuses the package already on disk, so it may
+ * refresh the page and it may push the branch, but anything that cuts a release is withheld — see
+ * step 7.
+ *
  * **It exists because a release done by hand is a release done in a different order each time.**
  * v3.2.0 proved it: the tag was pushed, the page was generated, the Marketplace submission went in
  * off that page — and `gh release create` was never run, so the version in front of Elgato had no
@@ -53,6 +57,20 @@
  * Every other step is local, deliberately. And it verifies **GitHub, not Marketplace** — the listing
  * cannot be inspected from here at all, which is the whole reason the notes on the page are notes to
  * paste rather than something automated.
+ *
+ * ## Nothing is published that steps 1-6 did not pass
+ *
+ * The acts in step 7 are withheld unless the gates ran in this invocation and all of them passed.
+ * That sounds like it goes without saying and it did not: the verdict used to be computed *below*
+ * the publish step and acted on in the last four lines of the file, so a run with a failing test
+ * suite tagged, pushed and created the release, then printed "do not cut this" about a thing it had
+ * just cut. `--no-gates` was the same hole by another route — it skips the build and the pack, so
+ * what it would have published is whichever package was last left on disk.
+ *
+ * The branch push is the exception, as it is for every other refusal: it is not about this version,
+ * and committed work should not sit unpushed because a gate went red. And a `--no-gates` re-run with
+ * nothing left to publish stays green, because withholding an empty list is silence — that flow, the
+ * one that rebuilds the page after publishing so step 7 reads as done, is why the flag exists.
  */
 
 import { createHash } from "node:crypto";
@@ -62,6 +80,7 @@ import { homedir } from "node:os";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { gitState } from "./git-state.mjs";
 import { contentId } from "./package-id.mjs";
 import { plan } from "./publish-plan.mjs";
 import { changelogSection, fitNotes, lead, NOT_FOR_MARKETPLACE, NOTES_LIMIT, parseSection } from "./release-notes.mjs";
@@ -166,6 +185,23 @@ const gates = GATES.map((gate) => {
 	return result;
 });
 
+const failed = gates.filter((gate) => gate.passed === false);
+
+/**
+ * Whether this run verified the build it is about to publish — the input to the last refusal.
+ *
+ * Read here, before anything is published, and that placement is the fix rather than an accident of
+ * layout. It used to be computed below the publish step and acted on at the very end of the file, so
+ * a run with a red gate tagged, pushed and created the release and only then printed "do not cut
+ * this" — a report on something already done. The one class of failure this tool exists to prevent,
+ * committed by the tool itself.
+ *
+ * `--no-gates` is the same answer for a different reason: they did not run, so nothing here stands
+ * behind the package on disk. Its `passed` is `null` rather than `false`, which is why the flag is
+ * named as well as counted.
+ */
+const gatesPassed = failed.length === 0 && !flag("no-gates");
+
 // ── The package, and what identifies it ──────────────────────────────────────
 
 const packaged = resolve(ROOT, PACKAGE);
@@ -224,17 +260,18 @@ function survey() {
 	const releaseExists = view.status === 0;
 	const reachable = releaseExists || /release not found/i.test(view.stderr ?? "");
 
-	const remoteLine = run("git", "ls-remote", "--tags", "origin", `v${version}^{}`);
+	// The git half is `tools/git-state.mjs`, which is where it can be run against a scratch
+	// repository — it was inline here, untested, and wrong about the remote tag for every tag this
+	// tool cuts.
+	const { branch, ...local } = gitState(ROOT, version);
 
 	return {
 		reachable,
-		branch: run("git", "rev-parse", "--abbrev-ref", "HEAD") ?? "HEAD",
+		branch,
 		state: {
 			version,
-			clean: run("git", "status", "--porcelain") === "",
-			headSha: run("git", "rev-parse", "HEAD") ?? "",
-			localTagSha: run("git", "rev-list", "-n", "1", `v${version}`),
-			remoteTagSha: remoteLine === null || remoteLine === "" ? null : remoteLine.split(/\s/)[0],
+			...local,
+			gatesPassed,
 			releaseExists,
 			releaseContentId: releaseExists ? publishedContentId() : null,
 			builtContentId: id
@@ -371,7 +408,6 @@ if (hasPackage) {
 
 const escape = (text) => text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 const kb = (bytes) => `${(bytes / 1024).toFixed(bytes < 10240 ? 1 : 0)} kB`;
-const failed = gates.filter((gate) => gate.passed === false);
 
 const html = `<!doctype html>
 <html lang="en">
@@ -553,7 +589,9 @@ console.log(
 console.log(`  page     ${resolve(out, "report.html")}`);
 
 if (failed.length > 0) {
-	console.error(`\n✗ ${failed.map((gate) => gate.label).join(", ")} failed — the page says so, but do not cut this`);
+	console.error(
+		`\n✗ ${failed.map((gate) => gate.label).join(", ")} failed — nothing was published; the page says which`
+	);
 	process.exit(1);
 }
 

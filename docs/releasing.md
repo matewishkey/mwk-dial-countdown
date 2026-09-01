@@ -202,7 +202,7 @@ the page are notes to paste.
 
 | | |
 | --- | --- |
-| `--no-gates` | Rebuild the page from the logs already in `logs/`, for when it is the wording that changed and not the build. |
+| `--no-gates` | Rebuild the page from the logs already in `logs/`, for when it is the wording that changed and not the build. **Cannot cut a release** — see below. |
 | `--no-publish` | Run everything and touch nothing outward-facing. |
 | `--version <v>` | Read another version's changelog entry, to see the notes it would produce. **Implies `--no-publish`** — see below. |
 | `--out <dir>` | Put the page somewhere other than the shared drive. |
@@ -213,6 +213,40 @@ version merely read a different changelog section. Left alone it would now offer
 whatever it was handed — and while the refusals catch the dangerous half of that (a version already
 tagged elsewhere is refused), a version that has *never* been cut would sail straight through and be
 released. A flag whose only use is looking must not be able to publish.
+
+### Nothing is published that the gates did not pass
+
+The four acts are withheld unless the gates ran in *this* invocation and every one of them passed.
+That reads as obvious and it was not true: the verdict was computed below the publish step and acted
+on in the last four lines of `tools/release.mjs`, so a run with a failing test suite tagged, pushed
+and created the release, and *then* printed "do not cut this" about something it had just done. The
+one failure this tool exists to prevent, committed by the tool.
+
+`--no-gates` was the same hole reached another way. It skips the build and the pack, so the package
+it would publish is whichever one was last left on disk — a version bump plus a `--no-gates` run
+would have shipped the previous build under the new number, with nothing having checked it. The flag
+was safe when this tool only wrote a page, and stayed unchanged when the tool started tagging.
+
+Two things keep the useful half of it working. The **branch push is exempt**, on the same grounds as
+every other refusal: it is not about this version, and committed work should not sit unpushed
+because a gate went red. And withholding an **empty** list is silence, not a refusal — so the
+prescribed `--no-gates` re-run, the one that rebuilds the page after publishing so the release check
+reads as done, still comes out green because it has nothing left to cut.
+
+### The plan is only as right as the state it is given
+
+`tools/publish-plan.mjs` is pure and every refusal in it is covered, and that was not enough. The
+remote tag was read with `git ls-remote --tags origin "v<version>^{}"`, and `^{}` matches only the
+peeled ref an **annotated** tag has — while `publish` cuts lightweight ones with `git tag`. So the
+answer was always empty, the plan always read "no tag on the remote", and the refusal for a version
+someone else had already cut was unreachable. Every test passed, because a pure function cannot be
+wrong about a value it is handed.
+
+Gathering that state now lives in `tools/git-state.mjs`, asked with both patterns and preferring the
+peeled line where there is one, so annotated and lightweight tags both resolve to the commit that
+gets compared against HEAD. `test/git-state.test.ts` runs it against a working tree and a bare
+remote built in a temp dir — a bare repo on disk is a real remote to `ls-remote`, so it needs no
+network, the same way the plan's own tests need no repository.
 
 ### A pushed tag is not a release — which is why `publish` does both
 

@@ -17,6 +17,32 @@ renamed, and rewriting it would make the history describe a repo that never exis
 
 ### Internal
 
+- **Nothing is published that the gates did not pass.** The verdict on the six gates was computed
+  *below* the publish step and acted on in the last four lines of `tools/release.mjs`, so a run with
+  a failing test suite tagged, pushed and created the GitHub release, and then printed "do not cut
+  this" about something it had already done. `--no-gates` was the same hole by another route: it
+  skips the build and the pack, so a version bump followed by a `--no-gates` run would have shipped
+  whichever package was last left on disk, unchecked, under the new number. That flag was harmless
+  when this tool only wrote a page and was not revisited when it started tagging.
+
+  Both are one mistake — publishing a build nothing stands behind — so both are now one input to the
+  plan, read before anything is published. The branch push stays exempt, as it is for every other
+  refusal, and a `--no-gates` re-run with nothing left to cut still comes out green, because
+  withholding an empty list is silence rather than a refusal.
+
+- **The refusal for a version someone else already cut could never fire.** The remote tag was read
+  with `git ls-remote --tags origin "v<version>^{}"`, and `^{}` matches only the peeled ref an
+  *annotated* tag has — while `publish` cuts lightweight ones. The answer was always empty, so the
+  plan always read "no tag on the remote". Every test passed throughout: the decision is pure and
+  was correct about a value the untested glue around it always handed over as `null`.
+
+  Gathering that state is now `tools/git-state.mjs`, asked with both patterns and preferring the
+  peeled line, so both kinds of tag resolve to the commit that gets compared against HEAD.
+  `test/git-state.test.ts` drives it against a working tree and a bare remote in a temp dir — a bare
+  repo on disk is a real remote to `ls-remote`, so it needs no network, just as the plan's own tests
+  need no repository. That split is the lesson: a pure core with every branch covered is still only
+  as right as the state handed to it.
+
 - **`npm run release` tags, pushes and publishes the GitHub release itself.** It was the last part
   of a release still typed by hand, and typing it by hand is how v3.2.0 reached Marketplace with no
   release behind it. Automating the tag push alone would have recreated that exact gap, so the tag,
