@@ -17,6 +17,23 @@ renamed, and rewriting it would make the history describe a repo that never exis
 
 ## [Unreleased]
 
+### Fixed
+
+- **A key could look completely dead, and pressing it again made it worse.** A press is held back for
+  a moment in case a second one is coming — that is how "press twice to reset" is told apart from
+  "press once to pause". The key was using the touchscreen's window of 250 ms, and a key is not
+  glass: it has travel, a click, and a finger that has to come all the way back up before it can go
+  down again, with only the release reported. An ordinary, deliberate double-press 320 ms apart fell
+  outside that window and arrived as two separate presses instead — start, then pause.
+
+  The clock therefore did not move, so nothing on screen said the presses had landed at all; and
+  pressing again could not recover, because an even number of toggles always lands back where it
+  started. The obvious response to a button that seems not to have worked was the one response that
+  guaranteed it stayed that way.
+
+  **The key now waits 500 ms for a second press**, and the touchscreen keeps its 250 ms. The cost is
+  that a single press on a key acts a quarter of a second later than it used to.
+
 ### Internal
 
 - **`docs/releasing.md` no longer contradicts itself about repo-only work.** It said that work was

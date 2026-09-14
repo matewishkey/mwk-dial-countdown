@@ -67,6 +67,14 @@ The alternative is to pause immediately and undo it when the second tap lands. T
 
 A **hold** does not wait, because there is nothing ambiguous about it — and a hold arriving while a tap is still pending cancels that tap, since a tap followed by a hold is two gestures rather than a double tap.
 
+#### The key waits twice as long, and has to
+
+250 ms is the touchscreen's figure and was for a long time the key's as well, which was a mistake. A key is not glass: it has travel, a click, and a finger that has to come all the way back up before it can go down again — and the hardware reports only the release, so the gap being measured is release-to-release, with the second press's own travel inside it.
+
+Driven against the built plugin, two presses **320 ms** apart — an ordinary, deliberate double-press — fell outside the window and arrived as two separate toggles: start, then pause. What makes that worth a window of its own rather than a wider shared one is *how* it fails. The clock does not move, so the key looks dead rather than misread; and pressing it again cannot recover, because an even number of toggles always lands back where it started. The obvious response to a button that seems not to have worked is the one response that guarantees it stays that way.
+
+So the key waits **500 ms**, and a single press costs the extra quarter of a second. `DOUBLE_PRESS_MS` in `src/gestures.ts` is the value; `CountdownAction.tapWindowMs` is how a control claims its own.
+
 ### Feedback, in place of haptics
 
 There is none to be had: `@elgato/streamdeck` exposes no haptic command, and the hardware has no motor to drive if it did. Two things stand in for it, and they are doing different jobs.

@@ -40,7 +40,7 @@ And on a dial, the encoder as well:
 
 The dial owns the two things you do constantly — nudge the clock, and start or stop it — because your hand is already on it. The screen owns the rest: resetting, and choosing which preset you are timing.
 
-A single tap acts a quarter of a second after your finger lifts, not the instant it does — that is the window in which a second tap would make it a reset. There is no way to have both an instant pause and a double tap, and a reset that briefly flashes "paused" first would be worse than the wait.
+A single tap acts a quarter of a second after your finger lifts, not the instant it does — that is the window in which a second tap would make it a reset. There is no way to have both an instant pause and a double tap, and a reset that briefly flashes "paused" first would be worse than the wait. **On a key the window is half a second**, because a physical key is slower to press twice than glass is to tap twice.
 
 Neither the reset nor the hold starts anything. Putting a clock back to the top and setting it running are two decisions, and a gesture that makes both takes the second one away from you — there would be no way to reset without immediately committing to a fresh run.
 

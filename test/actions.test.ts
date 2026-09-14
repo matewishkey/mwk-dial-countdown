@@ -32,6 +32,7 @@ import { CountdownAction, type Instance } from "../src/actions/countdown-action.
 import type { Countdown } from "../src/countdown.ts";
 import type { Gesture } from "../src/gestures.ts";
 import { normaliseSettings, type DialCountdownSettings } from "../src/settings.ts";
+import { formatDuration } from "../src/timer.ts";
 
 type Dial = DialAction<DialCountdownSettings>;
 
@@ -109,6 +110,16 @@ class TestAction extends CountdownAction<Dial> {
 		this.perform(this.#live(id), gesture);
 	}
 
+	/**
+	 * Sends a raw press through the instance's own resolver, as a key's `keyUp` handler does.
+	 *
+	 * Distinct from {@link TestAction.gesture}, which runs an *already resolved* gesture. What is
+	 * under test here is the resolving — whether the control's own window was the one applied.
+	 */
+	press(id: string): void {
+		this.#live(id).taps.press(false);
+	}
+
 	/** The countdown a control is currently showing, so a test can ask it what it thinks. */
 	countdownFor(id: string): Countdown {
 		return this.#live(id).countdown;
@@ -128,6 +139,7 @@ type Driver = {
 	onWillAppear(ev: unknown): void;
 	onWillDisappear(ev: unknown): void;
 	gesture(id: string, gesture: Gesture): void;
+	press(id: string): void;
 	countdownFor(id: string): Countdown;
 };
 
@@ -414,5 +426,73 @@ describe("the alert when a timer finishes", () => {
 			1,
 			"a sound that was asked for and did not play must still be reported"
 		);
+	});
+});
+
+/**
+ * Two controls that differ only in how long they wait for a second press.
+ *
+ * Deliberately far apart, and both far shorter than either real window, so the suite spends
+ * milliseconds rather than seconds proving which one was applied.
+ */
+const NARROW_WINDOW_MS = 30;
+const WIDE_WINDOW_MS = 250;
+
+class NarrowWindowAction extends TestAction {
+	protected override readonly tapWindowMs = NARROW_WINDOW_MS;
+}
+
+class WideWindowAction extends TestAction {
+	protected override readonly tapWindowMs = WIDE_WINDOW_MS;
+}
+
+/** As {@link driver}, for the two controls above. Same reason for the loose typing. */
+const narrowDriver = (): Driver => new NarrowWindowAction();
+const wideDriver = (): Driver => new WideWindowAction();
+
+describe("the window a control waits for a second press", () => {
+	/** Two presses that gap apart, then long enough for anything still pending to have fired. */
+	async function doublePress(action: Driver, id: string, gapMs: number): Promise<Countdown> {
+		const { action: control } = fakeDial(id);
+		action.onWillAppear({ action: control, payload: { settings: normaliseSettings({ presets: [300] }) } });
+
+		action.press(id);
+		await wait(gapMs);
+		action.press(id);
+		await wait(WIDE_WINDOW_MS + 100);
+
+		const countdown = action.countdownFor(id);
+		action.onWillDisappear({ action: control });
+		return countdown;
+	}
+
+	// The bug, in the smallest form that still has it. The key was built with the touchscreen's
+	// window, so a double-press slower than glass fell outside it and arrived as two separate
+	// toggles: start, then pause. The clock does not move, and pressing again cannot help, because an
+	// even number of toggles always lands back where it started.
+	const GAP_MS = 80;
+
+	it("reads a press pair as two toggles when the gap falls outside it", async () => {
+		const countdown = await doublePress(narrowDriver(), "narrow-1", GAP_MS);
+
+		// Start, then pause, on a clock that had not begun to run: it ends up *paused at full*. The
+		// clock reads exactly what it read before, so nothing on screen says the presses landed — and
+		// the state is one the user never asked for and cannot press their way out of.
+		assert.equal(countdown.timer.status, "paused", "two toggles on a full clock leave it paused, not reset");
+		// It did run, for exactly as long as the gap between the two presses — which is far less than
+		// the second the display is drawn in. So the clock reads what it read before: nothing visible
+		// happened, which is the whole complaint.
+		assert.equal(
+			formatDuration(countdown.timer.remainingMs),
+			formatDuration(countdown.timer.durationMs),
+			"and the clock still reads what it read before, so nothing on screen says the presses landed"
+		);
+	});
+
+	it("reads the same pair as one reset when the control waits long enough", async () => {
+		const countdown = await doublePress(wideDriver(), "wide-1", GAP_MS);
+
+		assert.equal(countdown.timer.status, "idle", "a reset leaves the clock stopped and full");
+		assert.equal(countdown.toast, "reset", "and it must have got there by resetting, not by two toggles");
 	});
 });

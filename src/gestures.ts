@@ -18,8 +18,34 @@
  */
 export type Gesture = "toggle" | "reset" | "next";
 
-/** How long a second tap has to arrive for the pair to count as one double tap. */
+/**
+ * How long a second tap has to arrive for the pair to count as one double tap.
+ *
+ * This is the touchscreen's figure, and only the touchscreen's. Two taps on glass land a long way
+ * inside it, so the window can stay short and a single tap acts almost at once.
+ */
 export const DOUBLE_TAP_MS = 250;
+
+/**
+ * The same window for a key, which needs a wider one.
+ *
+ * A key is not glass. It has travel, a click, and a finger that has to come all the way back up
+ * before it can go down again, and the hardware only reports the release — so the gap being measured
+ * is release-to-release, with the second press's own travel inside it. Driven against the built
+ * plugin, two presses 320 ms apart — an ordinary, deliberate double-press — fell outside the
+ * touchscreen's 250 ms and were read as two separate toggles instead, which start the clock and then
+ * immediately pause it again.
+ *
+ * What makes that worth a constant of its own rather than a wider shared one is how it fails. The
+ * clock does not move, so the key looks dead rather than misread; and pressing it again cannot
+ * recover, because an even number of toggles always lands back where it started. The obvious
+ * response to a button that seems not to have worked is the one response that guarantees it stays
+ * that way.
+ *
+ * The cost is that a single press is held back for half a second before it acts, which is the price
+ * of having a double-press gesture on a control this slow.
+ */
+export const DOUBLE_PRESS_MS = 500;
 
 /**
  * How long a press must be held to count as a long one rather than a tap. Only used where the

@@ -35,6 +35,15 @@ const PORT = Number(process.env.MOCK_PORT ?? 34567);
 /** `--demo` replays a fixed gesture sequence and exits, for CI and for showing the thing off. */
 const DEMO = process.argv.includes("--demo");
 
+/**
+ * The key's double-press window, mirrored so the scripted pass can time a press past it rather than
+ * inside it. The truth is `DOUBLE_PRESS_MS` in `src/gestures.ts`; this file is plain JavaScript and
+ * cannot import it, so it is named here rather than left inline as a literal nobody would connect to
+ * the source when it moves. The touchscreen's own window is not needed: every tap the pass makes is
+ * either well inside it or a second apart.
+ */
+const KEY_WINDOW_MS = 500;
+
 /** Mirrors the RegistrationInfo the real application passes in via `-info`. */
 const INFO = {
 	application: {
@@ -440,8 +449,9 @@ function keyPress(holdMs) {
 }
 
 /**
- * Two taps inside the double-tap window. The gap has to be shorter than the plugin's own window
- * (250 ms) or this is simply two single taps, which is the very thing being tested.
+ * Two taps inside the double-tap window. The gap has to be shorter than the plugin's own window, or
+ * this is simply two single taps, which is the very thing being tested. 90 ms is inside both the
+ * touchscreen's 250 ms and the key's {@link KEY_WINDOW_MS}.
  */
 async function doubleTap(tap, gapMs = 90) {
 	await tap();
@@ -974,7 +984,10 @@ async function runDemo() {
 			"key: one press → pauses; the caption names the gesture, then settles on the state",
 			async () => {
 				await keyPress(60);
-				await wait(400);
+				// A press does not act on release: it is held back for the control's whole double-press
+				// window first, in case a second one is coming. Sampling inside that window reads the
+				// state from before the gesture, which looks like a plugin that ignored the press.
+				await wait(KEY_WINDOW_MS + 300);
 				const said = key.caption;
 				// The toast lasts 900 ms and expires between render ticks, so the state it falls back to
 				// can be up to one 250 ms frame late. Sample past that, not on the nose.

@@ -20,7 +20,7 @@ import streamDeck, {
 
 import { Countdown } from "../countdown";
 import { FLASH_MS } from "../feedback";
-import { type Gesture, TapResolver } from "../gestures";
+import { DOUBLE_TAP_MS, type Gesture, TapResolver } from "../gestures";
 import { NO_SOUND, normaliseSettings, type DialCountdownSettings } from "../settings";
 import { listSounds, playSound, resolveSound, soundExists, wantsSound } from "../sound";
 
@@ -108,6 +108,14 @@ export abstract class CountdownAction<
 	/** Which control this action runs on, as the manifest declares it. */
 	protected abstract readonly controller: "Encoder" | "Keypad";
 
+	/**
+	 * How long a second press has to arrive to count as a double one.
+	 *
+	 * Glass and a physical key are not the same speed, so this belongs to the control rather than to
+	 * the resolver — see `../gestures`. The touchscreen's figure is the default.
+	 */
+	protected readonly tapWindowMs: number = DOUBLE_TAP_MS;
+
 	/** Narrows a control to the one this action can drive; anything else is left alone. */
 	protected abstract owns(action: DialAction<DialCountdownSettings> | KeyAction<DialCountdownSettings>): action is A;
 
@@ -164,7 +172,7 @@ export abstract class CountdownAction<
 			ticks: 0,
 			...this.extras()
 		} as unknown as I;
-		instance.taps = new TapResolver((gesture) => this.perform(instance, gesture));
+		instance.taps = new TapResolver((gesture) => this.perform(instance, gesture), this.tapWindowMs);
 
 		this.#instances.set(ev.action.id, instance);
 		instance.renderHandle = setInterval(() => this.refresh(instance), RENDER_INTERVAL_MS);

@@ -19,7 +19,7 @@ import streamDeck, {
 	type KeyUpEvent
 } from "@elgato/streamdeck";
 
-import { LONG_PRESS_MS } from "../gestures";
+import { DOUBLE_PRESS_MS, LONG_PRESS_MS } from "../gestures";
 import { keyCaption } from "../label";
 import { asDataUri, renderKey, themeFor } from "../render";
 import type { DialCountdownSettings } from "../settings";
@@ -36,6 +36,9 @@ type KeyInstance = Instance<Key> & {
 @action({ UUID: "com.matewishkey.dial-countdown-v2.key" })
 export class KeyCountdown extends CountdownAction<Key, KeyInstance> {
 	protected readonly controller = "Keypad" as const;
+
+	/** A key is slower to press twice than glass is to tap twice, so it waits longer for the partner. */
+	protected override readonly tapWindowMs = DOUBLE_PRESS_MS;
 
 	protected owns(control: DialAction<DialCountdownSettings> | Key): control is Key {
 		return control.isKey();

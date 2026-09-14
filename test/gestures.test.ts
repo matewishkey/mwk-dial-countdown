@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { DOUBLE_TAP_MS, type Gesture, LONG_PRESS_MS, TapResolver } from "../src/gestures.ts";
+import { DOUBLE_PRESS_MS, DOUBLE_TAP_MS, type Gesture, LONG_PRESS_MS, TapResolver } from "../src/gestures.ts";
 
 /** The window is shortened so the suite does not spend a quarter of a second per assertion. */
 const WINDOW = 20;
@@ -84,5 +84,42 @@ describe("TapResolver", () => {
 		assert.ok(DOUBLE_TAP_MS < LONG_PRESS_MS, "a double tap that outlasts a long press could never be made");
 		assert.ok(DOUBLE_TAP_MS >= 150, `${DOUBLE_TAP_MS}ms is too tight a window for two deliberate taps`);
 		assert.ok(DOUBLE_TAP_MS <= 400, `${DOUBLE_TAP_MS}ms of lag on every single tap is too much to pay`);
+	});
+});
+
+describe("the key's own window", () => {
+	// The bug: the key used the touchscreen's 250 ms. A key is slower to press twice than glass is to
+	// tap twice, so an ordinary double-press fell outside it and was read as two separate presses —
+	// start, then pause — leaving a clock that had not moved and a key that looked dead.
+	const HUMAN_DOUBLE_PRESS_MS = 320;
+
+	it("is wide enough for a double-press that the touchscreen's window would miss", () => {
+		assert.ok(
+			HUMAN_DOUBLE_PRESS_MS > DOUBLE_TAP_MS,
+			"the premise: this gap is outside the touchscreen's window, which is why the key needed its own"
+		);
+		assert.ok(
+			DOUBLE_PRESS_MS > HUMAN_DOUBLE_PRESS_MS,
+			`a double-press ${HUMAN_DOUBLE_PRESS_MS} ms apart must land inside the key's window`
+		);
+	});
+
+	it("still resolves a hold before a press held that long could be waiting on a partner", () => {
+		// The two are close enough now to be worth asserting on: a pending press must not out-live the
+		// hold that is meant to cancel it, or a hold would land as a toggle first and a `next` after.
+		assert.ok(LONG_PRESS_MS > DOUBLE_PRESS_MS, "a hold must still be the longer of the two");
+	});
+
+	it("pairs two presses a real finger's width apart, and does not toggle as well", async () => {
+		const seen: Gesture[] = [];
+		const resolver = new TapResolver((gesture) => seen.push(gesture), DOUBLE_PRESS_MS);
+
+		resolver.press(false);
+		await wait(HUMAN_DOUBLE_PRESS_MS);
+		resolver.press(false);
+
+		// Past the window, so a toggle left pending by a missed pair would have fired by now.
+		await wait(DOUBLE_PRESS_MS + 100);
+		assert.deepEqual(seen, ["reset"], "two presses at a human cadence are one reset, not two toggles");
 	});
 });
