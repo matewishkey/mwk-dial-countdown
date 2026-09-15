@@ -210,8 +210,6 @@ The restore comes first because it is wanted far more often: putting the clock b
 
 That reasoning is *more* true now than when it was rejected — the double tap and the hold land in exactly the same place — and the correction still stands. Redundancy is not the problem it looked like: the two gestures live on different controls, and reaching for the dial mid-run and being thrown onto the next preset is precisely the surprise the restore exists to prevent.
 
-In the hand that was wrong. Being thrown onto the next preset because you reached for the control mid-run is precisely the surprise the restore exists to prevent, and a running clock is not sitting on its preset either, whatever its duration says.
-
 This is the touchscreen's job, on both controls: the screen above a dial, and the key itself. The dial's own press starts and pauses the clock instead — see above.
 
 It also gives the **one-preset** case something to do. It used to be the documented dead end — "with only one preset configured, the gesture lands back on the same one" — and now it is a reset.

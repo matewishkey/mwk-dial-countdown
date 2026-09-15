@@ -61,7 +61,8 @@ export const DOUBLE_PRESS_MS = 500;
  *
  * This matters because {@link DOUBLE_PRESS_MS} is the number most likely to be changed next: it was
  * chosen against a mock host and wants confirming on real hardware, and the direction it would move
- * is up. Past 600 it stops being a tuning change and becomes a redesign of the key's gestures.
+ * is up. At 600 or beyond it stops being a tuning change and becomes a redesign of the key's
+ * gestures — the assertion is strict, so an equal pair breaks it just as a longer window would.
  */
 export const LONG_PRESS_MS = 600;
 

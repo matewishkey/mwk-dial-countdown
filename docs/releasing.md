@@ -167,7 +167,7 @@ phases below are the command's own; they are not the numbered steps above.
 | **publish** | tag, push the branch, push the tag, create the release | ...then check that the published asset is this build |
 
 The first failure stops the run, and the whole of every step's output is kept in `logs/` and copied
-beside the page. `npm run check` prints 305 passing tests nobody reads — right up until the release
+beside the page. `npm run check` prints hundreds of passing tests nobody reads — right up until the release
 where one of them did not pass, and the question is which.
 
 **`pack` is two commands on purpose.** `streamdeck pack` rewrites `manifest.json` in place as it

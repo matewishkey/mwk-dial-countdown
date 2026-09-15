@@ -605,7 +605,8 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.3.0...HEAD
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.4.0...HEAD
+[3.4.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.4.0
 [3.3.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.3.0
 [3.2.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.2.0
 [3.1.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.1.0
