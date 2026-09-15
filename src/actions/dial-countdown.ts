@@ -83,12 +83,26 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 	}
 
 	/**
-	 * Nothing but bookkeeping: a push is only ever half a gesture until it is known whether the dial
-	 * turned before it came back up.
+	 * Bookkeeping, and one decision: **touching the dial settles anything the glass was still waiting
+	 * on.**
 	 *
-	 * There is deliberately no long-press timer here any more. A hold on the dial does nothing at all,
-	 * which is what lets holding it in mean "minutes" for as long as you like without a second meaning
-	 * quietly accruing underneath.
+	 * A push is only ever half a gesture until it is known whether the dial turned before it came back
+	 * up, which is what `turnedWhileDown` records. There is deliberately no long-press timer here any
+	 * more. A hold on the dial does nothing at all, which is what lets holding it in mean "minutes" for
+	 * as long as you like without a second meaning quietly accruing underneath.
+	 *
+	 * The cancel is the part that matters. A tap on the touchscreen is held back for
+	 * `DOUBLE_TAP_MS` in case a second one is coming, and the screen sits directly above the
+	 * dials — so a tap and a press are one reach of the hand often enough to matter. Both resolve to
+	 * `toggle`, so the pair used to arrive as **start, then pause**: the plugin said so itself, one
+	 * word after the other, and the clock landed back exactly where it began. On a finished timer that
+	 * is the whole complaint — you press it to get going again, it sits there full and stopped, and
+	 * pressing again cannot recover because an even number of toggles always lands back where it
+	 * started.
+	 *
+	 * A press on the dial is unambiguous and acts at once, so it is the gesture that wins: whatever the
+	 * glass was still deciding is stale the moment a finger arrives here. The same rule as the key's
+	 * long press, which settles a pending tap for the same reason — see `../gestures`.
 	 */
 	override onDialDown(ev: DialDownEvent<DialCountdownSettings>): void {
 		const instance = this.instanceFor(ev.action.id);
@@ -96,6 +110,7 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 			return;
 		}
 
+		instance.taps.cancel();
 		instance.turnedWhileDown = false;
 	}
 

@@ -21,8 +21,16 @@ export type Gesture = "toggle" | "reset" | "next";
 /**
  * How long a second tap has to arrive for the pair to count as one double tap.
  *
- * This is the touchscreen's figure, and only the touchscreen's. Two taps on glass land a long way
- * inside it, so the window can stay short and a single tap acts almost at once.
+ * This is the touchscreen's figure, and only the touchscreen's. Glass has no travel, so the window
+ * can be shorter than the key's and a single tap acts almost at once.
+ *
+ * **250 has never been measured against a hand**, and it is the same number that turned out to be too
+ * short on the key — see {@link DOUBLE_PRESS_MS}, which was raised to 500 after an ordinary double
+ * press landed 320 ms apart. Driven against the built plugin, two taps **300 ms** apart arrive here as
+ * two separate toggles: start, then pause, with the clock back exactly where it began. That is the
+ * same failure the key had, and it fails the same way — worst on a finished timer, which is the one
+ * you most want to start again. Whether a real finger on glass is quick enough to stay inside 250 is
+ * the open question; nothing in this repo can answer it.
  */
 export const DOUBLE_TAP_MS = 250;
 

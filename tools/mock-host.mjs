@@ -654,6 +654,33 @@ async function runDemo() {
 		["one tap → paused, pause glyph in the ring, bottom line says so", async () => gestures.touch(false)],
 		["one tap → running again", async () => gestures.touch(false)],
 
+		// A tap is held back for a quarter-second in case a second one is coming, and the touchscreen sits
+		// directly above the dials — so a brush of the glass and a press of the dial are one reach of the
+		// hand often enough to matter. Both mean toggle, so the pair arrived as start *then* pause and the
+		// clock landed back exactly where it began. On a finished timer that is the state that looks
+		// broken, and pressing again cannot get out of it: an even number of toggles always lands back
+		// where it started. A press on the dial now settles whatever the glass was still deciding.
+		[
+			"a brush of the glass and a press of the dial → one start, not start then pause",
+			async () => {
+				applySettings({ presets: [600], presetIndex: 0 });
+				await wait(400);
+
+				const stopped = screen.value;
+				gestures.touch(false);
+				await wait(200);
+				await press(80);
+				await wait(300);
+				const word = screen.finish;
+				await wait(1200);
+
+				console.log(`\n   the pair was answered with "${word}", and the clock went ${stopped} → ${screen.value}`);
+				console.log(
+					`   ${screen.value !== stopped ? "\u2713 one gesture, one outcome" : `\u2717 they cancelled out — still sitting on ${screen.value}`}`
+				);
+			}
+		],
+
 		// A frame lost on the way — Stream Deck discards feedback sent alongside a layout switch —
 		// would sit on screen for ever on a display that is static by nature. So the current frame is
 		// re-asserted every couple of seconds even when nothing has changed.

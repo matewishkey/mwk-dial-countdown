@@ -17,7 +17,37 @@ renamed, and rewriting it would make the history describe a repo that never exis
 
 ## [Unreleased]
 
-Nothing yet.
+### Fixed
+
+- **A tap on the glass and a press of the dial cancelled each other out, and on a finished timer that
+  is the state that looks broken.** A tap is held back for a quarter of a second in case a second one
+  is coming — that is how "tap twice to reset" is told apart from "tap once to pause" — and the
+  touchscreen sits directly above the dials, so a brush of the screen and a press of the dial are one
+  reach of the hand often enough to matter. Both mean *toggle*. The pair therefore arrived as **start,
+  then pause**, a quarter-second apart: the plugin said both words out loud on the bottom line, and
+  the clock landed back exactly where it began.
+
+  It is worst on a timer that has just run out, repeats included. That is the moment you press it to
+  get going again, and what you get is a full, stopped clock that looks like nothing happened —
+  and pressing again cannot recover, because an even number of toggles always lands back where it
+  started.
+
+  **A press on the dial now settles whatever the glass was still deciding.** The dial is unambiguous
+  and acts at once, so it is the gesture that wins; the tap that was still waiting on a partner is
+  dropped rather than fired afterwards. The same rule the key's long press already followed.
+
+### Internal
+
+- **`DOUBLE_TAP_MS` now says that 250 has never been measured against a hand.** It is the same number
+  that turned out to be too short on the key in 3.4.0, and the comment claimed the opposite — that
+  taps on glass "land a long way inside it" — as though it had been checked. Driven against the built
+  plugin, two taps 300 ms apart arrive as two separate toggles, exactly as the key's did at 320. What
+  a real finger does on glass is still unknown, and nothing in this repo can answer it.
+
+- **`npm run demo` covers the one-reach case.** The dial's own event handlers still cannot be reached
+  from a unit test (#12), so the scripted pass against the built bundle is where this is asserted: a
+  tap followed by a press 200 ms later has to leave the clock running, and prints the word the plugin
+  answered with.
 
 ## [3.4.0] — 2026-09-15
 
