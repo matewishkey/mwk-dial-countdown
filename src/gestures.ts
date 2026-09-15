@@ -44,12 +44,24 @@ export const DOUBLE_TAP_MS = 250;
  *
  * The cost is that a single press is held back for half a second before it acts, which is the price
  * of having a double-press gesture on a control this slow.
+ *
+ * **500 is a starting value, not a measured one, and it cannot be raised freely** — see
+ * {@link LONG_PRESS_MS}, which it has to stay under.
  */
 export const DOUBLE_PRESS_MS = 500;
 
 /**
  * How long a press must be held to count as a long one rather than a tap. Only used where the
  * hardware does not decide for itself — the touchscreen reports `hold` on the event, a key does not.
+ *
+ * **It has to stay longer than every double-press window, and on the key the margin is now 100 ms.**
+ * A hold is what settles a press still waiting to see whether it had a partner; a window that
+ * outlasted the hold would resolve that press as a toggle first and then fire the hold as well, so
+ * one gesture would arrive as two. `test/gestures.test.ts` asserts the ordering for both controls.
+ *
+ * This matters because {@link DOUBLE_PRESS_MS} is the number most likely to be changed next: it was
+ * chosen against a mock host and wants confirming on real hardware, and the direction it would move
+ * is up. Past 600 it stops being a tuning change and becomes a redesign of the key's gestures.
  */
 export const LONG_PRESS_MS = 600;
 
