@@ -17,6 +17,10 @@ renamed, and rewriting it would make the history describe a repo that never exis
 
 ## [Unreleased]
 
+Nothing yet.
+
+## [3.4.0] — 2026-09-15
+
 ### Fixed
 
 - **A key could look completely dead, and pressing it again made it worse.** A press is held back for
