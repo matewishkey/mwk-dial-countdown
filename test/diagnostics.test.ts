@@ -10,10 +10,10 @@
 import assert from "node:assert/strict";
 import { mkdtempSync, writeFileSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, sep } from "node:path";
 import { describe, it } from "node:test";
 
-import { collectDiagnostics } from "../src/diagnostics.ts";
+import { collectDiagnostics, streamDeckLogDir } from "../src/diagnostics.ts";
 
 /** The real plugin folder, which is where `manifest.json` lives — the version has to come from it. */
 const PLUGIN_DIR = "com.matewishkey.dial-countdown-v2.sdPlugin";
@@ -75,6 +75,37 @@ describe("the diagnostics report", () => {
 		// A button that returns an empty box reads as broken. The first health line takes a minute.
 		const report = collectDiagnostics(logDir({}));
 		assert.match(report, /no log file found|no health lines yet/, `should explain itself: ${report}`);
+	});
+
+	it("says where Stream Deck's OWN log is, or says plainly that it does not know", () => {
+		// The application's log is a different thing from the plugin's, and it is the one that matters
+		// when the complaint is that the whole machine is slow: the app is the component every plugin
+		// talks through. Its path is DERIVED from Elgato's docs rather than asked of the process, so
+		// unlike our own log location it can be wrong — and a wrong guess must read as an absence, not
+		// as a working answer. On Linux, where Stream Deck does not run, that is exactly what it says.
+		const report = collectDiagnostics(logDir({ "a.log": "INFO  health: cpu 1%\n" }), PLUGIN_DIR);
+
+		assert.match(report, /Stream Deck's own log/, `the application's log must be accounted for either way: ${report}`);
+	});
+
+	it("knows where Stream Deck's own log lives on each platform it runs on", () => {
+		// Both branches checked from whichever platform the suite happens to run on — otherwise the
+		// Windows path is never executed on a Mac and vice versa, and the one that is wrong is the one
+		// nobody ran. These two paths come from Elgato's logging guide.
+		assert.equal(
+			streamDeckLogDir("win32", "C:\\Users\\x\\AppData\\Roaming", "C:\\Users\\x"),
+			"C:\\Users\\x\\AppData\\Roaming/Elgato/StreamDeck/logs".replaceAll("/", sep)
+		);
+		assert.equal(
+			streamDeckLogDir("darwin", undefined, "/Users/x"),
+			["", "Users", "x", "Library", "Logs", "ElgatoStreamDeck"].join(sep)
+		);
+		assert.equal(streamDeckLogDir("linux", undefined, "/home/x"), null, "Stream Deck does not run here");
+		assert.equal(
+			streamDeckLogDir("win32", undefined, "C:\\Users\\x"),
+			null,
+			"and without APPDATA there is nothing to point at"
+		);
 	});
 
 	it("does not throw when the log folder is not there at all", () => {

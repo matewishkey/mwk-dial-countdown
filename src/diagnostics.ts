@@ -14,7 +14,7 @@
  */
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { arch, cpus, platform, release, totalmem } from "node:os";
+import { arch, cpus, homedir, platform, release, totalmem } from "node:os";
 import { join } from "node:path";
 import { cwd } from "node:process";
 
@@ -26,6 +26,9 @@ const TAIL_BYTES = 48 * 1024;
 /** How many matching lines are kept, newest last. */
 const MAX_LINES = 60;
 
+/** How much of the application's own log to carry. Shorter: it is context, not the subject. */
+const APP_LOG_LINES = 25;
+
 /**
  * Only the lines that bear on a problem report. A whole log is unreadable in a chat window; these
  * are the two kinds of trouble this plugin has actually had — the health lines answer "is it slow,
@@ -33,6 +36,34 @@ const MAX_LINES = 60;
  * question every misread press has turned on.
  */
 const INTERESTING = /health:|WARN|ERROR|dialDown|dialUp|dialRotate|touchTap/;
+
+/**
+ * Where the Stream Deck **application** keeps its own log, which is a different thing from this
+ * plugin's.
+ *
+ * Worth having, because the plugin's log can only report on the plugin. When the complaint is that
+ * the whole machine is slow and other applications are lagging too, the application's own log is
+ * where its side of the story is — and it is the shared component every plugin talks through.
+ *
+ * Paths from Elgato's logging guide, which names exactly these two. Derived rather than asked of the
+ * running process, so unlike {@link logLocation} this one *can* be wrong — which is why a miss here
+ * is reported as an absence and never as an error.
+ *
+ * The parameters exist so both branches can be checked from either platform; nothing passes them.
+ */
+export function streamDeckLogDir(
+	plat: string = platform(),
+	appData: string | undefined = process.env.APPDATA,
+	home: string = homedir()
+): string | null {
+	if (plat === "win32") {
+		return appData === undefined ? null : join(appData, "Elgato", "StreamDeck", "logs");
+	}
+	if (plat === "darwin") {
+		return join(home, "Library", "Logs", "ElgatoStreamDeck");
+	}
+	return null;
+}
 
 /** The plugin's own version, read from the manifest beside it rather than duplicated in the source. */
 function pluginVersion(pluginDir: string): string {
@@ -108,5 +139,36 @@ export function collectDiagnostics(logDir: string = logLocation(), pluginDir: st
 		lines.push(`last ${kept.length} health, warning and gesture lines:`);
 		lines.push(...kept);
 	}
+
+	lines.push("");
+	lines.push(...streamDeckAppLog());
 	return lines.join("\n");
+}
+
+/**
+ * The tail of the Stream Deck application's own log.
+ *
+ * Unfiltered, unlike this plugin's: its format is Elgato's and not ours to have opinions about, so
+ * picking lines out of it would mean guessing at which ones matter. A short tail of everything is
+ * more honest than a filtered view built on an assumption.
+ */
+function streamDeckAppLog(): string[] {
+	const dir = streamDeckLogDir();
+	if (dir === null) {
+		return [`(Stream Deck's own log: no known location on ${platform()})`];
+	}
+
+	const path = newestLog(dir);
+	if (path === null) {
+		return [`(Stream Deck's own log: nothing found in ${dir})`];
+	}
+
+	try {
+		const recent = tail(path)
+			.filter((line) => line.trim() !== "")
+			.slice(-APP_LOG_LINES);
+		return [`last ${recent.length} lines of Stream Deck's own log (${path}):`, ...recent];
+	} catch (err) {
+		return [`(Stream Deck's own log could not be read: ${err instanceof Error ? err.message : String(err)})`];
+	}
 }
