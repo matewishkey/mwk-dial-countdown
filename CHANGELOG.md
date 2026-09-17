@@ -17,6 +17,36 @@ renamed, and rewriting it would make the history describe a repo that never exis
 
 ## [Unreleased]
 
+## [3.9.1] — 2026-09-17
+
+### Fixed
+
+- **Copy diagnostics now carries Stream Deck's own log as well as this plugin's.** The application
+  keeps a separate log, and it is the component every plugin talks through — so when the complaint is
+  that the whole machine is slow and other applications are lagging too, its side of the story was in
+  a file the report was not reading.
+
+  Its tail is included unfiltered, unlike this plugin's own lines. The format is Elgato's, and picking
+  lines out of it would mean guessing which ones matter; twenty-five lines of everything is more
+  honest than a filtered view built on an assumption.
+
+### Internal
+
+- **The two logs are known with different confidence, and the report is careful about it.** This
+  plugin's log location is *asked of the running process* and cannot be wrong. Stream Deck's is
+  *derived* from Elgato's logging guide and therefore can be — so a miss there is reported as an
+  absence rather than an error, and on a platform Stream Deck does not run on it says so plainly.
+
+- **Both platform branches are tested from whichever platform the suite runs on.** Otherwise the
+  Windows path is never executed on a Mac and the Mac path never on Windows, and the one that is wrong
+  is precisely the one nobody ran.
+
+- Two things turned up while reading the documentation, recorded rather than acted on: the docs say a
+  plugin's log files "never exceed 10 MiB", while the SDK that actually ships is configured for 50 MB
+  — the code is what runs. And the property inspector is Chromium with DOM access, which is why a copy
+  button inside it can reach the clipboard at all.
+
+
 ## [3.9.0] — 2026-09-17
 
 ### Added
@@ -986,7 +1016,8 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.9.0...HEAD
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.9.1...HEAD
+[3.9.1]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.9.1
 [3.9.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.9.0
 [3.8.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.8.0
 [3.7.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.7.0
