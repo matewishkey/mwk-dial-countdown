@@ -20,6 +20,7 @@ import streamDeck, {
 
 import { Countdown } from "../countdown";
 import { FLASH_MS } from "../feedback";
+import { collectDiagnostics } from "../diagnostics";
 import { latestHealth, logLocation, recordRefresh, setControlCount } from "../health";
 import { DOUBLE_TAP_MS, type Gesture, TapResolver } from "../gestures";
 import { NO_SOUND, normaliseSettings, type DialCountdownSettings } from "../settings";
@@ -317,6 +318,14 @@ export abstract class CountdownAction<
 			const path = resolveSound(payload);
 			const played = playSound(path, payload.volume ?? 100, payload.soundRepeat ?? 1);
 			void this.#reportSound(path, played);
+			return;
+		}
+
+		// One button, rather than a set of instructions ending in "now find the log folder".
+		if (payload?.event === "diagnostics") {
+			streamDeck.ui
+				.sendToPropertyInspector({ event: "diagnostics", report: collectDiagnostics() })
+				.catch((err) => streamDeck.logger.error("Failed to send diagnostics", err));
 			return;
 		}
 

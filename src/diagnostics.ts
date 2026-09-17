@@ -1,0 +1,112 @@
+/**
+ * Everything someone would need to answer "is this plugin what is making my machine slow", gathered
+ * into one block of text that a button can put on the clipboard.
+ *
+ * **It exists because the previous answer was a set of instructions, and instructions are work.** The
+ * honest version ran: find your Stream Deck plugins folder, which is in a different place on each
+ * platform and depends how you installed it; open the `.sdPlugin` directory; find `logs`; open the
+ * newest file; scroll to the bottom; find the lines beginning `health:`; copy some of them. Every
+ * step of that is a place to give up, and none of it is the user's job — they reported a slow device,
+ * which is a fact about the device, not a request to go filing.
+ *
+ * So the plugin reads its own log, because it is the one thing that knows where that log is, and
+ * hands back the part that matters.
+ */
+
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { arch, cpus, platform, release, totalmem } from "node:os";
+import { join } from "node:path";
+import { cwd } from "node:process";
+
+import { logLocation } from "./health";
+
+/** How much of the log's tail is read. Enough for a few hours of health lines, small enough to paste. */
+const TAIL_BYTES = 48 * 1024;
+
+/** How many matching lines are kept, newest last. */
+const MAX_LINES = 60;
+
+/**
+ * Only the lines that bear on a problem report. A whole log is unreadable in a chat window; these
+ * are the two kinds of trouble this plugin has actually had — the health lines answer "is it slow,
+ * and is it us", and the gesture lines answer "what did the hardware really send", which is the
+ * question every misread press has turned on.
+ */
+const INTERESTING = /health:|WARN|ERROR|dialDown|dialUp|dialRotate|touchTap/;
+
+/** The plugin's own version, read from the manifest beside it rather than duplicated in the source. */
+function pluginVersion(pluginDir: string): string {
+	try {
+		const manifest = JSON.parse(readFileSync(join(pluginDir, "manifest.json"), "utf8")) as { Version?: string };
+		return manifest.Version ?? "unknown";
+	} catch {
+		return "unknown";
+	}
+}
+
+/** The newest log file, which is the one the running process is writing to. */
+function newestLog(dir: string): string | null {
+	try {
+		const files = readdirSync(dir)
+			.filter((name) => name.endsWith(".log"))
+			.map((name) => ({ path: join(dir, name), at: statSync(join(dir, name)).mtimeMs }))
+			.sort((a, b) => b.at - a.at);
+		return files[0]?.path ?? null;
+	} catch {
+		return null;
+	}
+}
+
+/** The tail of a file, without reading the whole of it into memory. */
+function tail(path: string): string[] {
+	const size = statSync(path).size;
+	const from = Math.max(0, size - TAIL_BYTES);
+	const text = readFileSync(path, "utf8");
+	// Read whole and slice: the log is capped at 50MB by the SDK, and a partial read can split a
+	// multi-byte character. Correctness over cleverness on a path that runs once, on a button press.
+	return text.slice(from === 0 ? 0 : text.length - TAIL_BYTES).split("\n");
+}
+
+/**
+ * The report, as plain text ready to paste.
+ *
+ * Deliberately not JSON: it is going into a chat message or an issue, where a human reads it first.
+ *
+ * @param logDir Only a test passes this. In the plugin it is wherever the process is running from.
+ * @param pluginDir Likewise — the folder holding `manifest.json`, which is the plugin's own.
+ */
+export function collectDiagnostics(logDir: string = logLocation(), pluginDir: string = cwd()): string {
+	const lines: string[] = [];
+	lines.push(`Dial Countdown ${pluginVersion(pluginDir)}`);
+	// `process.version` is Node's. `os.version()` is the KERNEL's, and on Linux it reads as a
+	// plausible Node version while being nothing of the sort — it printed `node #139-Ubuntu SMP` here.
+	lines.push(
+		`${platform()} ${release()} ${arch()} · ${cpus().length} cores · ${(totalmem() / 1024 ** 3).toFixed(0)}GB · node ${process.version}`
+	);
+	lines.push(`log: ${logDir}`);
+	lines.push("");
+
+	const path = newestLog(logDir);
+	if (path === null) {
+		lines.push("(no log file found — this plugin may have only just started)");
+		return lines.join("\n");
+	}
+
+	let kept: string[];
+	try {
+		kept = tail(path)
+			.filter((line) => INTERESTING.test(line))
+			.slice(-MAX_LINES);
+	} catch (err) {
+		lines.push(`(could not read the log: ${err instanceof Error ? err.message : String(err)})`);
+		return lines.join("\n");
+	}
+
+	if (kept.length === 0) {
+		lines.push("(no health lines yet — the first is written about a minute after Stream Deck starts)");
+	} else {
+		lines.push(`last ${kept.length} health, warning and gesture lines:`);
+		lines.push(...kept);
+	}
+	return lines.join("\n");
+}

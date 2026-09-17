@@ -397,6 +397,10 @@
 				<span class="muted" id="logPath"></span>
 				<button id="copyLog" type="button">Copy path</button>
 			</div>
+			<div class="row">
+				<button id="copyReport" type="button">Copy diagnostics</button>
+				<span class="muted" id="reportStatus"></span>
+			</div>
 		</details>
 
 		<script>
@@ -762,34 +766,47 @@
 				renderControls();
 			}
 
-			el("copyLog").addEventListener("click", () => {
-				const path = el("logPath").textContent ?? "";
-				if (!path) {
+			/**
+			 * Puts text on the clipboard and says so. `navigator.clipboard` is unavailable in some
+			 * embedded webviews, so the older command is kept as a fallback rather than leaving a
+			 * button silently dead — a copy button that does nothing is worse than no button.
+			 */
+			function copyText(text, status, message) {
+				if (!text) {
 					return;
 				}
-				// `clipboard` is unavailable in some embedded webviews, so the old command is kept as
-				// a fallback rather than leaving the button silently dead.
 				const done = () => {
-					el("copyLog").textContent = "Copied";
-					setTimeout(() => (el("copyLog").textContent = "Copy path"), 1200);
+					status.textContent = message;
+					setTimeout(() => (status.textContent = ""), 2500);
 				};
-				if (navigator.clipboard?.writeText) {
-					navigator.clipboard.writeText(path).then(done, fallback);
-				} else {
-					fallback();
-				}
-				function fallback() {
+				const fallback = () => {
 					const box = document.createElement("textarea");
-					box.value = path;
+					box.value = text;
 					document.body.appendChild(box);
 					box.select();
 					try {
 						document.execCommand("copy");
 						done();
+					} catch {
+						status.textContent = "could not copy — select the text above instead";
 					} finally {
 						box.remove();
 					}
+				};
+				if (navigator.clipboard?.writeText) {
+					navigator.clipboard.writeText(text).then(done, fallback);
+				} else {
+					fallback();
 				}
+			}
+
+			el("copyLog").addEventListener("click", () => {
+				copyText(el("logPath").textContent ?? "", el("reportStatus"), "Path copied");
+			});
+
+			el("copyReport").addEventListener("click", () => {
+				el("reportStatus").textContent = "collecting…";
+				SDPIComponents.streamDeckClient.send("sendToPlugin", { event: "diagnostics" });
 			});
 
 			SDPIComponents.streamDeckClient.getSettings().then(({ settings }) => {
@@ -820,6 +837,13 @@
 					// path this page guessed at would be worse than none.
 					el("healthLine").textContent = payload.health ?? "no reading yet";
 					el("logPath").textContent = payload.logPath ?? "";
+					return;
+				}
+
+				if (payload?.event === "diagnostics") {
+					// Straight to the clipboard: the point of the button is that nothing further is asked
+					// of whoever pressed it.
+					copyText(payload.report ?? "", el("reportStatus"), "Copied — paste it wherever you are reporting this");
 					return;
 				}
 
