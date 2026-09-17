@@ -17,6 +17,8 @@ renamed, and rewriting it would make the history describe a repo that never exis
 
 ## [Unreleased]
 
+## [3.4.1] — 2026-09-17
+
 ### Fixed
 
 - **A turn of the dial on a paused clock threw the count away and put the timer back to full.** A
@@ -59,6 +61,12 @@ renamed, and rewriting it would make the history describe a repo that never exis
   taps on glass "land a long way inside it" — as though it had been checked. Driven against the built
   plugin, two taps 300 ms apart arrive as two separate toggles, exactly as the key's did at 320. What
   a real finger does on glass is still unknown, and nothing in this repo can answer it.
+
+- **`Timer.adjust`'s paused branch had no test, which is why it had no behaviour.** The suite covered
+  adjusting an idle clock and adjusting a running one, and `paused` fell through to the idle case
+  unexamined for as long as pausing has existed. The three tests added with the fix all fail against
+  the old code for the stated reason rather than incidentally — `'idle' !== 'paused'`, and a
+  `remainingMs` of 301000 on a clock that should have read 297000.
 
 - **`npm run demo` covers the one-reach case.** The dial's own event handlers still cannot be reached
   from a unit test (#12), so the scripted pass against the built bundle is where this is asserted: a
@@ -651,7 +659,8 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.4.0...HEAD
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.4.1...HEAD
+[3.4.1]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.4.1
 [3.4.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.4.0
 [3.3.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.3.0
 [3.2.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.2.0
