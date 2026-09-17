@@ -382,6 +382,23 @@
 			<button id="preview" type="button">Test</button>
 		</div>
 
+		<!--
+			Diagnostics, folded away. It is here because the answer to "is this plugin what is making
+			my device slow" lived in a file inside the plugin's own install folder, whose path differs
+			by platform and by how Stream Deck was installed — so the honest instruction was several
+			lines long and began with "it depends". The plugin knows where it is; it says so here.
+		-->
+		<details id="diagnostics">
+			<summary>Diagnostics</summary>
+			<div class="row">
+				<span class="muted" id="healthLine">no reading yet</span>
+			</div>
+			<div class="row">
+				<span class="muted" id="logPath"></span>
+				<button id="copyLog" type="button">Copy path</button>
+			</div>
+		</details>
+
 		<script>
 			const MAX_PRESET_SECONDS = 24 * 60 * 60;
 			const MAX_TITLE_LENGTH = 32;
@@ -745,6 +762,36 @@
 				renderControls();
 			}
 
+			el("copyLog").addEventListener("click", () => {
+				const path = el("logPath").textContent ?? "";
+				if (!path) {
+					return;
+				}
+				// `clipboard` is unavailable in some embedded webviews, so the old command is kept as
+				// a fallback rather than leaving the button silently dead.
+				const done = () => {
+					el("copyLog").textContent = "Copied";
+					setTimeout(() => (el("copyLog").textContent = "Copy path"), 1200);
+				};
+				if (navigator.clipboard?.writeText) {
+					navigator.clipboard.writeText(path).then(done, fallback);
+				} else {
+					fallback();
+				}
+				function fallback() {
+					const box = document.createElement("textarea");
+					box.value = path;
+					document.body.appendChild(box);
+					box.select();
+					try {
+						document.execCommand("copy");
+						done();
+					} finally {
+						box.remove();
+					}
+				}
+			});
+
 			SDPIComponents.streamDeckClient.getSettings().then(({ settings }) => {
 				load(settings);
 				checkSound();
@@ -765,6 +812,14 @@
 
 				if (payload?.event === "sounds") {
 					renderSounds(payload.sounds ?? []);
+					return;
+				}
+
+				if (payload?.event === "health") {
+					// Shown as sent. The plugin is the only thing that knows either of these, and a
+					// path this page guessed at would be worse than none.
+					el("healthLine").textContent = payload.health ?? "no reading yet";
+					el("logPath").textContent = payload.logPath ?? "";
 					return;
 				}
 

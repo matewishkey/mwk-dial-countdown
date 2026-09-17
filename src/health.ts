@@ -25,6 +25,9 @@
  * timestamp to point at rather than having to be caught inside the minute it happened.
  */
 
+import { cpus, freemem, totalmem } from "node:os";
+import { cwd } from "node:process";
+
 /** Just the two levels this writes at, so a test can pass a recorder instead of the SDK's logger. */
 export type HealthLogger = { info(message: string): void; warn(message: string): void };
 
@@ -71,6 +74,41 @@ const LAG_SAMPLE_MS = 500;
  * starts changing what a gesture means.
  */
 const LAG_WARN_MS = 250;
+
+/**
+ * The machine's own CPU, not just this process's.
+ *
+ * **Added because the report came back "other apps are lagging as well".** Every number here until
+ * now was about this plugin, and all of them can read perfectly healthy on a machine that is on its
+ * knees — a starved process uses little CPU precisely *because* it is not being scheduled. So the
+ * line would have said `cpu 0.2%` and looked like an exoneration when it was a symptom.
+ *
+ * Derived from per-core times rather than a load average, because `os.loadavg()` returns zeroes on
+ * Windows and this has to mean the same thing on both.
+ */
+let lastCpuTimes = cpuTimes();
+
+function cpuTimes(): { idle: number; total: number } {
+	let idle = 0;
+	let total = 0;
+	for (const core of cpus()) {
+		idle += core.times.idle;
+		total += core.times.user + core.times.nice + core.times.sys + core.times.idle + core.times.irq;
+	}
+	return { idle, total };
+}
+
+/** The whole machine's CPU use since this was last called, as a percentage. */
+function systemCpuPct(): number {
+	const now = cpuTimes();
+	const idle = now.idle - lastCpuTimes.idle;
+	const total = now.total - lastCpuTimes.total;
+	lastCpuTimes = now;
+	return total <= 0 ? 0 : (1 - idle / total) * 100;
+}
+
+/** The last line written, so the property inspector can show it without anyone finding a file. */
+let latest = "no report yet — the first lands about a minute after Stream Deck starts";
 
 let frames = 0;
 let slowestRefreshMs = 0;
@@ -156,11 +194,13 @@ export function startHealthLog(logger: HealthLogger, options: HealthOptions = {}
 		const cpuPct = ((cpu.user + cpu.system) / 1000 / elapsedMs) * 100;
 		const rssMb = process.memoryUsage().rss / 1024 / 1024;
 
-		logger.info(
+		latest =
 			`health: cpu ${cpuPct.toFixed(1)}% rss ${rssMb.toFixed(0)}MB controls ${totalControls()} ` +
-				`frames ${(frames / (elapsedMs / 1000)).toFixed(1)}/s lag ${worstLagMs}ms ` +
-				`slowest-render ${slowestRefreshMs.toFixed(1)}ms rtt ${rtt}`
-		);
+			`frames ${(frames / (elapsedMs / 1000)).toFixed(1)}/s lag ${worstLagMs}ms ` +
+			`slowest-render ${slowestRefreshMs.toFixed(1)}ms rtt ${rtt} ` +
+			`| machine: cpu ${systemCpuPct().toFixed(0)}% free-mem ${(freemem() / 1024 / 1024 / 1024).toFixed(1)}/${(totalmem() / 1024 / 1024 / 1024).toFixed(0)}GB`;
+
+		logger.info(latest);
 
 		frames = 0;
 		slowestRefreshMs = 0;
@@ -198,4 +238,21 @@ async function measureRoundTrip(probe: (() => Promise<unknown>) | undefined): Pr
 	} catch {
 		return "error";
 	}
+}
+
+/** The last line written, so the property inspector can show it without anyone finding a file. */
+export function latestHealth(): string {
+	return latest;
+}
+
+/**
+ * Where this plugin's log actually is, asked of the process rather than assumed.
+ *
+ * The install path differs per platform and per install method, and writing a plausible one into a
+ * document is how people end up looking in a folder that was never right. The SDK resolves its log
+ * directory from the working directory, and Stream Deck launches a plugin from inside its own
+ * `.sdPlugin` folder — so this is the answer, on whatever machine is asking.
+ */
+export function logLocation(): string {
+	return `${cwd()}/logs`;
 }

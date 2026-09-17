@@ -20,7 +20,7 @@ import streamDeck, {
 
 import { Countdown } from "../countdown";
 import { FLASH_MS } from "../feedback";
-import { recordRefresh, setControlCount } from "../health";
+import { latestHealth, logLocation, recordRefresh, setControlCount } from "../health";
 import { DOUBLE_TAP_MS, type Gesture, TapResolver } from "../gestures";
 import { NO_SOUND, normaliseSettings, type DialCountdownSettings } from "../settings";
 import { listSounds, playSound, resolveSound, soundExists, wantsSound } from "../sound";
@@ -297,6 +297,14 @@ export abstract class CountdownAction<
 		streamDeck.ui
 			.sendToPropertyInspector({ event: "sounds", sounds: listSounds() })
 			.catch((err) => streamDeck.logger.error("Failed to send sound list", err));
+
+		// **Where the log is, asked of the running process rather than assumed.** The install path
+		// differs by platform and by how Stream Deck was installed, and a plausible-looking path
+		// written into a document is how someone ends up searching a folder that was never right.
+		// Sent with the latest reading, so "is it this plugin?" can be answered without finding a file.
+		streamDeck.ui
+			.sendToPropertyInspector({ event: "health", health: latestHealth(), logPath: logLocation() })
+			.catch((err) => streamDeck.logger.error("Failed to send health", err));
 	}
 
 	/** Auditions a sound, and answers whether a chosen file actually resolves. */

@@ -8,7 +8,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { recordFrame, recordRefresh, setControlCount, startHealthLog } from "../src/health.ts";
+import {
+	latestHealth,
+	logLocation,
+	recordFrame,
+	recordRefresh,
+	setControlCount,
+	startHealthLog
+} from "../src/health.ts";
 
 const wait = (ms: number): Promise<void> => new Promise((done) => setTimeout(done, ms));
 
@@ -83,6 +90,59 @@ describe("the health report", () => {
 
 		assert.ok(seen.info.length >= 1, "the summary must still be written when the probe fails");
 		assert.match(seen.info[0], /rtt error/, `the failure must be named: ${seen.info[0]}`);
+	});
+
+	it("reports the MACHINE's load too, not only this process's", async () => {
+		// Added because the report came back "other apps are lagging as well". Every other number here
+		// is about this plugin, and all of them read healthy on a machine that is on its knees — a
+		// starved process uses little CPU precisely because it is not being scheduled. Without this
+		// the line said `cpu 0.2%` and looked like an exoneration when it was a symptom.
+		//
+		// Asserted on a NUMBER, not on the shape of one: `machine: cpu \d+%` also matches `cpu 0%`, so
+		// a stubbed-out reading passed the first version of this test. The same blind spot as every
+		// other check here that was written against a format rather than a value.
+		const seen = recorder();
+		const stop = startHealthLog(seen.log, { reportIntervalMs: 400, lagSampleMs: 40 });
+		try {
+			// Peg a core for most of the window. One busy core out of twelve is a small percentage, but
+			// it is not zero, and zero is exactly what is being ruled out.
+			const until = Date.now() + 320;
+			while (Date.now() < until) {
+				/* deliberately hot */
+			}
+			await wait(300);
+		} finally {
+			stop();
+		}
+
+		const line = seen.info[0] ?? "";
+		assert.match(line, /\| machine: cpu \d+% free-mem [\d.]+\/\d+GB/, `the machine's load must be reported: ${line}`);
+		const machineCpu = Number(/machine: cpu (\d+)%/.exec(line)?.[1] ?? "0");
+		assert.ok(machineCpu > 0, `a pegged core must show as machine load, and the line reads: ${line}`);
+	});
+
+	it("keeps the last line for the property inspector to show", async () => {
+		// So "is this plugin the problem" can be answered where the user already is, rather than in a
+		// file inside an install folder whose path differs by platform and by how Stream Deck was put
+		// on the machine.
+		const seen = recorder();
+		const stop = startHealthLog(seen.log, { reportIntervalMs: 150, lagSampleMs: 40 });
+		try {
+			await wait(350);
+		} finally {
+			stop();
+		}
+
+		assert.equal(latestHealth(), seen.info.at(-1), "the inspector must be shown what was logged");
+	});
+
+	it("answers where its log is by asking the process, not by assuming", () => {
+		// The one fact a document must never guess at. Stream Deck launches a plugin from inside its
+		// own `.sdPlugin` folder and the SDK resolves `logs/` from there, so the running process is
+		// the only thing that actually knows.
+		const where = logLocation();
+		assert.ok(where.endsWith("/logs"), `should name the log directory, and said: ${where}`);
+		assert.ok(where.startsWith("/") || /^[A-Za-z]:/.test(where), `should be absolute, and said: ${where}`);
 	});
 
 	it("reports the worst lag it saw, not merely the word `lag`", async () => {
