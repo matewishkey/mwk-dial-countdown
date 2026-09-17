@@ -42,7 +42,7 @@ describe("the health report", () => {
 		const line = seen.info[0];
 		assert.match(line, /controls 7\b/, `the two actions' counts must be SUMMED, not overwritten: ${line}`);
 		assert.match(line, /slowest-render 3\.5ms/, `the slowest render must be the one recorded: ${line}`);
-		assert.match(line, /frames [1-9]/, `two frames in ~150ms is more than 1\/s: ${line}`);
+		assert.match(line, /frames [1-9]/, `two frames in ~150ms is more than 1/s: ${line}`);
 		assert.match(line, /cpu \d+\.\d+% rss \d+MB/, `cpu and memory must be real numbers: ${line}`);
 	});
 
