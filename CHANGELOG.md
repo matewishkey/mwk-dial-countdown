@@ -17,6 +17,8 @@ renamed, and rewriting it would make the history describe a repo that never exis
 
 ## [Unreleased]
 
+## [3.4.2] — 2026-09-17
+
 ### Fixed
 
 - **A press of the dial could be swallowed with nothing at all on screen to show for it.** The guard
@@ -698,7 +700,8 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.4.1...HEAD
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.4.2...HEAD
+[3.4.2]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.4.2
 [3.4.1]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.4.1
 [3.4.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.4.0
 [3.3.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.3.0
