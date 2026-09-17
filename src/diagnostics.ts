@@ -20,6 +20,15 @@ import { cwd } from "node:process";
 
 import { logLocation } from "./health";
 
+/** What the plugin was told about its host at registration, which only the plugin can know. */
+export type HostInfo = {
+	appVersion?: string;
+	platform?: string;
+	platformVersion?: string;
+	/** Each connected device, as a name and type — which is what the power advice turns on. */
+	devices?: string[];
+};
+
 /** How much of the log's tail is read. Enough for a few hours of health lines, small enough to paste. */
 const TAIL_BYTES = 48 * 1024;
 
@@ -106,7 +115,11 @@ function tail(path: string): string[] {
  * @param logDir Only a test passes this. In the plugin it is wherever the process is running from.
  * @param pluginDir Likewise — the folder holding `manifest.json`, which is the plugin's own.
  */
-export function collectDiagnostics(logDir: string = logLocation(), pluginDir: string = cwd()): string {
+export function collectDiagnostics(
+	logDir: string = logLocation(),
+	pluginDir: string = cwd(),
+	host: HostInfo = {}
+): string {
 	const lines: string[] = [];
 	lines.push(`Dial Countdown ${pluginVersion(pluginDir)}`);
 	// `process.version` is Node's. `os.version()` is the KERNEL's, and on Linux it reads as a
@@ -114,6 +127,17 @@ export function collectDiagnostics(logDir: string = logLocation(), pluginDir: st
 	lines.push(
 		`${platform()} ${release()} ${arch()} · ${cpus().length} cores · ${(totalmem() / 1024 ** 3).toFixed(0)}GB · node ${process.version}`
 	);
+	// **The Stream Deck application's own version, and the device.** Added after researching what is
+	// actually reported when a Stream Deck stops responding: the two answers that come back most are
+	// an out-of-date application and a device not getting enough power through a hub. Neither can be
+	// asked about usefully without knowing which version and which device — and asking the user costs
+	// a round trip, on a report whose whole point is that it takes one press.
+	if (host.appVersion !== undefined || host.platform !== undefined) {
+		lines.push(`Stream Deck ${host.appVersion ?? "?"} on ${host.platform ?? "?"} ${host.platformVersion ?? ""}`.trim());
+	}
+	if (host.devices !== undefined && host.devices.length > 0) {
+		lines.push(`devices: ${host.devices.join(", ")}`);
+	}
 	lines.push(`log: ${logDir}`);
 	lines.push("");
 

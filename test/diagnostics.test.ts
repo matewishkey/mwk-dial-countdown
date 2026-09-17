@@ -42,6 +42,30 @@ describe("the diagnostics report", () => {
 		assert.match(report, /node v\d+/, "and Node's own version, not the kernel's");
 	});
 
+	it("names the Stream Deck application and the device, which only the plugin can know", () => {
+		// Researching what is actually reported when a Stream Deck stops responding, the two answers
+		// that come back most are an out-of-date application and a device not getting enough power
+		// through a hub. Neither can be advised on without knowing the version and the device — and
+		// both arrive in the registration handshake, where no user could go and look them up.
+		const report = collectDiagnostics(logDir({ "a.log": "INFO  health: cpu 1%\n" }), PLUGIN_DIR, {
+			appVersion: "7.2.0",
+			platform: "windows",
+			platformVersion: "11",
+			devices: ["Stream Deck + (type 7)"]
+		});
+
+		assert.match(report, /Stream Deck 7\.2\.0 on windows 11/, `the host must be named: ${report}`);
+		assert.match(report, /devices: Stream Deck \+ \(type 7\)/, `and the hardware: ${report}`);
+	});
+
+	it("leaves the host line out entirely when it was told nothing", () => {
+		// The positive control: a line reading `Stream Deck ? on ? ?` is worse than no line, because it
+		// looks like an answer. A test that only checked the populated case would not notice.
+		const report = collectDiagnostics(logDir({ "a.log": "INFO  health: cpu 1%\n" }), PLUGIN_DIR);
+		assert.doesNotMatch(report, /Stream Deck \?/, `should say nothing rather than nothing useful: ${report}`);
+		assert.doesNotMatch(report, /devices:/, "and not claim an empty device list");
+	});
+
 	it("carries the health lines AND the gesture lines", () => {
 		// The two kinds of trouble this plugin has actually had: is it slow and is it us, and what did
 		// the hardware really send. A report that answered only one would send someone back for the other.

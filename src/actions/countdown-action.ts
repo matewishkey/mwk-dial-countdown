@@ -20,7 +20,7 @@ import streamDeck, {
 
 import { Countdown } from "../countdown";
 import { FLASH_MS } from "../feedback";
-import { collectDiagnostics } from "../diagnostics";
+import { collectDiagnostics, type HostInfo } from "../diagnostics";
 import { latestHealth, logLocation, recordRefresh, setControlCount } from "../health";
 import { DOUBLE_TAP_MS, type Gesture, TapResolver } from "../gestures";
 import { NO_SOUND, normaliseSettings, type DialCountdownSettings } from "../settings";
@@ -324,7 +324,7 @@ export abstract class CountdownAction<
 		// One button, rather than a set of instructions ending in "now find the log folder".
 		if (payload?.event === "diagnostics") {
 			streamDeck.ui
-				.sendToPropertyInspector({ event: "diagnostics", report: collectDiagnostics() })
+				.sendToPropertyInspector({ event: "diagnostics", report: collectDiagnostics(undefined, undefined, host()) })
 				.catch((err) => streamDeck.logger.error("Failed to send diagnostics", err));
 			return;
 		}
@@ -469,6 +469,23 @@ export abstract class CountdownAction<
 			streamDeck.logger.error("Failed to report sound status", err);
 		}
 	}
+}
+
+/**
+ * What Stream Deck told this plugin about itself when it started, for the diagnostics report.
+ *
+ * Only the plugin ever sees this — it arrives in the registration handshake and appears nowhere a
+ * user could look it up. It is also the pair of facts that the two most commonly reported causes of
+ * an unresponsive Stream Deck turn on: an out-of-date application, and a device drawing more power
+ * than the port it is plugged into will give it.
+ */
+function host(): HostInfo {
+	return {
+		appVersion: streamDeck.info.application.version,
+		platform: streamDeck.info.application.platform,
+		platformVersion: streamDeck.info.application.platformVersion,
+		devices: [...streamDeck.devices].map((device) => `${device.name ?? "unnamed"} (type ${device.type})`)
+	};
 }
 
 /** Structural comparison, used only to avoid a pointless settings write on every appearance. */
