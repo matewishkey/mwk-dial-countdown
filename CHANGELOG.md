@@ -17,6 +17,38 @@ renamed, and rewriting it would make the history describe a repo that never exis
 
 ## [Unreleased]
 
+## [3.5.1] — 2026-09-17
+
+### Fixed
+
+- **A change made on the hardware could be undone by the next thing you touched in the property
+  inspector.** Reported as the clicks going wrong once *auto-reset* and *fade to the end* were switched
+  on. Neither setting is itself at fault — what they have in common is that you switch them on **in the
+  inspector**, and the inspector is the other half of this.
+
+  A gesture that changes the preset is written to disk a fraction of a second later, because that write
+  is held back so that spinning the dial does not go to disk on every click. The inspector is brought
+  up to date *by* that write — so until it lands, the inspector is both the authority on your settings
+  and out of date about them. Tick any checkbox in that gap and its idea of the selected preset came
+  back over the top: the clock reloaded the old preset, and the pending write then put the old
+  selection on disk too, so the preset you had just chosen was gone from the screen and from the
+  settings both.
+
+  Measured against the built plugin, holding the screen to move 5m → 20m and then ticking a box: at
+  80 ms and 250 ms the advance was undone; at 800 ms, past the write, it survived. All three keep it
+  now. Only the selected preset is held back, and only while a write is outstanding — everything you
+  actually opened the inspector to change is taken exactly as sent, including edits to the preset
+  lengths themselves.
+
+### Internal
+
+- **Two new tests tear down in a `finally`, and the mutation harness now knows a hang from a
+  failure.** Written without one, a deliberately broken build *hung* the suite rather than failing it:
+  the render loop is an interval, and an assertion that throws before the teardown line leaks it and
+  holds the process open. By exit code alone a hang and a pass are the same answer, which is the same
+  shape of blind spot as the release gate that could not fail.
+
+
 ## [3.5.0] — 2026-09-17
 
 Everything here came out of an external design review — four reviewers reading the design cold, with
@@ -789,7 +821,8 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.5.0...HEAD
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.5.1...HEAD
+[3.5.1]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.5.1
 [3.5.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.5.0
 [3.4.2]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.4.2
 [3.4.1]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.4.1
