@@ -17,6 +17,51 @@ renamed, and rewriting it would make the history describe a repo that never exis
 
 ## [Unreleased]
 
+## [3.9.0] — 2026-09-17
+
+### Added
+
+- **A "Copy diagnostics" button in the property inspector.** One press puts everything needed to
+  investigate a problem on your clipboard, ready to paste into a message or an issue.
+
+  It replaces an instruction that ran: *find your Stream Deck plugins folder, which is in a different
+  place on each platform and depends how you installed it; open the `.sdPlugin` directory; find
+  `logs`; open the newest file; scroll to the bottom; find the lines beginning `health:`; copy some of
+  them.* Seven steps, each one a place to give up — and none of it is the job of somebody who has
+  reported that their device is slow. The plugin is the one thing that knows where its own log is, so
+  it fetches it.
+
+  ```
+  Dial Countdown 3.9.0.0
+  linux 6.8.0-139-generic x64 · 12 cores · 31GB · node v24.21.0
+  log: …/com.matewishkey.dial-countdown-v2.sdPlugin/logs
+
+  last 6 health, warning and gesture lines:
+  2026-09-17T12:26:00.904Z INFO  dialDown
+  2026-09-17T12:26:00.955Z INFO  dialUp turnedWhileDown=false down=true
+  …
+  ```
+
+  It carries the **health** lines and the **gesture** lines, because those are the two kinds of
+  trouble this plugin has actually had — *is it slow and is it this plugin*, and *what did the
+  hardware really send*. A report that answered only one would send you back for the other. Everything
+  else the plugin has ever logged is left out: a whole log is unreadable in a chat window.
+
+  Find it under **Diagnostics**, at the bottom of the settings for any countdown.
+
+### Internal
+
+- **Driven end to end through the real socket rather than read, and both runs found something reading
+  it had not.** `os.version()` is the *kernel's* version, not Node's — the report printed `node
+  #139-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug 1…`, which is precisely the shape of thing that reads as a
+  checked fact when it lands in a bug report. And the first version of the filter kept only health
+  lines, so a *gesture* problem would have produced a report with nothing about gestures in it.
+
+- The empty case is tested as carefully as the full one: a button that hands back an empty box reads
+  as broken, so it says the first health line is about a minute away instead. Six mutations, all
+  caught, including one that puts the kernel version back.
+
+
 ## [3.8.0] — 2026-09-17
 
 ### Added
@@ -941,7 +986,8 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.8.0...HEAD
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.9.0...HEAD
+[3.9.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.9.0
 [3.8.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.8.0
 [3.7.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.7.0
 [3.6.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.6.0
