@@ -34,12 +34,12 @@ renamed, and rewriting it would make the history describe a repo that never exis
   ```
   Dial Countdown 3.9.0.0
   linux 6.8.0-139-generic x64 · 12 cores · 31GB · node v24.21.0
-  log: …/com.matewishkey.dial-countdown-v2.sdPlugin/logs
+  log: <the plugin's own folder>/logs
 
   last 6 health, warning and gesture lines:
   2026-09-17T12:26:00.904Z INFO  dialDown
   2026-09-17T12:26:00.955Z INFO  dialUp turnedWhileDown=false down=true
-  …
+  (and so on)
   ```
 
   It carries the **health** lines and the **gesture** lines, because those are the two kinds of
@@ -53,7 +53,7 @@ renamed, and rewriting it would make the history describe a repo that never exis
 
 - **Driven end to end through the real socket rather than read, and both runs found something reading
   it had not.** `os.version()` is the *kernel's* version, not Node's — the report printed `node
-  #139-Ubuntu SMP PREEMPT_DYNAMIC Sat Aug 1…`, which is precisely the shape of thing that reads as a
+  #139-Ubuntu SMP PREEMPT_DYNAMIC`, which is precisely the shape of thing that reads as a
   checked fact when it lands in a bug report. And the first version of the filter kept only health
   lines, so a *gesture* problem would have produced a report with nothing about gestures in it.
 
