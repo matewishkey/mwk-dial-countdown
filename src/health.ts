@@ -29,7 +29,32 @@
 export type HealthLogger = { info(message: string): void; warn(message: string): void };
 
 /** Only for tests, which cannot wait a minute for a line. The defaults are the shipped behaviour. */
-export type HealthOptions = { reportIntervalMs?: number; lagSampleMs?: number; lagWarnMs?: number };
+export type HealthOptions = {
+	reportIntervalMs?: number;
+	lagSampleMs?: number;
+	lagWarnMs?: number;
+	/**
+	 * A round trip to the Stream Deck application, timed to produce `rtt`. See {@link RTT_TIMEOUT_MS}.
+	 */
+	probe?: () => Promise<unknown>;
+};
+
+/**
+ * How long a round trip is waited for before it is called lost.
+ *
+ * **`rtt` is the number that answers "is something else on this machine blocking us".** Every plugin
+ * runs in its own process, so another plugin cannot stall *this* event loop — but all of them talk to
+ * the one Stream Deck application, which drives the one USB device, and that is genuinely shared. A
+ * plugin flooding the application would leave our `cpu` and `lag` looking perfectly healthy while the
+ * hardware crawled, and no measurement taken inside this process would show it. This one does: it is
+ * the application's own answering time.
+ *
+ * The probe asks for the *global* settings, which this plugin does not use and has no handler for, so
+ * timing it cannot disturb anything. Asking for an action's settings would have worked too and would
+ * have fired this plugin's own `didReceiveSettings` once a minute, re-applying settings nobody
+ * changed — a measurement that alters what it measures.
+ */
+const RTT_TIMEOUT_MS = 5_000;
 
 /** How often the summary line is written. */
 const REPORT_INTERVAL_MS = 60_000;
@@ -118,6 +143,11 @@ export function startHealthLog(logger: HealthLogger, options: HealthOptions = {}
 	}, sampleMs);
 
 	const reportTimer = setInterval(() => {
+		void report();
+	}, reportMs);
+
+	async function report(): Promise<void> {
+		const rtt = await measureRoundTrip(options.probe);
 		const cpu = process.cpuUsage(lastCpu);
 		const elapsedMs = Date.now() - lastAt;
 		lastCpu = process.cpuUsage();
@@ -128,13 +158,14 @@ export function startHealthLog(logger: HealthLogger, options: HealthOptions = {}
 
 		logger.info(
 			`health: cpu ${cpuPct.toFixed(1)}% rss ${rssMb.toFixed(0)}MB controls ${totalControls()} ` +
-				`frames ${(frames / (elapsedMs / 1000)).toFixed(1)}/s lag ${worstLagMs}ms slowest-render ${slowestRefreshMs.toFixed(1)}ms`
+				`frames ${(frames / (elapsedMs / 1000)).toFixed(1)}/s lag ${worstLagMs}ms ` +
+				`slowest-render ${slowestRefreshMs.toFixed(1)}ms rtt ${rtt}`
 		);
 
 		frames = 0;
 		slowestRefreshMs = 0;
 		worstLagMs = 0;
-	}, reportMs);
+	}
 
 	lagTimer.unref?.();
 	reportTimer.unref?.();
@@ -143,4 +174,28 @@ export function startHealthLog(logger: HealthLogger, options: HealthOptions = {}
 		clearInterval(lagTimer);
 		clearInterval(reportTimer);
 	};
+}
+
+/**
+ * Times one round trip to the Stream Deck application.
+ *
+ * @returns the time in milliseconds, or `timeout` / `error` / `n/a` — reported rather than thrown,
+ * because a probe that cannot answer is itself the most interesting result this line can carry.
+ */
+async function measureRoundTrip(probe: (() => Promise<unknown>) | undefined): Promise<string> {
+	if (probe === undefined) {
+		return "n/a";
+	}
+
+	const startedAt = performance.now();
+	try {
+		const timedOut = Symbol("timed out");
+		const result = await Promise.race([
+			probe(),
+			new Promise((resolve) => setTimeout(() => resolve(timedOut), RTT_TIMEOUT_MS).unref?.())
+		]);
+		return result === timedOut ? `>${RTT_TIMEOUT_MS}ms` : `${(performance.now() - startedAt).toFixed(0)}ms`;
+	} catch {
+		return "error";
+	}
 }

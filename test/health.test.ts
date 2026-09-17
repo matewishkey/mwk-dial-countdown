@@ -46,6 +46,45 @@ describe("the health report", () => {
 		assert.match(line, /cpu \d+\.\d+% rss \d+MB/, `cpu and memory must be real numbers: ${line}`);
 	});
 
+	it("times the round trip to Stream Deck, which is how a busy APPLICATION is told from a busy plugin", async () => {
+		// Every plugin runs in its own process, so another plugin cannot stall this event loop. What is
+		// genuinely shared is the Stream Deck application and the one USB device behind it — and a
+		// plugin flooding that would leave `cpu` and `lag` here looking perfectly healthy while the
+		// hardware crawled. `rtt` is the application's own answering time, and nothing else in this
+		// report can see past our own process.
+		const seen = recorder();
+		const slowApp = (): Promise<unknown> => new Promise((done) => setTimeout(done, 120));
+		const stop = startHealthLog(seen.log, { reportIntervalMs: 200, lagSampleMs: 40, probe: slowApp });
+		try {
+			await wait(500);
+		} finally {
+			stop();
+		}
+
+		const line = seen.info[0] ?? "";
+		const rtt = Number(/rtt (\d+)ms/.exec(line)?.[1] ?? "-1");
+		assert.ok(rtt >= 100, `a 120ms round trip must be reported as such, and the line reads: ${line}`);
+	});
+
+	it("says so when the round trip never comes back, rather than dropping the line", async () => {
+		// A probe that hangs is the most interesting result this line can carry, so it must not take
+		// the whole report down with it. Anything that throws is reported too.
+		const seen = recorder();
+		const stop = startHealthLog(seen.log, {
+			reportIntervalMs: 150,
+			lagSampleMs: 40,
+			probe: () => Promise.reject(new Error("no connection"))
+		});
+		try {
+			await wait(400);
+		} finally {
+			stop();
+		}
+
+		assert.ok(seen.info.length >= 1, "the summary must still be written when the probe fails");
+		assert.match(seen.info[0], /rtt error/, `the failure must be named: ${seen.info[0]}`);
+	});
+
 	it("reports the worst lag it saw, not merely the word `lag`", async () => {
 		// Guards the sampler rather than the warning: the two are separate, and the warning reads the
 		// lateness directly, so stubbing out the high-water mark left the summary saying `lag 0ms`
