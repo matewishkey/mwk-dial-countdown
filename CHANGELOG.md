@@ -17,6 +17,49 @@ renamed, and rewriting it would make the history describe a repo that never exis
 
 ## [Unreleased]
 
+## [3.6.0] — 2026-09-17
+
+### Added
+
+- **The plugin now reports what it is costing your machine, once a minute, into its own log.** Because
+  "the device feels slow" is the one question that cannot be answered from a developer's desk — and
+  every performance number this plugin has produced so far came from a mock host on a Linux box with
+  one control on it, which says nothing about a Stream Deck + on Windows with a dozen other plugins
+  running beside it.
+
+  ```
+  health: cpu 0.4% rss 71MB controls 12 frames 9.4/s lag 2ms slowest-render 0.8ms
+  ```
+
+  Four numbers, because between them they separate the three possible causes. **`cpu`** and
+  **`frames`** are this plugin's to fix if they are high. **`lag`** is the one that matters for an
+  unresponsive device: a plugin at 1% CPU and 400 ms of lag is *blocked*, not busy, and nothing else
+  tells those two apart. **`slowest-render`** names this plugin as the cause of that lag, if it is.
+
+  A warning is written the moment lag crosses **250 ms**, rather than waiting for the next summary, so
+  a freeze leaves a timestamp you can point at. That number is the touchscreen's own double-tap
+  window: once the plugin is running that late it can no longer tell a single tap from half of a
+  double one, because the delay is as long as the thing it is measuring. **That is the point where
+  slowness stops being cosmetic and starts changing what a gesture means** — which would explain
+  presses that do not register and a clock that seems to tick unevenly, from one cause.
+
+  The log is `logs/com.matewishkey.dial-countdown-v2.0.log`, inside the plugin's own folder.
+
+### Internal
+
+- **For the record, measured on a Linux desktop, and offered as a baseline rather than as a verdict:**
+  one dial frame — the ring and the glyph, rendered and encoded as they are sent — costs **4 µs**,
+  which is 0.01% of one core for four dials at the full render rate. Twelve controls idle at **0.3%
+  CPU**; spinning a dial hard reaches **1.2%**. Nothing in that supports the plugin being the cause of
+  a slow device, and nothing in it rules the possibility out on other hardware either.
+
+- **The control count was wrong the first time it ran end to end, and only running it showed that.**
+  The dial and the key are separate actions with separate instance maps, so a single shared total was
+  written twice per change and whichever ran last won — four dials and eight keys reported `controls
+  8`. It is counted per action and summed now. An undercount makes every per-control figure beside it
+  read better than the truth, which is the one direction a health report must never be wrong in.
+
+
 ## [3.5.1] — 2026-09-17
 
 ### Fixed
@@ -821,7 +864,8 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.5.1...HEAD
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.6.0...HEAD
+[3.6.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.6.0
 [3.5.1]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.5.1
 [3.5.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.5.0
 [3.4.2]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.4.2
