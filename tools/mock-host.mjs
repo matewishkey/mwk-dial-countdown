@@ -681,6 +681,42 @@ async function runDemo() {
 			}
 		],
 
+		// A rotation carrying no detents used to cost you the press, and cost it silently. The guard that
+		// stops a push-and-turn's release from also toggling the clock was armed by *any* rotation while
+		// the dial was down, `ticks: 0` included — so the release did nothing, and with no detents there
+		// was no clock movement, no word and no pulse to show for it either. The dial simply looked as
+		// though it were not wired up. Elgato documents neither a floor on `ticks` nor the ordering of
+		// these events, so the plugin is not entitled to assume this cannot happen.
+		[
+			"a press with a no-detent rotation inside it → still a press",
+			async () => {
+				applySettings({ presets: [600], presetIndex: 0 });
+				await wait(400);
+
+				// Asserted on the *word*, and on the word being one of the three a press can answer
+				// with. Two weaker versions of this check passed against a build that still had the
+				// bug. "Did the clock move" is wrong because a press answers `start`, `resume` or
+				// `pause` depending on what the case before it left behind, and one of those three
+				// freezes the clock rather than moving it. "Was there a word at all" is wrong because
+				// the swallowed press was not silent after all — the zero-tick rotation it was eaten by
+				// announced itself as `+0s`, which is a word, and the check went green on it.
+				const PRESS_WORDS = ["start", "resume", "pause"];
+				const before = screen.value;
+				gestures.dialDown();
+				await wait(40);
+				gestures.rotate(0, true);
+				await wait(40);
+				gestures.dialUp();
+				await wait(300);
+				const word = screen.finish;
+
+				console.log(`\n   the press was answered with "${word}", on a clock reading ${before}`);
+				console.log(
+					`   ${PRESS_WORDS.includes(word) ? "\u2713 the press survived a zero-tick rotation" : `\u2717 swallowed — "${word}" is the rotation talking, not the press`}`
+				);
+			}
+		],
+
 		// A frame lost on the way — Stream Deck discards feedback sent alongside a layout switch —
 		// would sit on screen for ever on a display that is static by nature. So the current frame is
 		// re-asserted every couple of seconds even when nothing has changed.

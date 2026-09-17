@@ -17,6 +17,45 @@ renamed, and rewriting it would make the history describe a repo that never exis
 
 ## [Unreleased]
 
+### Fixed
+
+- **A press of the dial could be swallowed with nothing at all on screen to show for it.** The guard
+  that stops a push-and-turn from *also* starting the clock as you let go was armed by any rotation
+  reported while the dial was down — **including one carrying no detents at all.** A `ticks: 0`
+  rotation between the press and its release therefore ate the press, and because no detents turned,
+  there was no clock movement, no word on the bottom line and no pulse of the ring to show for it
+  either. The dial simply looked as though it were not wired up, in every state: it would not start an
+  idle clock, would not pause a running one, would not resume a paused one, and would not restart a
+  finished one.
+
+  A rotation of nothing is not a rotation. It is now ignored outright, before the guard or the clock
+  sees it. Elgato's SDK documents `ticks` as "positive or negative" and says nothing about a floor,
+  about ordering, or about coalescing, so the plugin is not entitled to assume this cannot arrive —
+  `rwellinger/xp_streamdeck` guards the same case, for what looks like the same reason.
+
+### Changed
+
+- **Whether the dial is pushed in is now read from the button events as well as the rotation's own
+  flag.** `dialRotate` carries `pressed`, and that had been the only source. But `dialDown` and
+  `dialUp` are separate messages from the same hardware, and where the two disagree the record
+  assembled from the button's own events is the better answer — so a turn counts as a minute step if
+  *either* says the dial was down. Without it a rotation whose flag lagged the button was charged at a
+  second a click and then started the clock on release, which is two wrong answers from one gesture.
+
+### Internal
+
+- **Every dial gesture is now written to the plugin's log at `info`, which an installed build keeps.**
+  One line per `dialDown`, `dialUp`, `dialRotate` (with its tick count and both readings of the button)
+  and `touchTap` — bounded by how fast a hand moves, unlike the render loop, which is still silent.
+  What the hardware actually emits when a knob is pressed is the one thing no amount of driving the
+  mock host can answer, and every question left open here is a question about that. The file is
+  `logs/com.matewishkey.dial-countdown-v2.0.log`, inside the installed plugin's own folder.
+
+- **`npm run demo` covers the no-detent press.** The dial's own event handlers still cannot be reached
+  from a unit test (#12), so the scripted pass against the built bundle is where this is asserted: a
+  `dialDown`, a `ticks: 0` rotation and a `dialUp` have to leave the clock running.
+
+
 ## [3.4.1] — 2026-09-17
 
 ### Fixed

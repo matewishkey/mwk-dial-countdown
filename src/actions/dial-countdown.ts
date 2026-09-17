@@ -35,6 +35,15 @@ type DialInstance = Instance<Dial> & {
 	 * turn, not a separate instruction to start the clock.
 	 */
 	turnedWhileDown: boolean;
+	/**
+	 * Whether the button is down, as this plugin saw it — `dialDown` in, `dialUp` out.
+	 *
+	 * A rotation already carries a `pressed` flag, so this looks redundant. It is not: the flag
+	 * describes the button *as the rotation was reported*, and the two are separate messages from the
+	 * hardware. Where they disagree, the one we assembled from the button's own events is the better
+	 * answer, so the step is decided from either — the same call `xp_streamdeck` makes.
+	 */
+	down: boolean;
 	lastLayout: string | null;
 };
 
@@ -47,7 +56,7 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 	}
 
 	protected extras(): Omit<DialInstance, keyof Instance<Dial>> {
-		return { turnedWhileDown: false, lastLayout: null };
+		return { turnedWhileDown: false, down: false, lastLayout: null };
 	}
 
 	protected override attach(instance: DialInstance): void {
@@ -57,9 +66,11 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 	/**
 	 * Turning adjusts time — **a second a click, or a minute a click while the dial is pushed in.**
 	 *
-	 * That is the whole of the step model. `pressed` arrives on the event itself, so the plugin holds
-	 * no mode, expires no mode, and has nothing to put on screen reminding you which mode you left it
-	 * in: your own finger is the state.
+	 * That is the whole of the step model. Whether the dial is pushed in is read per rotation, so the
+	 * plugin holds no mode, expires no mode, and has nothing to put on screen reminding you which mode
+	 * you left it in: your own finger is the state. It is read from the rotation's own `pressed` flag
+	 * or from the button events this plugin has already seen, whichever says yes — see
+	 * {@link DialInstance.down}.
 	 *
 	 * Every click is acknowledged by a pulse of the ring. There is no haptic feedback to be had on this
 	 * hardware, so the ring answering each click is what tells you the dial is being heard — and the
@@ -74,11 +85,25 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 			return;
 		}
 
-		if (ev.payload.pressed) {
+		streamDeck.logger.info(`dialRotate ticks=${ev.payload.ticks} pressed=${ev.payload.pressed} down=${instance.down}`);
+
+		// **A rotation of no detents is not a rotation, and must not cost you the press.** It is the
+		// one variant of this that is completely invisible: a rotate carrying `ticks: 0` between the
+		// press and its release sets the guard below, so the release does nothing — no clock moved, no
+		// word on the screen, no pulse of the ring. The dial simply appears not to be wired up, which
+		// is the report that started this. Elgato documents `ticks` as "positive or negative" and says
+		// nothing about ordering, coalescing, or a floor, so nothing here is entitled to assume.
+		if (ev.payload.ticks === 0) {
+			return;
+		}
+
+		// Either source counts. See `DialInstance.down`.
+		const pressed = ev.payload.pressed || instance.down;
+		if (pressed) {
 			instance.turnedWhileDown = true;
 		}
 
-		instance.countdown.adjust(ev.payload.ticks, ev.payload.pressed);
+		instance.countdown.adjust(ev.payload.ticks, pressed);
 		this.acknowledge(instance);
 	}
 
@@ -110,7 +135,9 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 			return;
 		}
 
+		streamDeck.logger.info("dialDown");
 		instance.taps.cancel();
+		instance.down = true;
 		instance.turnedWhileDown = false;
 	}
 
@@ -130,6 +157,9 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 		if (instance === undefined) {
 			return;
 		}
+
+		streamDeck.logger.info(`dialUp turnedWhileDown=${instance.turnedWhileDown}`);
+		instance.down = false;
 
 		if (instance.turnedWhileDown) {
 			instance.turnedWhileDown = false;
@@ -153,6 +183,7 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 			return;
 		}
 
+		streamDeck.logger.info(`touchTap hold=${ev.payload.hold}`);
 		instance.taps.press(ev.payload.hold);
 	}
 
