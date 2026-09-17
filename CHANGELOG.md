@@ -17,6 +17,95 @@ renamed, and rewriting it would make the history describe a repo that never exis
 
 ## [Unreleased]
 
+## [3.5.0] — 2026-09-17
+
+Everything here came out of an external design review — four reviewers reading the design cold, with
+no access to the diagnosis that prompted it. **None of them found the gesture model or the timer state
+machine wrong in principle.** What they found is that the machinery meant to hold the design in place
+had stopped checking, and six bugs had walked through the gap.
+
+### Fixed
+
+- **A turn of the dial up, and an equal turn back down, permanently redefined the preset.** The clock
+  came back to exactly where it was; the preset behind it did not. On a 2 minute preset 20 seconds in,
+  `+3m` then `-3m` left the timer's length at **4:40** — so the ring jumped from 17% to 64% with no
+  time passing, the label read `from 2m` for ever, a hold of the screen was spent restoring instead of
+  advancing, and **the next repeat lap ran 4:40 instead of 2:00** with nothing on screen to explain it.
+
+  The duration was being ratcheted up to meet a clock wound above it, so the progress fraction could
+  not go negative. The ratchet was one-way. Progress is clamped instead and a started clock's duration
+  is left alone, which makes a turn of the dial reversible — and settles a fourth, disagreeing route
+  back to "the top of the clock" that had been quietly in use by the repeat.
+
+- **A click *down* on a nearly-finished clock *added* time, and a running clock could not be wound to
+  zero.** The one-second floor is the shortest a *preset* may be set to; it was also being applied to
+  the time left on a clock, which is not a preset. Paused with 400 ms to go, one click down handed back
+  a full second. Winding down now reaches zero, and reaching zero while running finishes the timer
+  exactly as running out of time does.
+
+- **Changing "repeat 3 times" to 4 while it was running made it run six times.** The lap tally was
+  reset whenever the repeat rule changed — right for a timer that has already finished, which is the
+  case the rule was written for, and wrong underneath a run in progress: the laps already done were
+  done again, labelled `×1/4` on a lap that was really the third. The property inspector sends a write
+  on every keystroke while a number is typed over, so this did not need anyone to mean it.
+
+- **On a key, one press followed by a press-and-hold did two things at once** — started the clock *and*
+  advanced the preset. A press waiting to see whether it had a partner starts counting at the
+  *previous* release, while the hold that is meant to settle it cannot fire until the *next* press has
+  been held long enough — so the waiting one always resolved first, whatever the two thresholds were
+  set to, and the code that was supposed to cancel it could never run. A press now stops counting down
+  while a finger is on the key, so the hold is free to settle it. **Both thresholds are now free to be
+  tuned on feel alone**, which they were not before.
+
+- **A release of the dial that the plugin never saw the press for started the clock.** Flipping page or
+  profile tears an action down and rebuilds it, and the rebuilt one has no memory of a press already in
+  progress — but the countdown itself is kept and handed back. So holding the dial in for a
+  minute-stepped wind, flipping away and back, and letting go landed a stray start or pause on a real
+  timer. The trade is deliberate: a *lost* press now does nothing, which you recover from by pressing
+  again, rather than a clock starting when nobody asked.
+
+- **Two rapid presses of a key could leave a stray timer running that nothing could stop.** It later
+  advanced the preset of a countdown that was no longer on screen, and scheduled two more timers that
+  nothing could clear. It was the only timer in the plugin that could outlive the control that started
+  it.
+
+### Changed
+
+- **The tooltips said "hold for the next preset".** A hold puts the clock right first and only moves on
+  when there is nothing left to put right — which the trigger description shown on the hardware had
+  correct all along. The tooltip is the one you read first, so it is now the one that agrees.
+
+### Internal
+
+- **`npm run demo` had no way to fail, and had been failing.** It ended in an unconditional
+  `process.exit(0)`; its ✗ lines were print statements nothing read back, while the release gate judges
+  that step by exit code alone — and `npm run check` does not run it at all. **v3.4.2 was released
+  carrying two failing checks, under a page reading "all gates passed".** Neither was a bug in the
+  plugin: one check demanded a word the state it inherited could not produce, the other slept a fixed
+  3.4 seconds and called that the finish. Both are fixed; verdicts are now counted and the exit code
+  means something. A pass that asserts *nothing* fails too — an empty tally is what a harness that died
+  early looks like, and by exit code alone it is indistinguishable from a clean run.
+
+- **Three of the four end-of-fade tests were true by arithmetic.** Their clock started on a whole
+  second and the blink period divides a second, so the expression they asserted on was `false` at every
+  instant they sampled, whatever the guards above it did. Deleting the half-duration cap — a bug that
+  actually shipped once, and the thing one of those tests is *named* for — left all four green. The
+  fixture now starts half a blink off the boundary, and each of the three guards was re-checked by
+  deleting it and watching the right test go red.
+
+- **Every fix here was driven against a build with that fix reverted.** Seven are caught by the unit
+  suite and three by the scripted pass, which is the only thing that can reach the dial's and the key's
+  own event handlers — their `@action` decorator keeps them out of a unit test. The check for the key's
+  hold took three attempts to become a real one: asserting where the clock ended up cannot work, since
+  the right answer and the wrong one both land on the next preset, stopped.
+
+- **`plugin.ts` now handles uncaught exceptions and rejections with `on`.** The SDK installs its own
+  with `once`, so the first throw anywhere in the process spent it — and the render loop is a 4 Hz
+  interval per control, so a repeating throw there had no handler left by its second tick. The comment
+  explaining why a failed connection was left unlogged was also wrong about where logging goes: a file
+  beside the plugin, not back down the socket it just failed to open.
+
+
 ## [3.4.2] — 2026-09-17
 
 ### Fixed
@@ -700,7 +789,8 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.4.2...HEAD
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.5.0...HEAD
+[3.5.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.5.0
 [3.4.2]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.4.2
 [3.4.1]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.4.1
 [3.4.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.4.0
