@@ -117,6 +117,39 @@ describe("Timer", () => {
 		assert.equal(timer.remainingMs, 230_000);
 	});
 
+	it("nudges only the remaining time when adjusted while paused", () => {
+		const { timer, advance } = at(0, 300);
+		timer.start();
+		advance(4);
+		timer.pause();
+		timer.adjust(1_000);
+		assert.equal(timer.status, "paused", "a turn of the dial must not un-pause the clock");
+		assert.equal(timer.remainingMs, 297_000, "the four seconds already spent must stay spent");
+		assert.equal(timer.durationMs, 300_000, "nudging the time left must not redefine the preset");
+	});
+
+	it("does not put a paused clock back to full when it is adjusted", () => {
+		// The shape as reported: paused at 4:56 of a 5:00 preset, one click of the dial, and the clock
+		// came back reading 5:01 and idle — the count lost, the pause lost, the preset rewritten.
+		const { timer, advance } = at(0, 300);
+		timer.start();
+		advance(4);
+		timer.pause();
+		timer.adjust(1_000);
+		assert.notEqual(timer.remainingMs, 301_000, "the adjustment rewrote the duration instead of the clock");
+		assert.equal(formatDuration(timer.remainingMs), "4:57");
+	});
+
+	it("keeps a paused clock paused when it is wound down to the floor", () => {
+		const { timer, advance } = at(0, 300);
+		timer.start();
+		advance(4);
+		timer.pause();
+		timer.adjust(-999_999);
+		assert.equal(timer.status, "paused");
+		assert.equal(timer.remainingMs, MIN_DURATION_MS);
+	});
+
 	it("keeps progress meaningful when a running timer is extended beyond its duration", () => {
 		const { timer, advance } = at(0, 60);
 		timer.start();

@@ -19,6 +19,22 @@ renamed, and rewriting it would make the history describe a repo that never exis
 
 ### Fixed
 
+- **A turn of the dial on a paused clock threw the count away and put the timer back to full.** A
+  timer paused at 4:56 of a five minute preset answered one click of the dial by reading **5:01**,
+  sitting idle — the four seconds gone, the pause gone with them, and the preset quietly redefined as
+  5:01 for every run after. It took one click, in the state you are most likely to be in when you
+  reach for the dial: stopped, mid-run, about to give yourself another minute.
+
+  The dial has always had two jobs, and which one it does depends on whether the clock has been
+  started. On a clock that is running it nudges the time left. On one that has not been started there
+  is no time left to nudge, so it re-scales the duration instead and the clock follows it — that is
+  how you wind a preset up before you begin. **`paused` was being counted as the second kind**, on the
+  reasoning that a paused timer is a stopped timer. It is not: it is a clock with time left on it, and
+  re-scaling it is the one operation that discards exactly that.
+
+  A pause now goes with `running`. The turn moves the time left, the clock stays paused, and the
+  preset behind it is left alone.
+
 - **A tap on the glass and a press of the dial cancelled each other out, and on a finished timer that
   is the state that looks broken.** A tap is held back for a quarter of a second in case a second one
   is coming — that is how "tap twice to reset" is told apart from "tap once to pause" — and the

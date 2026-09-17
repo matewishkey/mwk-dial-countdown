@@ -112,14 +112,26 @@ export class Timer {
 	}
 
 	/**
-	 * Adds or removes time. While stopped this re-scales the duration itself, so turning the dial
-	 * edits the preset; while running it only nudges the time left, leaving the duration alone.
+	 * Adds or removes time.
+	 *
+	 * **A clock that has been started is nudged; a clock that has not is re-scaled.** On a timer that
+	 * is running or paused the turn moves only the time left, leaving the duration — and the pause —
+	 * exactly where they were. On one that is idle or elapsed there is no time left to nudge, so the
+	 * turn edits the duration itself and the clock follows it.
+	 *
+	 * **`paused` used to fall through to the second case**, which is the one branch of this that could
+	 * lose a count. A timer paused at 4:56 of 5:00 answered one click of the dial by rewriting the
+	 * duration to 5:01 and putting the whole clock back to full — the four seconds gone, the pause
+	 * gone with them, and the preset quietly redefined. Measured against the built plugin: `4:56
+	 * paused` → one `+1s` → `5:01`, sitting idle. A pause is a clock with time left on it, so it
+	 * belongs with `running`, not with the empty ones.
 	 */
 	adjust(deltaMs: number): void {
 		this.#settle();
-		if (this.#status === "running") {
+		if (this.#status === "running" || this.#status === "paused") {
 			const next = clampDuration(this.remainingMs + deltaMs);
-			this.#deadline = this.#now() + next;
+			// Only a running clock has a deadline to move; a paused one is held in `#restingMs` alone.
+			this.#deadline = this.#status === "running" ? this.#now() + next : null;
 			this.#restingMs = next;
 			// Growing past the original duration would leave progress pinned at zero; track the ceiling.
 			this.#durationMs = Math.max(this.#durationMs, next);
