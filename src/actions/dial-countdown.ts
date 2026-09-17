@@ -158,11 +158,27 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 			return;
 		}
 
-		streamDeck.logger.info(`dialUp turnedWhileDown=${instance.turnedWhileDown}`);
+		streamDeck.logger.info(`dialUp turnedWhileDown=${instance.turnedWhileDown} down=${instance.down}`);
+
+		const sawThePress = instance.down;
 		instance.down = false;
 
 		if (instance.turnedWhileDown) {
 			instance.turnedWhileDown = false;
+			return;
+		}
+
+		// **Only a release this instance saw the press for counts.** An action is torn down and rebuilt
+		// whenever the user flips page or profile, and the rebuilt one starts with both latches clear —
+		// so a flip made while the dial was held in came back with no memory of the push, and the
+		// release of a minute-stepped turn read as a plain press and started the clock. The clock
+		// itself survives the flip (it is parked and revived), which is what made the stray toggle land
+		// on a real countdown rather than a fresh one.
+		//
+		// The trade is deliberate: a *dropped* `dialDown` now swallows a genuine press. That fails as
+		// "nothing happened, press it again", which recovers on the next press — against a clock
+		// starting or stopping when nobody asked, which announces itself to nobody and does not.
+		if (!sawThePress) {
 			return;
 		}
 

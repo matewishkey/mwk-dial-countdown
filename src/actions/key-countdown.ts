@@ -58,6 +58,18 @@ export class KeyCountdown extends CountdownAction<Key, KeyInstance> {
 			return;
 		}
 
+		// **Clear the old handle before arming a new one.** Every other timer in this plugin does; this
+		// one did not, so a `keyDown` with no `keyUp` between overwrote a live handle and left it
+		// unreachable — `#cancelLongPress` would then find `null` and teardown would clear nothing, so
+		// the orphan fired `next` against a dead instance, advancing the preset of a countdown parked
+		// off screen and scheduling two more handles nothing could ever clear. The base class refuses
+		// to assume events are paired (see `countdown-action.ts`); this handler was assuming it.
+		this.#cancelLongPress(instance);
+
+		// A press still waiting on a partner stops counting down while this one is in progress, so the
+		// hold below is free to settle it rather than racing it. See `../gestures`.
+		instance.taps.hold();
+
 		instance.longPressFired = false;
 		instance.longPressHandle = setTimeout(() => {
 			instance.longPressFired = true;

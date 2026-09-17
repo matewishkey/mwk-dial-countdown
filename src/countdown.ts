@@ -16,7 +16,7 @@ import { normaliseSettings, type DialCountdownSettings, type Preset } from "./se
 import { formatPresetLabel, Timer } from "./timer";
 
 /** Blink period while inside the warning window — two render frames on, two off. */
-const BLINK_MS = 500;
+export const BLINK_MS = 500;
 
 type Clock = () => number;
 
@@ -207,8 +207,15 @@ export class Countdown {
 		// Re-deciding how many times a timer repeats re-decides how far through it is. Without this a
 		// count raised from 3 to 5 after the timer had already finished read `×3/5` on a dead clock —
 		// three laps that belonged to a rule which no longer exists, counted against the new one.
+		//
+		// **Only on a clock that has finished**, which is the whole of the case that reasoning covers.
+		// Applied to a *running* timer it restarts the tally underneath the run: raising the count from
+		// 3 to 4 while on lap 3 put `#completed` back to zero, so four more laps followed — six runs in
+		// total from a setting of four, labelled `×1/4` on a lap that was really the third. The
+		// inspector sends this on every keystroke while a number is typed over, so it was not rare.
 		const repeatChanged =
-			settings.repeat !== this.#settings.repeat || settings.repeatCount !== this.#settings.repeatCount;
+			(settings.repeat !== this.#settings.repeat || settings.repeatCount !== this.#settings.repeatCount) &&
+			this.finished;
 
 		this.#settings = settings;
 		this.#presets = settings.presets;

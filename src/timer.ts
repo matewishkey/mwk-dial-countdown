@@ -52,12 +52,20 @@ export class Timer {
 		return this.#restingMs;
 	}
 
-	/** Fraction of the duration already spent, 0-1, for the progress indicator. */
+	/**
+	 * Fraction of the duration already spent, 0-1, for the progress indicator.
+	 *
+	 * **Clamped, because a nudged clock is allowed to hold more time than its own duration.** That
+	 * used to be prevented by ratcheting the duration up to meet it, which kept this fraction in range
+	 * by quietly redefining how long the timer was — see {@link Timer.adjust}. The ring pins at full
+	 * while the clock is wound above its length, which is the honest picture: there is more time left
+	 * than the timer is long, and no fraction of the duration describes that.
+	 */
 	get progress(): number {
 		if (this.#durationMs <= 0) {
 			return 1;
 		}
-		return 1 - this.remainingMs / this.#durationMs;
+		return Math.min(1, Math.max(0, 1 - this.remainingMs / this.#durationMs));
 	}
 
 	/** Starts, or resumes, the countdown. A timer at zero restarts from its full duration. */
@@ -125,16 +133,29 @@ export class Timer {
 	 * gone with them, and the preset quietly redefined. Measured against the built plugin: `4:56
 	 * paused` → one `+1s` → `5:01`, sitting idle. A pause is a clock with time left on it, so it
 	 * belongs with `running`, not with the empty ones.
+	 *
+	 * **A started clock's duration is now left entirely alone, and that is what makes a turn
+	 * reversible.** It used to be ratcheted up to whatever the clock was wound to, so that
+	 * {@link Timer.progress} could not go negative — but the ratchet was one-way, so a turn up
+	 * followed by an equal turn down put the clock back exactly and left the duration somewhere it
+	 * had never been. Measured, on a 2m preset 20s in: `+3m` then `-3m` returned the clock to 1:40
+	 * and left the duration at 4:40. The ring jumped from 17% to 64% with no time passing, the label
+	 * read `from 2m` for ever, and — worst — the next repeat lap ran the ratcheted 4:40 rather than
+	 * the 2m the preset says, because {@link Timer.reset} restores the duration. `progress` clamps
+	 * instead, which costs a pinned ring in one uncommon case and buys a duration that stays true.
 	 */
 	adjust(deltaMs: number): void {
 		this.#settle();
 		if (this.#status === "running" || this.#status === "paused") {
-			const next = clampDuration(this.remainingMs + deltaMs);
+			// **Floored at zero, not at MIN_DURATION_MS.** That floor is the shortest a *preset* may
+			// be, and a clock with 400 ms left on it is not a preset — clamping it there answered a
+			// click of *less* by handing back 600 ms more, and made a running clock impossible to wind
+			// down to nothing. Reaching zero while running is an ordinary elapse: the deadline lands on
+			// `now`, and the next `#settle` retires it exactly as if it had run out on its own.
+			const next = clampRemaining(this.remainingMs + deltaMs);
 			// Only a running clock has a deadline to move; a paused one is held in `#restingMs` alone.
 			this.#deadline = this.#status === "running" ? this.#now() + next : null;
 			this.#restingMs = next;
-			// Growing past the original duration would leave progress pinned at zero; track the ceiling.
-			this.#durationMs = Math.max(this.#durationMs, next);
 			return;
 		}
 		this.#durationMs = clampDuration(this.#durationMs + deltaMs);
@@ -160,6 +181,17 @@ function clampDuration(ms: number): number {
 		return MIN_DURATION_MS;
 	}
 	return Math.min(MAX_DURATION_MS, Math.max(MIN_DURATION_MS, Math.round(ms)));
+}
+
+/**
+ * The same ceiling, but a floor of zero: this is for time *left on a clock*, which may legitimately
+ * be none. {@link MIN_DURATION_MS} governs how short a preset may be set to and has no business here.
+ */
+function clampRemaining(ms: number): number {
+	if (!Number.isFinite(ms)) {
+		return 0;
+	}
+	return Math.min(MAX_DURATION_MS, Math.max(0, Math.round(ms)));
 }
 
 /**

@@ -104,10 +104,51 @@ describe("the key's own window", () => {
 		);
 	});
 
-	it("still resolves a hold before a press held that long could be waiting on a partner", () => {
-		// The two are close enough now to be worth asserting on: a pending press must not out-live the
-		// hold that is meant to cancel it, or a hold would land as a toggle first and a `next` after.
-		assert.ok(LONG_PRESS_MS > DOUBLE_PRESS_MS, "a hold must still be the longer of the two");
+	it("holds a pending press while a finger is down, so a hold can still win", async () => {
+		// This replaces an assertion that `LONG_PRESS_MS > DOUBLE_PRESS_MS`, whose stated reason — that
+		// a pending press must not out-live the hold meant to cancel it — was the opposite of what that
+		// inequality achieves. A pending press starts at the PREVIOUS release and the hold starts at the
+		// NEXT press, so the pending one always expired first, whatever the constants were, and press
+		// then press-and-hold arrived as two gestures. Freezing settles it without either constant.
+		const seen: Gesture[] = [];
+		const resolver = new TapResolver((gesture) => seen.push(gesture), 60);
+
+		resolver.press(false); // a press lands, and waits to see if it had a partner
+		await wait(20);
+		resolver.hold(); // a second press begins before the window closed
+		await wait(150); // well past the window it would have expired in
+
+		assert.deepEqual(seen, [], "nothing may resolve while a finger is still on the control");
+		assert.equal(resolver.pending, true, "the press is still pending — it is simply not counting down");
+
+		resolver.cancel(); // what the long press does when it fires
+		assert.deepEqual(seen, [], "and the hold drops it rather than letting it land afterwards");
+	});
+
+	it("still pairs two presses when the second one is a quick release", async () => {
+		// The other half: freezing must not cost the double press. The second press arrives as a hold
+		// followed by a release, and the release has to find the frozen one and pair with it.
+		const seen: Gesture[] = [];
+		const resolver = new TapResolver((gesture) => seen.push(gesture), 60);
+
+		resolver.press(false);
+		await wait(20);
+		resolver.hold();
+		resolver.press(false);
+		await wait(150);
+
+		assert.deepEqual(seen, ["reset"], "two presses are still one reset, not a toggle apiece");
+	});
+
+	it("leaves a lone press alone — a press that begins with nothing pending freezes nothing", async () => {
+		const seen: Gesture[] = [];
+		const resolver = new TapResolver((gesture) => seen.push(gesture), 60);
+
+		resolver.hold(); // the finger lands; there is nothing waiting
+		resolver.press(false);
+		await wait(150);
+
+		assert.deepEqual(seen, ["toggle"], "one press is still one toggle");
 	});
 
 	it("pairs two presses a real finger's width apart, and does not toggle as well", async () => {

@@ -140,14 +140,26 @@ describe("Timer", () => {
 		assert.equal(formatDuration(timer.remainingMs), "4:57");
 	});
 
-	it("keeps a paused clock paused when it is wound down to the floor", () => {
+	it("winds a paused clock down to nothing, rather than to the preset floor", () => {
+		// MIN_DURATION_MS is the shortest a *preset* may be, and time left on a clock is not a preset.
+		// Clamping here answered a click of "less" with 600 ms more, on a clock inside its last second.
 		const { timer, advance } = at(0, 300);
 		timer.start();
 		advance(4);
 		timer.pause();
 		timer.adjust(-999_999);
-		assert.equal(timer.status, "paused");
-		assert.equal(timer.remainingMs, MIN_DURATION_MS);
+		assert.equal(timer.status, "paused", "a turn of the dial must not un-pause the clock");
+		assert.equal(timer.remainingMs, 0);
+		assert.equal(timer.durationMs, 300_000, "and the preset behind it is untouched");
+	});
+
+	it("lets a running clock be wound down to nothing, which retires it like any other elapse", () => {
+		const { timer, advance } = at(0, 300);
+		timer.start();
+		advance(10);
+		timer.adjust(-999_999);
+		assert.equal(timer.status, "elapsed", "winding a running clock to zero is a finish");
+		assert.equal(timer.remainingMs, 0);
 	});
 
 	it("keeps progress meaningful when a running timer is extended beyond its duration", () => {
@@ -156,6 +168,25 @@ describe("Timer", () => {
 		advance(10);
 		timer.adjust(120_000);
 		assert.ok(timer.progress >= 0 && timer.progress <= 1, `progress out of range: ${timer.progress}`);
+	});
+
+	it("leaves the duration alone on a started clock, so an adjustment can be undone", () => {
+		// The duration used to be ratcheted up to meet a clock wound above it, to keep `progress` in
+		// range. The ratchet was one-way, so a turn up and an equal turn down put the clock back
+		// exactly and left the duration somewhere it had never been — and `reset` restores the
+		// duration, so the next repeat lap ran the high-water mark instead of the preset.
+		const { timer, advance } = at(0, 120);
+		timer.start();
+		advance(20);
+
+		timer.adjust(180_000);
+		assert.equal(timer.durationMs, 120_000, "winding a running clock up must not redefine its length");
+		assert.equal(timer.progress, 0, "progress pins at full rather than going negative");
+
+		timer.adjust(-180_000);
+		assert.equal(timer.remainingMs, 100_000, "the clock comes back to exactly where it was");
+		assert.equal(timer.durationMs, 120_000, "and so does everything behind it");
+		assert.equal(Number(timer.progress.toFixed(3)), 0.167, "including the ring");
 	});
 
 	it("clamps adjustments to a sane range", () => {

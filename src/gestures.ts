@@ -62,20 +62,29 @@ export const DOUBLE_PRESS_MS = 500;
  * How long a press must be held to count as a long one rather than a tap. Only used where the
  * hardware does not decide for itself — the touchscreen reports `hold` on the event, a key does not.
  *
- * **It has to stay longer than every double-press window, and on the key the margin is now 100 ms.**
- * A hold is what settles a press still waiting to see whether it had a partner; a window that
- * outlasted the hold would resolve that press as a toggle first and then fire the hold as well, so
- * one gesture would arrive as two. `test/gestures.test.ts` asserts the ordering for both controls.
+ * **This no longer has to outlast the double-press windows, and it never actually did.** The claim
+ * used to be that a hold settles a press still waiting on a partner, so a window outlasting the hold
+ * would resolve that press as a toggle and then fire the hold as well. The reasoning was sound and
+ * the inequality was backwards: a pending press starts at the *previous* release and the hold starts
+ * at the *next* press, so the pending one always expired first however the two constants were set,
+ * and the cancel in the hold's callback was dead code. Press, then press-and-hold, measured against
+ * the built bundle, answered `["start", "preset · 5m"]`.
  *
- * This matters because {@link DOUBLE_PRESS_MS} is the number most likely to be changed next: it was
- * chosen against a mock host and wants confirming on real hardware, and the direction it would move
- * is up. At 600 or beyond it stops being a tuning change and becomes a redesign of the key's
- * gestures — the assertion is strict, so an equal pair breaks it just as a longer window would.
+ * {@link TapResolver.hold} fixes it at the source — a press cannot resolve while a finger is down —
+ * which leaves both constants free to be tuned on feel alone. {@link DOUBLE_PRESS_MS} was the one
+ * most likely to move, and it can now move in either direction without breaking a gesture.
  */
 export const LONG_PRESS_MS = 600;
 
 export class TapResolver {
 	#handle: NodeJS.Timeout | null = null;
+
+	/**
+	 * Set when {@link TapResolver.hold} stopped the clock on a press that was still waiting for a
+	 * partner. The press is every bit as pending as it was — it simply is not counting down, because
+	 * a finger is on the control and whatever that finger does next will settle it.
+	 */
+	#frozen = false;
 
 	readonly #emit: (gesture: Gesture) => void;
 
@@ -92,7 +101,33 @@ export class TapResolver {
 
 	/** True while a tap is being held back, waiting to see whether a second one follows. */
 	get pending(): boolean {
-		return this.#handle !== null;
+		return this.#handle !== null || this.#frozen;
+	}
+
+	/**
+	 * **A new press has begun, so a press still waiting on a partner stops counting down.**
+	 *
+	 * Only a control that reports its presses as a down and an up can call this, which on this plugin
+	 * means the key: the touchscreen reports a completed tap and nothing else, so there is no moment
+	 * at which a finger is known to be resting on it.
+	 *
+	 * It exists because the window and the hold were racing, and the window always won. A pending
+	 * press starts at the *previous* release, so it expires `DOUBLE_PRESS_MS` after that; the hold
+	 * belongs to the *next* press and cannot fire until `LONG_PRESS_MS` after it began, which is
+	 * necessarily later. So `taps.cancel()` in the hold's own callback could never cancel anything,
+	 * and a press followed by a held press arrived as **toggle, then next** — the clock started *and*
+	 * the preset moved. That is precisely the outcome the comment on `LONG_PRESS_MS` claimed the
+	 * ordering prevented; the ordering guaranteed it.
+	 *
+	 * Freezing settles it without touching either constant, and removes the ordering requirement
+	 * altogether: nothing can resolve while a finger is down, so the hold is always free to win.
+	 */
+	hold(): void {
+		if (this.#handle !== null) {
+			clearTimeout(this.#handle);
+			this.#handle = null;
+			this.#frozen = true;
+		}
 	}
 
 	/**
@@ -108,7 +143,7 @@ export class TapResolver {
 			return;
 		}
 
-		if (this.#handle !== null) {
+		if (this.pending) {
 			this.cancel();
 			this.#emit("reset");
 			return;
@@ -120,11 +155,12 @@ export class TapResolver {
 		}, this.#windowMs);
 	}
 
-	/** Drops a tap still waiting on its partner, without emitting anything. */
+	/** Drops a tap still waiting on its partner, frozen or not, without emitting anything. */
 	cancel(): void {
 		if (this.#handle !== null) {
 			clearTimeout(this.#handle);
 			this.#handle = null;
 		}
+		this.#frozen = false;
 	}
 }

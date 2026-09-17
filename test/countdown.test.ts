@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { Countdown } from "../src/countdown.ts";
+import { BLINK_MS, Countdown } from "../src/countdown.ts";
 import { FLASH_MS, formatDelta, TOAST_MS } from "../src/feedback.ts";
 import { normaliseSettings } from "../src/settings.ts";
 
@@ -73,14 +73,17 @@ describe("the gestures a countdown answers to", () => {
 	});
 
 	it("resets a running timer that was dialled off its preset back to the preset", () => {
-		// Adjusting while running only nudges the time left, but it raises the duration as a ceiling —
-		// so the running case drifts by a different route and has to land in the same place.
+		// A nudge to a *running* clock moves the time left and deliberately leaves the duration — and
+		// so the preset behind it — untouched, which is why this case is not `drifted`. It still has
+		// to land back on the preset, by the same reset, so that both routes end in one place.
 		const { countdown, advance } = fixture([300, 1200]);
 
 		countdown.toggle();
 		advance(30_000);
 		countdown.adjust(600);
-		assert.equal(countdown.drifted, true, "precondition: the ceiling moved past the preset");
+		assert.equal(countdown.timer.status, "running", "precondition: running");
+		assert.equal(countdown.timer.remainingMs, 870_000, "precondition: nudged well off where it was");
+		assert.equal(countdown.drifted, false, "nudging a running clock must not redefine its preset");
 
 		countdown.reset();
 
@@ -229,7 +232,9 @@ describe("holding for the next preset", () => {
 
 		countdown.toggle();
 		countdown.adjust(5);
-		assert.equal(countdown.drifted, true, "precondition: dialled off the preset");
+		// Not `drifted` — a nudge to a started clock leaves the duration alone. It is `onPreset` that
+		// decides whether a hold restores or advances, and a clock that has been started is not on it.
+		assert.equal(countdown.onPreset, false, "precondition: started, so there is something to put right");
 
 		countdown.cyclePreset();
 		assert.equal(countdown.presetIndex, 0, "the first press does not move on");
@@ -331,6 +336,57 @@ describe("the lap counter", () => {
 			countdown.settle();
 		}
 	}
+
+	it("does not restart the repeat tally when the count changes mid-run", () => {
+		// Raising the count while the timer was running put `#completed` back to zero, so the laps
+		// already run were run again: a count raised from 3 to 4 on the third lap produced SIX runs,
+		// labelled `×1/4` on a lap that was really the third. The inspector emits a settings write on
+		// every keystroke while a number is typed over, so this fired without anyone meaning it to.
+		const base = { presets: [2], presetIndex: 0, repeat: true, repeatCount: 3, soundId: "none" };
+		let now = 1_000_000;
+		const countdown = new Countdown(normaliseSettings(base), () => now);
+
+		countdown.toggle();
+		let runs = 0;
+		for (let i = 0; i < 4 && runs < 2; i++) {
+			now += 2_000;
+			if (countdown.settle()) {
+				runs += 1;
+			}
+		}
+		assert.equal(runs, 2, "precondition: two of three laps done, on the third");
+		assert.equal(countdown.lap, 3);
+
+		countdown.applySettings({ ...base, repeatCount: 4 });
+		assert.equal(countdown.lap, 3, "the laps already run still count towards the new total");
+
+		for (let i = 0; i < 20 && countdown.timer.status !== "elapsed"; i++) {
+			now += 2_000;
+			if (countdown.settle()) {
+				runs += 1;
+			}
+		}
+		assert.equal(runs, 4, "four runs for a count of four, not six");
+	});
+
+	it("does clear a finished timer's repeat tally, which is the case that reasoning was for", () => {
+		// The positive control for the gate above: on a clock that has already finished, the tally
+		// belongs to a rule that no longer exists and must go, or the label reads `×3/5` on a dead
+		// clock — three laps counted against a total they were never run under.
+		const base = { presets: [2], presetIndex: 0, repeat: true, repeatCount: 3, soundId: "none" };
+		let now = 1_000_000;
+		const countdown = new Countdown(normaliseSettings(base), () => now);
+
+		countdown.toggle();
+		for (let i = 0; i < 6 && countdown.timer.status !== "elapsed"; i++) {
+			now += 2_000;
+			countdown.settle();
+		}
+		assert.equal(countdown.finished, true, "precondition: the whole job is over");
+
+		countdown.applySettings({ ...base, repeatCount: 5 });
+		assert.equal(countdown.lap, 1, "the new rule starts from the beginning of itself");
+	});
 
 	it("counts a total, not a number of repeats", () => {
 		// The off-by-one this closes: `repeatCount` was compared against repeats *made*, so the third
@@ -617,7 +673,15 @@ describe("acknowledgement", () => {
 
 describe("the end-of-timer fade", () => {
 	function fading(presetSeconds: number, warnSeconds: number): ReturnType<typeof fixture> {
-		let now = 1_000_000;
+		// **Started deliberately on the DIM half of the blink**, not on a round second.
+		//
+		// `dimmed` ends in `Math.floor(now / BLINK_MS) % 2 === 1`, and BLINK_MS divides 1000 — so on a
+		// clock starting at a whole second and advanced by whole seconds, that expression is `false` at
+		// every instant a test could sample. Three of the tests below assert `dimmed === false`, which
+		// made them true by arithmetic rather than by the guards they were written for: deleting the
+		// half-duration cap on line 181 of `src/countdown.ts` — a bug that actually shipped once — left
+		// all four of them green. Offset by half a blink, a `false` can only come from a guard.
+		let now = 1_000_000 + BLINK_MS;
 		const countdown = new Countdown(
 			normaliseSettings({ presets: [presetSeconds], presetIndex: 0, warnEnabled: true, warnSeconds }),
 			() => now
@@ -626,10 +690,20 @@ describe("the end-of-timer fade", () => {
 	}
 
 	it("stays off entirely when the fade is switched off", () => {
-		const { countdown, advance } = fixture([20]);
+		// Built like `fading`, but with the fade off — and then wound to a moment that is inside the
+		// window AND on the dim half of the blink, so `warnEnabled` is the only thing left that can
+		// keep it off. It used to run on the shared fixture's whole-second clock, well outside any
+		// window, so it passed with its own guard deleted and with the fade left switched on.
+		let now = 1_000_000 + BLINK_MS;
+		const countdown = new Countdown(
+			normaliseSettings({ presets: [20], presetIndex: 0, warnEnabled: false, warnSeconds: 20 }),
+			() => now
+		);
+
 		countdown.toggle();
-		advance(19_000);
-		assert.equal(countdown.dimmed, false);
+		now += 19_000;
+
+		assert.equal(countdown.dimmed, false, "the fade is off, so nothing else about the clock matters");
 	});
 
 	it("stays off on a stopped timer, however little is left on it", () => {
@@ -711,7 +785,9 @@ describe("settings arriving from the inspector", () => {
 		// touch of the volume slider and silently undo the adjustment.
 		const { countdown } = fixture();
 
-		countdown.toggle();
+		// Dialled while STOPPED, which is the case that genuinely moves the duration off the preset and
+		// therefore the case this trap is about. Nudging a running clock no longer touches the duration
+		// at all, so it could not trip a reload keyed on the two disagreeing.
 		countdown.adjust(5);
 		const dialled = countdown.timer.durationMs;
 		assert.equal(countdown.drifted, true, "precondition: dialled off the preset");
