@@ -1,6 +1,7 @@
 import streamDeck from "@elgato/streamdeck";
 
 import { DialCountdown } from "./actions/dial-countdown";
+import { startHealthLog } from "./health";
 import { KeyCountdown } from "./actions/key-countdown";
 
 /**
@@ -19,6 +20,10 @@ declare const __DEV__: boolean;
  * where it is worth having.
  */
 streamDeck.logger.setLevel(__DEV__ ? "trace" : "info");
+
+// One line a minute saying what this plugin is costing the machine, and a warning the moment the
+// event loop runs late enough to change what a gesture means. See `./health`.
+startHealthLog(streamDeck.logger);
 
 streamDeck.actions.registerAction(new DialCountdown());
 streamDeck.actions.registerAction(new KeyCountdown());

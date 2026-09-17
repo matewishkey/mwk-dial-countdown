@@ -20,6 +20,7 @@ import streamDeck, {
 
 import { Countdown } from "../countdown";
 import { FLASH_MS } from "../feedback";
+import { recordRefresh, setControlCount } from "../health";
 import { DOUBLE_TAP_MS, type Gesture, TapResolver } from "../gestures";
 import { NO_SOUND, normaliseSettings, type DialCountdownSettings } from "../settings";
 import { listSounds, playSound, resolveSound, soundExists, wantsSound } from "../sound";
@@ -175,6 +176,7 @@ export abstract class CountdownAction<
 		instance.taps = new TapResolver((gesture) => this.perform(instance, gesture), this.tapWindowMs);
 
 		this.#instances.set(ev.action.id, instance);
+		setControlCount(this.controller, this.#instances.size);
 		instance.renderHandle = setInterval(() => this.refresh(instance), RENDER_INTERVAL_MS);
 		this.attach(instance);
 		this.refresh(instance, true);
@@ -233,6 +235,7 @@ export abstract class CountdownAction<
 		}
 
 		this.#instances.delete(instance.action.id);
+		setControlCount(this.controller, this.#instances.size);
 	}
 
 	/**
@@ -351,6 +354,12 @@ export abstract class CountdownAction<
 
 	/** One turn of the render loop: move an elapsed timer on, sound its alert, then draw. */
 	protected refresh(instance: I, force = false): void {
+		const startedAt = performance.now();
+		this.#refresh(instance, force);
+		recordRefresh(performance.now() - startedAt);
+	}
+
+	#refresh(instance: I, force: boolean): void {
 		if (instance.countdown.settle()) {
 			const { settings } = instance.countdown;
 			const path = resolveSound(settings);

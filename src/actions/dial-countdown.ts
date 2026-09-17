@@ -14,6 +14,7 @@ import { dialLabel } from "../label";
 import { asDataUri, renderGlyph, renderRing, ringColour, themeFor } from "../render";
 import type { DialCountdownSettings } from "../settings";
 import { formatClockTime, formatDuration } from "../timer";
+import { recordFrame } from "../health";
 import { CountdownAction, type Instance } from "./countdown-action";
 
 export type { DialCountdownSettings };
@@ -288,6 +289,7 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 						finish: footer
 					};
 
+		recordFrame();
 		instance.action.setFeedback(feedback).catch((err) => streamDeck.logger.error("Failed to set feedback", err));
 	}
 }

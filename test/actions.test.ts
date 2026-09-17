@@ -29,6 +29,7 @@ import { describe, it } from "node:test";
 import type { DialAction, KeyAction } from "@elgato/streamdeck";
 
 import { CountdownAction, type Instance } from "../src/actions/countdown-action.ts";
+import { recordRefresh, setControlCount, startHealthLog } from "../src/health.ts";
 import type { Countdown } from "../src/countdown.ts";
 import type { Gesture } from "../src/gestures.ts";
 import { normaliseSettings, type DialCountdownSettings } from "../src/settings.ts";
@@ -290,6 +291,35 @@ describe("an action's lifecycle", () => {
 		} finally {
 			dial.onWillDisappear({ action });
 		}
+	});
+
+	it("reports its render passes to the health log, so a slow one has somewhere to show up", async () => {
+		// The wiring, not the reporting: `health.ts` is tested on its own, and this is the other half —
+		// that the render loop actually calls into it. Without this the report would be live, correct
+		// and permanently reading `slowest-render 0ms`, which is the most misleading of the three
+		// possible failures because it looks like a clean bill of health.
+		const seen: string[] = [];
+		const stop = startHealthLog(
+			{ info: (m) => void seen.push(m), warn: () => {} },
+			{ reportIntervalMs: 400, lagSampleMs: 50 }
+		);
+		const dial = driver();
+		const { action } = fakeDial("health-1");
+
+		recordRefresh(0); // clear the high-water mark left by any earlier test in this file
+		setControlCount("Keypad", 0); // and any count a health test in another file left behind
+		try {
+			dial.onWillAppear({ action, payload: { settings: normaliseSettings({ presets: [300] }) } });
+			await wait(700); // a few turns of the 250ms render loop
+		} finally {
+			dial.onWillDisappear({ action });
+			stop();
+		}
+
+		const line = seen.at(-1) ?? "";
+		assert.match(line, /controls [1-9]/, `the control must be counted while it is on screen: ${line}`);
+		const slowest = Number(/slowest-render ([\d.]+)ms/.exec(line)?.[1] ?? "0");
+		assert.ok(slowest > 0, `the render loop must report how long it took, and the line reads: ${line}`);
 	});
 
 	it("stops drawing once the control has gone", async () => {
