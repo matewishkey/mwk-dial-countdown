@@ -17,6 +17,43 @@ renamed, and rewriting it would make the history describe a repo that never exis
 
 ## [Unreleased]
 
+## [3.7.0] — 2026-09-17
+
+### Added
+
+- **The health line now times the round trip to Stream Deck, which is how a busy *application* is told
+  from a busy plugin.** Asked the obvious question — what if something else on the machine is blocking
+  it — and the honest answer needed a number that did not exist yet.
+
+  **Nothing another plugin does can block this one directly.** Every Stream Deck plugin runs in its
+  own process, so another plugin misbehaving cannot stall this one's event loop; `lag` would stay
+  clean straight through it. What *is* shared is the Stream Deck application and the one USB device
+  behind it — and a plugin flooding that would leave every number in this report looking healthy while
+  the hardware crawled. No measurement taken inside this process could see it.
+
+  `rtt` can, because it is the application's own answering time:
+
+  ```
+  health: cpu 0.4% rss 71MB controls 12 frames 9.3/s lag 2ms slowest-render 0.8ms rtt 92ms
+  ```
+
+  | what the line says | what it means |
+  | --- | --- |
+  | `cpu` high | this plugin, and this plugin's to fix |
+  | `lag` high, `cpu` low | this process is blocked or starved — something else is taking the machine |
+  | `rtt` high, `cpu` and `lag` low | the Stream Deck application or the device, not this plugin |
+  | all low, device still slow | not the software at either end of this link |
+
+### Internal
+
+- The probe asks for the **global** settings, which this plugin does not use and has no handler for.
+  Asking for an action's settings would have worked equally well and would have fired this plugin's
+  own `didReceiveSettings` once a minute, re-applying settings nobody had touched — a measurement that
+  alters what it measures. It is raced against a five second timeout, and a probe that fails or never
+  returns is reported in the line rather than thrown, because a round trip that cannot complete is the
+  most interesting thing the line could say.
+
+
 ## [3.6.0] — 2026-09-17
 
 ### Added
@@ -864,7 +901,8 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.6.0...HEAD
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.7.0...HEAD
+[3.7.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.7.0
 [3.6.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.6.0
 [3.5.1]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.5.1
 [3.5.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.5.0
