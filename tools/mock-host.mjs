@@ -32,6 +32,39 @@ const CONTEXT = "mock-context-dial-0";
 const KEY_CONTEXT = "mock-context-key-0";
 const PORT = Number(process.env.MOCK_PORT ?? 34567);
 
+/**
+ * Every ✓/✗ the scripted pass prints, counted.
+ *
+ * **The ✗ used to be decorative.** This file ended in an unconditional `process.exit(0)`, nothing read
+ * the marks back, and `release.mjs` judges the demo step by its exit code alone — so a pass that was
+ * wall-to-wall ✗ was recorded as a gate passed, and the release page said "all gates passed". v3.4.2
+ * shipped that way, carrying two failures nobody was shown. `npm run check` does not run the demo at
+ * all, so this is the only place those checks are ever executed.
+ *
+ * Counted by watching what is printed rather than by threading a helper through all thirty-odd call
+ * sites. That is deliberate: the rule "a line that reports a verdict is a verdict" is total, so a
+ * check added later is counted without anyone remembering to opt it in — which is exactly how the
+ * marks came to be ignored in the first place.
+ */
+/**
+ * The three words a press can be answered with. Which one you get depends on the state the step
+ * before left behind, so a check that a press was HEARD asserts membership rather than a literal —
+ * two checks here have gone green or red for the wrong reason by pinning one of these.
+ */
+const PRESS_WORDS = ["start", "resume", "pause"];
+
+const tally = { passed: 0, failed: 0 };
+const emit = console.log.bind(console);
+console.log = (...args) => {
+	const text = args.map(String).join(" ");
+	if (text.includes("\u2713")) {
+		tally.passed += 1;
+	} else if (text.includes("\u2717")) {
+		tally.failed += 1;
+	}
+	emit(...args);
+};
+
 /** `--demo` replays a fixed gesture sequence and exits, for CI and for showing the thing off. */
 const DEMO = process.argv.includes("--demo");
 
@@ -43,6 +76,12 @@ const DEMO = process.argv.includes("--demo");
  * either well inside it or a second apart.
  */
 const KEY_WINDOW_MS = 500;
+
+/**
+ * How long the key holds a press before calling it a hold, mirrored for the same reason. The truth is
+ * `LONG_PRESS_MS` in `src/gestures.ts`.
+ */
+const LONG_PRESS_MS = 600;
 
 /** Mirrors the RegistrationInfo the real application passes in via `-info`. */
 const INFO = {
@@ -373,6 +412,23 @@ const gestures = {
 			device: DEVICE_ID,
 			payload: { controller: "Encoder", coordinates: { column: 0, row: 0 }, settings, hold, tapPos: [100, 50] }
 		}),
+	/** A page or profile flip: the control leaves the screen and comes back. */
+	dialDisappear: () =>
+		send({
+			event: "willDisappear",
+			action: ACTION_UUID,
+			context: CONTEXT,
+			device: DEVICE_ID,
+			payload: { controller: "Encoder", coordinates: { column: 0, row: 0 }, isInMultiAction: false, settings }
+		}),
+	dialAppear: () =>
+		send({
+			event: "willAppear",
+			action: ACTION_UUID,
+			context: CONTEXT,
+			device: DEVICE_ID,
+			payload: { controller: "Encoder", coordinates: { column: 0, row: 0 }, isInMultiAction: false, settings }
+		}),
 	keyDown: () =>
 		send({
 			event: "keyDown",
@@ -416,6 +472,26 @@ function size(toast) {
 }
 
 /** Spins the dial repeatedly, the way a wrist does. */
+/**
+ * Waits for the screen to reach a state, rather than for a duration.
+ *
+ * A check that sleeps a fixed number of milliseconds and then samples is betting on how long the
+ * plugin, the socket and this process will take — and the auto-reset check lost that bet often
+ * enough to print ✗ on a plugin that was working, for as long as nobody was reading the ✗.
+ *
+ * @returns whether the state arrived before the deadline, so the caller can say which it was.
+ */
+async function until(predicate, timeoutMs = 8_000) {
+	const deadline = Date.now() + timeoutMs;
+	while (Date.now() < deadline) {
+		if (predicate()) {
+			return true;
+		}
+		await wait(50);
+	}
+	return false;
+}
+
 async function spin(events, ticks, gapMs) {
 	for (let i = 0; i < events; i++) {
 		gestures.rotate(ticks);
@@ -585,7 +661,11 @@ async function runDemo() {
 				await wait(500);
 				console.log(`\n   held the dial 1.5s, then let go: it said "${screen.finish}"`);
 				console.log(
-					`   ${screen.finish === "start" ? "\u2713 the same as a quick press, with no third meaning to learn" : `\u2717 a long hold meant something else: "${screen.finish}"`}`
+					// Any of the three words a press can answer with. It used to demand "start", but the
+					// step before this one leaves the clock PAUSED, where a press correctly says
+					// "resume" — so this printed ✗ on every run of a plugin that was behaving. It went
+					// unnoticed for as long as the ✗ was decorative.
+					`   ${PRESS_WORDS.includes(screen.finish) ? "\u2713 the same as a quick press, with no third meaning to learn" : `\u2717 a long hold meant something else: "${screen.finish}"`}`
 				);
 			}
 		],
@@ -700,7 +780,6 @@ async function runDemo() {
 				// freezes the clock rather than moving it. "Was there a word at all" is wrong because
 				// the swallowed press was not silent after all — the zero-tick rotation it was eaten by
 				// announced itself as `+0s`, which is a word, and the check went green on it.
-				const PRESS_WORDS = ["start", "resume", "pause"];
 				const before = screen.value;
 				gestures.dialDown();
 				await wait(40);
@@ -713,6 +792,34 @@ async function runDemo() {
 				console.log(`\n   the press was answered with "${word}", on a clock reading ${before}`);
 				console.log(
 					`   ${PRESS_WORDS.includes(word) ? "\u2713 the press survived a zero-tick rotation" : `\u2717 swallowed — "${word}" is the rotation talking, not the press`}`
+				);
+			}
+		],
+
+		// An action is torn down and rebuilt on every page and profile flip, and the rebuilt one starts
+		// with no memory of a press already in progress — but the COUNTDOWN is parked and handed back,
+		// so a release arriving after the flip landed on a real clock. Holding the dial in is how you
+		// ask for minutes, so the gesture interrupted here is a common one, not a contrived one.
+		[
+			"flip away mid-press, flip back, let go → the stray release is not a press",
+			async () => {
+				applySettings({ presets: [600], presetIndex: 0 });
+				await wait(400);
+				const stopped = screen.value;
+
+				gestures.dialDown();
+				await wait(60);
+				gestures.dialDisappear();
+				await wait(200);
+				gestures.dialAppear();
+				await wait(400);
+				gestures.dialUp();
+				await wait(500);
+
+				const started = await until(() => screen.value !== stopped, 1500);
+				console.log(`\n   clock was ${stopped}, and after the stray release it is ${screen.value}`);
+				console.log(
+					`   ${started ? `\u2717 the release started the clock — it is now ${screen.value}` : "\u2713 a release with no press behind it does nothing"}`
 				);
 			}
 		],
@@ -966,15 +1073,20 @@ async function runDemo() {
 				});
 				await wait(300);
 				gestures.touch(false);
-				await wait(3400);
-				const atFinish = `${screen.value} / "${screen.label}" / glyph "${screen.glyph}"`;
-				const finished = screen.label.includes("done") && screen.glyph === "done";
 
-				await wait(1400);
+				// Waited for, not slept through. This used to sample 3.4 s after the tap and call that
+				// the finish; when anything upstream ran slow the clock still had a second on it, and
+				// the check reported a timer that had failed to clear while it was in fact still
+				// counting down. It printed ✗ in the v3.4.2 release run for exactly that reason.
+				const finished = await until(() => screen.label.includes("done") && screen.glyph === "done");
+				const atFinish = `${screen.value} / "${screen.label}" / glyph "${screen.glyph}"`;
+
+				const cleared = await until(() => screen.glyph === "logo" && screen.value === "0:03");
+
 				console.log(`\n   at the finish: ${atFinish}`);
-				console.log(`   a second later: ${screen.value} / "${screen.label}" / glyph "${screen.glyph}"`);
+				console.log(`   after the auto-reset: ${screen.value} / "${screen.label}" / glyph "${screen.glyph}"`);
 				console.log(
-					`   ${finished && screen.glyph === "logo" && screen.value === "0:03" ? "\u2713 done was shown, then the clock went back to full and idle on its own" : "\u2717 the finished timer did not clear itself"}`
+					`   ${finished && cleared ? "\u2713 done was shown, then the clock went back to full and idle on its own" : `\u2717 ${finished ? "it showed done but never cleared" : "it never reached done at all"}`}`
 				);
 			}
 		],
@@ -1061,6 +1173,74 @@ async function runDemo() {
 				);
 			}
 		],
+		// The clock starts AND the preset advances, from one press-and-hold. taps.press() is only ever
+		// reached from keyUp, so a pending press starts at the PREVIOUS release while the hold starts
+		// at the NEXT press — the pending one always expired first, and the cancel in the hold's own
+		// callback was dead code. Only the built bundle can show this: KeyCountdown's handlers carry
+		// an @action decorator and cannot be imported into a unit test.
+		[
+			"key: a press, then a press-and-hold → the hold wins, and only the hold",
+			async () => {
+				applySettings({ presets: [540, 1200], presetIndex: 0 });
+				await wait(500);
+				// Reset first, so the clock is idle and sitting on its preset however the step before
+				// this one left it — an unchanged duration is not a reload, so applySettings alone does
+				// not guarantee it, and a hold on a clock that is NOT on its preset restores instead of
+				// advancing. That is what made the first version of this check fail on working code.
+				await doubleTap(() => keyPress(60));
+				await wait(KEY_WINDOW_MS + 400);
+
+				// **Asserted on the words, not on where the clock ends up.** Both the right answer and
+				// the wrong one land on 20:00 and stopped, because advancing a preset stops the clock —
+				// so the end state cannot tell one gesture from two. Only the acknowledgement can: the
+				// bug says `start` on its way past.
+				const words = [];
+				let last = key.caption;
+				const recorder = setInterval(() => {
+					if (key.caption !== last) {
+						last = key.caption;
+						words.push(last);
+					}
+				}, 40);
+
+				await keyPress(60); // a press, left waiting to see if it had a partner
+				await wait(200); // a second press begins, inside that window
+				await keyPress(LONG_PRESS_MS + 250); // ...and is held
+				await wait(900);
+				clearInterval(recorder);
+
+				const started = words.some((word) => PRESS_WORDS.includes(word));
+				console.log(`\n   the key said, in order: ${JSON.stringify(words)}`);
+				console.log(
+					`   ${started ? `\u2717 two gestures from one press-and-hold: ${JSON.stringify(words)}` : "\u2713 the hold settled the press waiting behind it, and acted alone"}`
+				);
+			}
+		],
+
+		// onKeyDown armed a long-press timer without clearing the previous one, so a keyDown with no
+		// keyUp between left a live orphan that nothing could cancel — and both handles fired, so the
+		// preset advanced twice from one hold.
+		[
+			"key: a repeated key-down does not leave a second long-press armed",
+			async () => {
+				applySettings({ presets: [300, 600, 1200], presetIndex: 0 });
+				await wait(500);
+				const before = key.value;
+
+				gestures.keyDown();
+				await wait(80);
+				gestures.keyDown(); // the pairing Stream Deck normally guarantees, and this must not rely on
+				await wait(LONG_PRESS_MS + 400);
+				gestures.keyUp();
+				await wait(900);
+
+				console.log(`\n   clock was ${before}, and after the doubled key-down it is ${key.value}`);
+				console.log(
+					`   ${key.value === "10:00" ? "\u2713 one hold, one preset" : `\u2717 the preset moved more than once — landed on ${key.value}`}`
+				);
+			}
+		],
+
 		[
 			"key: two presses → back to full, and NOT started",
 			async () => {
@@ -1110,9 +1290,20 @@ async function runDemo() {
 		keyFrame();
 	}
 
-	console.log("\nScripted pass complete.\n");
+	// A pass that asserted nothing is a failure, not a success — an empty tally is what a harness that
+	// died early, or was refactored into silence, looks like, and it is indistinguishable from a clean
+	// run by exit code alone. That is the shape this whole change exists to stop.
+	const ran = tally.passed + tally.failed;
+	const verdict =
+		ran === 0
+			? "asserted NOTHING"
+			: tally.failed === 0
+				? "all checks passed"
+				: `${tally.failed} of ${ran} checks FAILED`;
+	emit(`\nScripted pass complete — ${verdict}.\n`);
+
 	plugin.kill();
-	process.exit(0);
+	process.exit(tally.failed === 0 && ran > 0 ? 0 : 1);
 }
 
 // ── Keyboard driving ─────────────────────────────────────────────────────────

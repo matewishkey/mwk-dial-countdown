@@ -23,6 +23,25 @@ streamDeck.logger.setLevel(__DEV__ ? "trace" : "info");
 streamDeck.actions.registerAction(new DialCountdown());
 streamDeck.actions.registerAction(new KeyCountdown());
 
-// `void`, not ignored: `connect` returns a promise, and if it rejects the plugin has no Stream Deck
-// to talk to and nothing useful left to do — including logging, which goes back down the same pipe.
-void streamDeck.connect();
+/**
+ * **The process's own safety net, because the SDK's is a single use.**
+ *
+ * `@elgato/streamdeck` installs its uncaught-exception handler with `process.once`, so the first
+ * throw anywhere in the plugin logs a line and *removes* it. Everything after that is unhandled. That
+ * matters here more than in most plugins: the render loop is a 4 Hz `setInterval` per visible
+ * control, so a deterministic throw inside it recurs 250 ms later with no handler left and takes
+ * every control's countdown down with it — a timer losing its count being the single worst thing this
+ * plugin can do.
+ *
+ * `on`, not `once`, and both kinds: under Node's default `--unhandled-rejections=throw` a rejection
+ * with no listener is raised as an uncaught exception, so the two share one budget.
+ */
+process.on("uncaughtException", (err) => streamDeck.logger.error("Uncaught exception", err));
+process.on("unhandledRejection", (reason) => streamDeck.logger.error("Unhandled rejection", reason));
+
+// **Logged, not swallowed.** This used to be a bare `void` on the reasoning that a failed connection
+// leaves nothing useful to do "including logging, which goes back down the same pipe". That is not
+// where logging goes: the SDK writes to a file target under the plugin's own directory, and only adds
+// a console target in debug mode. A connect failure was perfectly loggable and was going unlogged —
+// and, before the handlers above, was also spending the process's one free pass.
+streamDeck.connect().catch((err) => streamDeck.logger.error("Failed to connect to Stream Deck", err));
