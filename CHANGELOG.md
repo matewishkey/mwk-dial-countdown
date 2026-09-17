@@ -17,6 +17,46 @@ renamed, and rewriting it would make the history describe a repo that never exis
 
 ## [Unreleased]
 
+## [3.8.0] — 2026-09-17
+
+### Added
+
+- **The health line now reports the machine's own load, not just this plugin's.** Because the next
+  thing reported was that *other applications were lagging too* — and every number in this report so
+  far was about this plugin, all of which read perfectly healthy on a machine that is on its knees. A
+  starved process uses little CPU precisely *because* it is not being scheduled, so the line would
+  have said `cpu 0.2%` and looked like an exoneration when it was a symptom.
+
+  ```
+  health: cpu 0.4% rss 71MB controls 12 frames 9.3/s lag 2ms slowest-render 0.8ms rtt 92ms
+          | machine: cpu 1% free-mem 23.4/31GB
+  ```
+
+  Everything before the bar is this plugin. Everything after it is the computer. **If the machine's
+  CPU is high or its free memory is nearly gone while this plugin's own numbers are small, the plugin
+  is a victim rather than a cause** — and the same line proves it, out of a log you are already
+  collecting.
+
+- **A Diagnostics section in the property inspector, showing the latest reading and where the log
+  lives.** Open the inspector for any countdown and it is at the bottom: the most recent health line,
+  the full path to the log folder, and a button to copy that path.
+
+  It exists because the honest answer to "where do I read this?" was several lines long and began with
+  "it depends on your platform and how Stream Deck was installed". The plugin does not have to guess —
+  Stream Deck launches it from inside its own folder, so it simply reports where it is.
+
+### Internal
+
+- **The machine's CPU is derived from per-core times rather than a load average**, because
+  `os.loadavg()` returns zeroes on Windows and this number has to mean the same thing on both
+  platforms.
+
+- **The test for it had to be written twice**, and the first version is worth recording: it asserted
+  the line matched `machine: cpu \d+%`, which `cpu 0%` satisfies — so a reading stubbed out to zero
+  passed it. It pegs a core now and asserts the number is above zero. That is the third check today
+  written against a *format* rather than a *value* that went green against a broken build.
+
+
 ## [3.7.0] — 2026-09-17
 
 ### Added
@@ -901,7 +941,8 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.7.0...HEAD
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.8.0...HEAD
+[3.8.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.8.0
 [3.7.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.7.0
 [3.6.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.6.0
 [3.5.1]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.5.1
