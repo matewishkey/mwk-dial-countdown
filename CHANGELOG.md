@@ -17,6 +17,37 @@ renamed, and rewriting it would make the history describe a repo that never exis
 
 ## [Unreleased]
 
+## [3.10.0] — 2026-09-17
+
+### Added
+
+- **Copy diagnostics now names the Stream Deck application version and the connected device.** Both
+  arrive when the plugin starts, in a handshake no user could go and look up — and they are exactly
+  what the two most commonly reported causes of an unresponsive Stream Deck turn on.
+
+  ```
+  Stream Deck 7.1.0.0 on mac 14.0.0
+  devices: Stream Deck + (type 7)
+  ```
+
+  When the plugin has not been told, the line is left out entirely rather than printed with question
+  marks in it: a line reading `Stream Deck ? on ? ?` looks like an answer.
+
+### Internal
+
+- Researched what is actually reported when a Stream Deck stops responding, prompted by keys from
+  *other* plugins failing too. The two recurring answers are **insufficient USB power** — the device
+  browns out, restarts without initialising and is left in a bad state, which is why it is usually
+  cured by a powered hub or a direct port rather than by any software change — and **an out-of-date
+  application**. Neither is a plugin fault, and neither could be advised on without the two facts now
+  in the report.
+
+- What the research did *not* support is recorded too: a page offering to fix Stream Deck lag gave
+  tidy percentages for each cause, which is the shape of a number written to be quotable rather than
+  measured. It is not used here. The one figure that is cited comes from a plugin vendor describing
+  their own support queue, and is attributed as that rather than as a fact about anyone's hardware.
+
+
 ## [3.9.1] — 2026-09-17
 
 ### Fixed
@@ -1016,7 +1047,8 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.9.1...HEAD
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.10.0...HEAD
+[3.10.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.10.0
 [3.9.1]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.9.1
 [3.9.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.9.0
 [3.8.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.8.0
