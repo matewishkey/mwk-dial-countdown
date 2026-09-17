@@ -189,6 +189,55 @@ describe("an action's lifecycle", () => {
 		assert.equal(calls.setSettings.length, 0, "a teardown with no pending edit should write nothing");
 	});
 
+	it("rewrites settings left by an older build, dropping the keys it no longer has", () => {
+		// The upgrade path, which had no test: every other case here hands in an already-normalised
+		// object, so `deepEqual` holds and this branch never runs. Without it, a key from a build two
+		// designs ago sits in the user's profile for ever — the dial's old mode-based step model left
+		// three, and the plugin has no other way to be rid of them.
+		const dial = driver();
+		const { action, calls } = fakeDial("upgrade-1");
+
+		dial.onWillAppear({
+			action,
+			payload: {
+				settings: {
+					presets: [300, 1200, 1800, 2400],
+					presetIndex: 1,
+					showTitle: false, // since renamed to showLabel
+					soundEnabled: false, // since removed
+					stepMode: "minutes", // from the mode-based dial, three designs ago
+					momentum: true,
+					volume: 42
+				}
+			}
+		});
+		dial.onWillDisappear({ action });
+
+		assert.equal(calls.setSettings.length, 1, "settings in an old shape must be rewritten, not left");
+		const written = calls.setSettings[0];
+
+		for (const dead of ["showTitle", "soundEnabled", "stepMode", "momentum"]) {
+			assert.equal(dead in written, false, `\`${dead}\` should not survive the upgrade`);
+		}
+
+		// ...and the half that matters more: what the user actually chose has to come through it.
+		assert.equal(written.showLabel, false, "a label switched off under the old name stays off");
+		assert.equal(written.presetIndex, 1, "their selected preset survives");
+		assert.equal(written.volume, 42, "and so does their volume");
+	});
+
+	it("leaves settings alone when they are already in the current shape", () => {
+		// The positive control: without this, the test above would pass on an action that wrote its
+		// settings back on every single appearance, which is a disk write per page flip.
+		const dial = driver();
+		const { action, calls } = fakeDial("upgrade-2");
+
+		dial.onWillAppear({ action, payload: { settings: normaliseSettings({ presets: [300, 1200] }) } });
+		dial.onWillDisappear({ action });
+
+		assert.equal(calls.setSettings.length, 0, "nothing to migrate, so nothing to write");
+	});
+
 	it("stops drawing once the control has gone", async () => {
 		const dial = driver();
 		const { action, calls } = fakeDial("stop-1");
