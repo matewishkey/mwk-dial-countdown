@@ -138,6 +138,7 @@ class TestAction extends CountdownAction<Dial> {
 type Driver = {
 	onWillAppear(ev: unknown): void;
 	onWillDisappear(ev: unknown): void;
+	onDidReceiveSettings(ev: unknown): void;
 	gesture(id: string, gesture: Gesture): void;
 	press(id: string): void;
 	countdownFor(id: string): Countdown;
@@ -236,6 +237,59 @@ describe("an action's lifecycle", () => {
 		dial.onWillDisappear({ action });
 
 		assert.equal(calls.setSettings.length, 0, "nothing to migrate, so nothing to write");
+	});
+
+	it("does not let the inspector's stale preset undo a gesture it cannot have seen", async () => {
+		// The window: a gesture that changes the preset is written to disk 400ms later, and Stream Deck
+		// forwards that write to the inspector, which is how the inspector catches up. Inside those
+		// 400ms it is authoritative and out of date at once — so its `presetIndex` came back over the
+		// top of the gesture, and the debounced write then put the old index on disk as well.
+		const dial = driver();
+		const id = "pi-race-1";
+		const { action, calls } = fakeDial(id);
+		const settings = normaliseSettings({ presets: [300, 1200], presetIndex: 0 });
+
+		dial.onWillAppear({ action, payload: { settings } });
+		// Torn down in a `finally`: the render loop is a `setInterval`, so an assertion that throws
+		// before the teardown line leaks it and HANGS the suite rather than failing it. Which it did —
+		// this test was written without one, and a deliberately broken build hung instead of going red.
+		try {
+			dial.gesture(id, "next"); // a hold: advance to the 20m preset, and schedule the write
+			assert.equal(dial.countdownFor(id).presetIndex, 1, "precondition: the gesture landed");
+
+			// A checkbox ticked in the inspector, inside the window, carrying its stale idea of the preset.
+			dial.onDidReceiveSettings({ action, payload: { settings: { ...settings, warnEnabled: true } } });
+
+			const countdown = dial.countdownFor(id);
+			assert.equal(countdown.presetIndex, 1, "the gesture must survive an inspector write that predates it");
+			assert.equal(countdown.settings.warnEnabled, true, "and the edit the user actually made must land");
+
+			// ...and the disk agrees, rather than the debounce later writing the stale index back.
+			await wait(600);
+			const written = calls.setSettings.at(-1);
+			assert.equal(written?.presetIndex, 1, "the write must carry the gesture, not the inspector's copy");
+		} finally {
+			dial.onWillDisappear({ action });
+		}
+	});
+
+	it("takes the inspector's preset when there is no gesture outstanding", async () => {
+		// The positive control. Without it the guard above could simply be ignoring `presetIndex` for
+		// ever, which would make the inspector's own preset picker dead.
+		const dial = driver();
+		const id = "pi-race-2";
+		const { action } = fakeDial(id);
+		const settings = normaliseSettings({ presets: [300, 1200], presetIndex: 0 });
+
+		dial.onWillAppear({ action, payload: { settings } });
+		try {
+			await wait(600); // nothing pending
+
+			dial.onDidReceiveSettings({ action, payload: { settings: { ...settings, presetIndex: 1 } } });
+			assert.equal(dial.countdownFor(id).presetIndex, 1, "an inspector edit with nothing racing it applies");
+		} finally {
+			dial.onWillDisappear({ action });
+		}
 	});
 
 	it("stops drawing once the control has gone", async () => {

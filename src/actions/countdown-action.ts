@@ -235,14 +235,48 @@ export abstract class CountdownAction<
 		this.#instances.delete(instance.action.id);
 	}
 
-	/** Picks up preset and appearance edits made in the property inspector. */
+	/**
+	 * Picks up preset and appearance edits made in the property inspector.
+	 *
+	 * **A pending save means the inspector cannot have seen the user's last gesture, so its idea of
+	 * which preset is selected is stale and must not be taken.** The write is held back by
+	 * {@link SETTINGS_DEBOUNCE_MS} so that spinning the dial does not go to disk per click; Stream Deck
+	 * forwards a plugin's `setSettings` on to the inspector, which subscribes to it, so the inspector
+	 * catches up the moment that write lands — but not before. For those 400 ms it is authoritative and
+	 * out of date at once.
+	 *
+	 * What that cost: hold the screen to pick the next preset, then tick any checkbox in the inspector
+	 * within the window, and the inspector's `presetIndex` came back over the top — the clock reloaded
+	 * the old preset and the debounced write then put the old index on disk, so the selection was gone
+	 * from memory and from disk both. Measured against the built plugin: at 80 ms and 250 ms after the
+	 * hold the advance was undone; at 800 ms, past the write, it survived.
+	 *
+	 * Only `presetIndex` is held back, and only while a write is outstanding. It is the single field a
+	 * gesture can move — {@link CountdownAction.perform} schedules a save for `next` and nothing else —
+	 * so everything the user actually came to the inspector to change is taken as sent, including an
+	 * edit to the preset lengths themselves.
+	 */
 	override onDidReceiveSettings(ev: DidReceiveSettingsEvent<DialCountdownSettings>): void {
 		const instance = this.#instances.get(ev.action.id);
 		if (instance === undefined) {
 			return;
 		}
 
-		instance.countdown.applySettings(ev.payload.settings);
+		const stale = instance.saveHandle !== null;
+		const settings = stale
+			? { ...ev.payload.settings, presetIndex: instance.countdown.presetIndex }
+			: ev.payload.settings;
+
+		instance.countdown.applySettings(settings);
+
+		// The inspector is working from an old copy, so end that: flush the write now rather than at
+		// the end of the debounce, which both settles the disk and brings the inspector up to date.
+		if (stale && instance.saveHandle !== null) {
+			clearTimeout(instance.saveHandle);
+			instance.saveHandle = null;
+			this.#save(instance);
+		}
+
 		this.attach(instance);
 		this.refresh(instance, true);
 	}
