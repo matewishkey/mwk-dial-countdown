@@ -24,7 +24,6 @@ import { keyCaption } from "../label";
 import { asDataUri, renderKey, themeFor } from "../render";
 import type { DialCountdownSettings } from "../settings";
 import { formatDuration } from "../timer";
-import { recordFrame } from "../health";
 import { CountdownAction, type Instance } from "./countdown-action";
 
 type Key = KeyAction<DialCountdownSettings>;
@@ -140,7 +139,6 @@ export class KeyCountdown extends CountdownAction<Key, KeyInstance> {
 		// A data URI, not the bare markup. setImage documents a file path or "a base64 encoded string
 		// with the mime type declared" — a raw <svg> string is not one of them, and is dropped, which
 		// leaves the key showing the static image from the manifest and looking completely dead.
-		recordFrame();
 		instance.action.setImage(asDataUri(svg)).catch((err) => streamDeck.logger.error("Failed to set key image", err));
 	}
 }

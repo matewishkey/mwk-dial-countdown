@@ -18,8 +18,6 @@ import { arch, cpus, homedir, platform, release, totalmem } from "node:os";
 import { join } from "node:path";
 import { cwd } from "node:process";
 
-import { logLocation } from "./health";
-
 /** What the plugin was told about its host at registration, which only the plugin can know. */
 export type HostInfo = {
 	appVersion?: string;
@@ -29,7 +27,19 @@ export type HostInfo = {
 	devices?: string[];
 };
 
-/** How much of the log's tail is read. Enough for a few hours of health lines, small enough to paste. */
+/**
+ * Where this plugin's log is, asked of the process rather than assumed.
+ *
+ * The install path differs per platform and per install method, and writing a plausible one into a
+ * document is how people end up searching a folder that was never right. Stream Deck launches a
+ * plugin from inside its own `.sdPlugin` folder and the SDK resolves `logs/` from the working
+ * directory — so this is the answer, on whatever machine is asking.
+ */
+export function logLocation(): string {
+	return `${cwd()}/logs`;
+}
+
+/** How much of the log's tail is read. Enough for a few hours, small enough to paste. */
 const TAIL_BYTES = 48 * 1024;
 
 /** How many matching lines are kept, newest last. */
@@ -39,12 +49,15 @@ const MAX_LINES = 60;
 const APP_LOG_LINES = 25;
 
 /**
- * Only the lines that bear on a problem report. A whole log is unreadable in a chat window; these
- * are the two kinds of trouble this plugin has actually had — the health lines answer "is it slow,
- * and is it us", and the gesture lines answer "what did the hardware really send", which is the
- * question every misread press has turned on.
+ * Only the lines that bear on a problem report. A whole log is unreadable in a chat window, and
+ * everything this plugin logs routinely is noise to someone reading it cold.
+ *
+ * This once also matched every dial gesture and a per-minute performance line. Both were added while
+ * chasing a fault that turned out to be a Stream Deck drawing 500 mA through a monitor's hub — no
+ * part of it was ever in this plugin — and neither earned a permanent place in everybody's log. If a
+ * question needs them again, they are a few lines to add back.
  */
-const INTERESTING = /health:|WARN|ERROR|dialDown|dialUp|dialRotate|touchTap/;
+const INTERESTING = /WARN|ERROR/;
 
 /**
  * Where the Stream Deck **application** keeps its own log, which is a different thing from this
@@ -158,9 +171,9 @@ export function collectDiagnostics(
 	}
 
 	if (kept.length === 0) {
-		lines.push("(no health lines yet — the first is written about a minute after Stream Deck starts)");
+		lines.push("(no warnings or errors logged — which is the good answer)");
 	} else {
-		lines.push(`last ${kept.length} health, warning and gesture lines:`);
+		lines.push(`last ${kept.length} warnings and errors:`);
 		lines.push(...kept);
 	}
 

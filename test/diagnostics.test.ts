@@ -34,7 +34,7 @@ function logDir(files: Record<string, string>): string {
 
 describe("the diagnostics report", () => {
 	it("names the build and the machine, so a report can be acted on without asking twice", () => {
-		const report = collectDiagnostics(logDir({ "a.log": "INFO  health: cpu 1%\n" }), PLUGIN_DIR);
+		const report = collectDiagnostics(logDir({ "a.log": "WARN  something went wrong\n" }), PLUGIN_DIR);
 
 		// The real manifest, so this also proves the version is READ rather than defaulted to "unknown".
 		assert.match(report, /^Dial Countdown \d+\.\d+\.\d+\.\d+/m, `the shipped version must be named: ${report}`);
@@ -47,7 +47,7 @@ describe("the diagnostics report", () => {
 		// that come back most are an out-of-date application and a device not getting enough power
 		// through a hub. Neither can be advised on without knowing the version and the device — and
 		// both arrive in the registration handshake, where no user could go and look them up.
-		const report = collectDiagnostics(logDir({ "a.log": "INFO  health: cpu 1%\n" }), PLUGIN_DIR, {
+		const report = collectDiagnostics(logDir({ "a.log": "WARN  something went wrong\n" }), PLUGIN_DIR, {
 			appVersion: "7.2.0",
 			platform: "windows",
 			platformVersion: "11",
@@ -61,34 +61,36 @@ describe("the diagnostics report", () => {
 	it("leaves the host line out entirely when it was told nothing", () => {
 		// The positive control: a line reading `Stream Deck ? on ? ?` is worse than no line, because it
 		// looks like an answer. A test that only checked the populated case would not notice.
-		const report = collectDiagnostics(logDir({ "a.log": "INFO  health: cpu 1%\n" }), PLUGIN_DIR);
+		const report = collectDiagnostics(logDir({ "a.log": "WARN  something went wrong\n" }), PLUGIN_DIR);
 		assert.doesNotMatch(report, /Stream Deck \?/, `should say nothing rather than nothing useful: ${report}`);
 		assert.doesNotMatch(report, /devices:/, "and not claim an empty device list");
 	});
 
-	it("carries the health lines AND the gesture lines", () => {
-		// The two kinds of trouble this plugin has actually had: is it slow and is it us, and what did
-		// the hardware really send. A report that answered only one would send someone back for the other.
+	it("carries the warnings and errors, and nothing routine", () => {
+		// A whole log is unreadable in a chat window, and everything logged routinely is noise to
+		// someone reading it cold. This once also matched every dial gesture and a per-minute
+		// performance line; both were added chasing a fault that turned out to be a Stream Deck
+		// drawing 500 mA through a monitor's hub, and neither earned a place in everybody's log.
 		const report = collectDiagnostics(
 			logDir({
 				"a.log": [
-					"INFO  health: cpu 0.4% lag 2ms | machine: cpu 1%",
-					"INFO  dialRotate ticks=0 pressed=true down=true",
+					"INFO  the plugin started",
+					"WARN  Failed to play the alert sound",
 					"INFO  setting the volume to 40",
-					"WARN  health: event loop ran 800ms late"
+					"ERROR Failed to set the layout"
 				].join("\n")
 			})
 		);
 
-		assert.match(report, /health: cpu 0\.4%/, "the health line");
-		assert.match(report, /dialRotate ticks=0/, "the gesture line");
-		assert.match(report, /ran 800ms late/, "and the warning");
+		assert.match(report, /Failed to play the alert sound/, "the warning");
+		assert.match(report, /Failed to set the layout/, "and the error");
 		assert.doesNotMatch(report, /setting the volume/, "but not every line the plugin ever wrote");
+		assert.doesNotMatch(report, /the plugin started/, "nor the routine ones");
 	});
 
 	it("reads the NEWEST log, which is the one being written to", () => {
 		const report = collectDiagnostics(
-			logDir({ "old.log": "INFO  health: from an old session\n", "new.log": "INFO  health: from this session\n" })
+			logDir({ "old.log": "WARN  from an old session\n", "new.log": "WARN  from this session\n" })
 		);
 
 		assert.match(report, /from this session/);
@@ -98,7 +100,7 @@ describe("the diagnostics report", () => {
 	it("says so plainly when there is nothing to report yet", () => {
 		// A button that returns an empty box reads as broken. The first health line takes a minute.
 		const report = collectDiagnostics(logDir({}));
-		assert.match(report, /no log file found|no health lines yet/, `should explain itself: ${report}`);
+		assert.match(report, /no log file found|no warnings or errors/, `should explain itself: ${report}`);
 	});
 
 	it("says where Stream Deck's OWN log is, or says plainly that it does not know", () => {
@@ -107,7 +109,7 @@ describe("the diagnostics report", () => {
 		// talks through. Its path is DERIVED from Elgato's docs rather than asked of the process, so
 		// unlike our own log location it can be wrong — and a wrong guess must read as an absence, not
 		// as a working answer. On Linux, where Stream Deck does not run, that is exactly what it says.
-		const report = collectDiagnostics(logDir({ "a.log": "INFO  health: cpu 1%\n" }), PLUGIN_DIR);
+		const report = collectDiagnostics(logDir({ "a.log": "WARN  something went wrong\n" }), PLUGIN_DIR);
 
 		assert.match(report, /Stream Deck's own log/, `the application's log must be accounted for either way: ${report}`);
 	});

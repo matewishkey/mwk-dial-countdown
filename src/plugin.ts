@@ -1,7 +1,6 @@
 import streamDeck from "@elgato/streamdeck";
 
 import { DialCountdown } from "./actions/dial-countdown";
-import { startHealthLog } from "./health";
 import { KeyCountdown } from "./actions/key-countdown";
 
 /**
@@ -22,11 +21,6 @@ declare const __DEV__: boolean;
 streamDeck.logger.setLevel(__DEV__ ? "trace" : "info");
 
 // One line a minute saying what this plugin is costing the machine, and a warning the moment the
-// event loop runs late enough to change what a gesture means. See `./health`.
-// The probe asks for the GLOBAL settings, which this plugin never uses — so the reply reaches none
-// of its handlers, and timing it cannot change what it is measuring. See `./health`.
-startHealthLog(streamDeck.logger, { probe: () => streamDeck.settings.getGlobalSettings() });
-
 streamDeck.actions.registerAction(new DialCountdown());
 streamDeck.actions.registerAction(new KeyCountdown());
 

@@ -391,9 +391,6 @@
 		<details id="diagnostics">
 			<summary>Diagnostics</summary>
 			<div class="row">
-				<span class="muted" id="healthLine">no reading yet</span>
-			</div>
-			<div class="row">
 				<span class="muted" id="logPath"></span>
 				<button id="copyLog" type="button">Copy path</button>
 			</div>
@@ -832,10 +829,9 @@
 					return;
 				}
 
-				if (payload?.event === "health") {
-					// Shown as sent. The plugin is the only thing that knows either of these, and a
-					// path this page guessed at would be worse than none.
-					el("healthLine").textContent = payload.health ?? "no reading yet";
+				if (payload?.event === "logPath") {
+					// Shown as sent. The plugin is the only thing that knows this, and a path this page
+					// guessed at would be worse than none.
 					el("logPath").textContent = payload.logPath ?? "";
 					return;
 				}

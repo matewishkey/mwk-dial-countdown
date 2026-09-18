@@ -20,8 +20,7 @@ import streamDeck, {
 
 import { Countdown } from "../countdown";
 import { FLASH_MS } from "../feedback";
-import { collectDiagnostics, type HostInfo } from "../diagnostics";
-import { latestHealth, logLocation, recordRefresh, setControlCount } from "../health";
+import { collectDiagnostics, type HostInfo, logLocation } from "../diagnostics";
 import { DOUBLE_TAP_MS, type Gesture, TapResolver } from "../gestures";
 import { NO_SOUND, normaliseSettings, type DialCountdownSettings } from "../settings";
 import { listSounds, playSound, resolveSound, soundExists, wantsSound } from "../sound";
@@ -177,7 +176,6 @@ export abstract class CountdownAction<
 		instance.taps = new TapResolver((gesture) => this.perform(instance, gesture), this.tapWindowMs);
 
 		this.#instances.set(ev.action.id, instance);
-		setControlCount(this.controller, this.#instances.size);
 		instance.renderHandle = setInterval(() => this.refresh(instance), RENDER_INTERVAL_MS);
 		this.attach(instance);
 		this.refresh(instance, true);
@@ -236,7 +234,6 @@ export abstract class CountdownAction<
 		}
 
 		this.#instances.delete(instance.action.id);
-		setControlCount(this.controller, this.#instances.size);
 	}
 
 	/**
@@ -302,10 +299,9 @@ export abstract class CountdownAction<
 		// **Where the log is, asked of the running process rather than assumed.** The install path
 		// differs by platform and by how Stream Deck was installed, and a plausible-looking path
 		// written into a document is how someone ends up searching a folder that was never right.
-		// Sent with the latest reading, so "is it this plugin?" can be answered without finding a file.
 		streamDeck.ui
-			.sendToPropertyInspector({ event: "health", health: latestHealth(), logPath: logLocation() })
-			.catch((err) => streamDeck.logger.error("Failed to send health", err));
+			.sendToPropertyInspector({ event: "logPath", logPath: logLocation() })
+			.catch((err) => streamDeck.logger.error("Failed to send the log path", err));
 	}
 
 	/** Auditions a sound, and answers whether a chosen file actually resolves. */
@@ -371,12 +367,6 @@ export abstract class CountdownAction<
 
 	/** One turn of the render loop: move an elapsed timer on, sound its alert, then draw. */
 	protected refresh(instance: I, force = false): void {
-		const startedAt = performance.now();
-		this.#refresh(instance, force);
-		recordRefresh(performance.now() - startedAt);
-	}
-
-	#refresh(instance: I, force: boolean): void {
 		if (instance.countdown.settle()) {
 			const { settings } = instance.countdown;
 			const path = resolveSound(settings);

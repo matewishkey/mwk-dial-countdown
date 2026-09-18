@@ -14,7 +14,6 @@ import { dialLabel } from "../label";
 import { asDataUri, renderGlyph, renderRing, ringColour, themeFor } from "../render";
 import type { DialCountdownSettings } from "../settings";
 import { formatClockTime, formatDuration } from "../timer";
-import { recordFrame } from "../health";
 import { CountdownAction, type Instance } from "./countdown-action";
 
 export type { DialCountdownSettings };
@@ -39,10 +38,13 @@ type DialInstance = Instance<Dial> & {
 	/**
 	 * Whether the button is down, as this plugin saw it — `dialDown` in, `dialUp` out.
 	 *
-	 * A rotation already carries a `pressed` flag, so this looks redundant. It is not: the flag
-	 * describes the button *as the rotation was reported*, and the two are separate messages from the
-	 * hardware. Where they disagree, the one we assembled from the button's own events is the better
-	 * answer, so the step is decided from either — the same call `xp_streamdeck` makes.
+	 * Used for exactly one thing: refusing to act on a release this instance never saw the press for,
+	 * which is what a page flip mid-press produces. See {@link DialCountdown.onDialUp}.
+	 *
+	 * It once also overrode the `pressed` flag on a rotation, on the theory that the flag might lag
+	 * the button. That was borrowed from another plugin rather than measured, no evidence for it ever
+	 * appeared, and a reviewer pointed out it turns a self-correcting reading into a latch that stays
+	 * wrong until the next complete press. The rotation's own flag is the authority again.
 	 */
 	down: boolean;
 	lastLayout: string | null;
@@ -67,11 +69,9 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 	/**
 	 * Turning adjusts time — **a second a click, or a minute a click while the dial is pushed in.**
 	 *
-	 * That is the whole of the step model. Whether the dial is pushed in is read per rotation, so the
-	 * plugin holds no mode, expires no mode, and has nothing to put on screen reminding you which mode
-	 * you left it in: your own finger is the state. It is read from the rotation's own `pressed` flag
-	 * or from the button events this plugin has already seen, whichever says yes — see
-	 * {@link DialInstance.down}.
+	 * That is the whole of the step model. `pressed` arrives on the event itself, so the plugin holds
+	 * no mode, expires no mode, and has nothing to put on screen reminding you which mode you left it
+	 * in: your own finger is the state.
 	 *
 	 * Every click is acknowledged by a pulse of the ring. There is no haptic feedback to be had on this
 	 * hardware, so the ring answering each click is what tells you the dial is being heard — and the
@@ -86,8 +86,6 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 			return;
 		}
 
-		streamDeck.logger.info(`dialRotate ticks=${ev.payload.ticks} pressed=${ev.payload.pressed} down=${instance.down}`);
-
 		// **A rotation of no detents is not a rotation, and must not cost you the press.** It is the
 		// one variant of this that is completely invisible: a rotate carrying `ticks: 0` between the
 		// press and its release sets the guard below, so the release does nothing — no clock moved, no
@@ -98,13 +96,11 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 			return;
 		}
 
-		// Either source counts. See `DialInstance.down`.
-		const pressed = ev.payload.pressed || instance.down;
-		if (pressed) {
+		if (ev.payload.pressed) {
 			instance.turnedWhileDown = true;
 		}
 
-		instance.countdown.adjust(ev.payload.ticks, pressed);
+		instance.countdown.adjust(ev.payload.ticks, ev.payload.pressed);
 		this.acknowledge(instance);
 	}
 
@@ -136,7 +132,6 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 			return;
 		}
 
-		streamDeck.logger.info("dialDown");
 		instance.taps.cancel();
 		instance.down = true;
 		instance.turnedWhileDown = false;
@@ -158,8 +153,6 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 		if (instance === undefined) {
 			return;
 		}
-
-		streamDeck.logger.info(`dialUp turnedWhileDown=${instance.turnedWhileDown} down=${instance.down}`);
 
 		const sawThePress = instance.down;
 		instance.down = false;
@@ -200,7 +193,6 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 			return;
 		}
 
-		streamDeck.logger.info(`touchTap hold=${ev.payload.hold}`);
 		instance.taps.press(ev.payload.hold);
 	}
 
@@ -289,7 +281,6 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 						finish: footer
 					};
 
-		recordFrame();
 		instance.action.setFeedback(feedback).catch((err) => streamDeck.logger.error("Failed to set feedback", err));
 	}
 }
