@@ -77,6 +77,7 @@ There is no haptic feedback to be had on this hardware — the SDK exposes no su
 - **Auto-repeat**, counting laps on screen — `×2/3` while it runs, `done ×3/3` once it is over. The limit is a total number of runs, and it is a limit because nothing here should still be going tomorrow.
 - **Clear itself when finished**, after a wait you set. A finished timer otherwise sits reading `done` until somebody presses it, which is right for a timer you are watching and wrong for one on a page you left; switch this on and it goes back to a full, stopped clock — repeat tally included — on its own. It waits for the whole job, repeats and all.
 - **Finish time** — `ends 14:35`, more useful than a raw remaining count on a long timer.
+- **Copy diagnostics**, at the bottom of the property inspector. One press puts the plugin version, the machine, the Stream Deck application version and connected device, and any recent warnings and errors on the clipboard — ready to paste into a bug report. It costs nothing until it is pressed; nothing is collected in the background and nothing leaves your machine on its own.
 - **Timers survive a page or profile switch** — flip away and back and the clock is where you left it, still counting. They do not survive the plugin restarting, and one that ran out while you were away comes back silent rather than sounding an alarm for a moment that has passed.
 - Anything up to **24 hours**.
 
@@ -87,7 +88,7 @@ Stream Deck runs on macOS and Windows only, so the plugin cannot be *run* on Lin
 ```sh
 npm install
 npm run build      # bundle into com.matewishkey.dial-countdown-v2.sdPlugin/bin
-npm test           # 323 tests — 41 of them drive the property inspector in a browser
+npm test           # 345 tests — 41 of them drive the property inspector in a browser
 npm run check      # everything CI runs: typecheck, lint, format, tests, versions
 npm run demo       # scripted gesture pass, prints one frame per step
 npm run mock       # the same harness, driven from the keyboard
@@ -162,6 +163,7 @@ The version lives in three places in three formats — `1.1.0`, `1.1.0.0`, `v1.1
 | `src/actions/dial-countdown.ts` | Dial events, and the touchscreen layout. |
 | `src/actions/key-countdown.ts` | Key events, and the key face. |
 | `src/plugin.ts` | Registers both actions and connects. |
+| `src/diagnostics.ts` | Gathers the report behind *Copy diagnostics* — this plugin's log and Stream Deck's own, filtered to warnings and errors. Asks the process where its log is rather than deriving it. |
 | `…sdPlugin/layouts/` | `ring.json` and `bar.json` — the two touchscreen layouts, both the plugin's own. |
 | `tools/mock-host.mjs` | A stand-in for the Stream Deck application. |
 | `test/inspector-harness.mjs` | Drives the property inspector in a real browser, so its inline JavaScript can be tested. |

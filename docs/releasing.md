@@ -109,17 +109,17 @@ with the timestamps that carry no meaning left out. Same tree in, same id out, o
 hour. The package's own sha256 is still worth recording, because it answers a narrower question:
 whether the file that was uploaded is the file that was built.
 
-(The recipe here used to unzip both builds into temp directories and `diff -rq` them. That needed
-`unzip`, **which is not installed on this box** — and a `diff` of two directories that failed to
-populate reports them as identical, so the check could not fail. It also used to say to compare
-pixels with ImageMagick's `compare`, which is not installed either. A comparison that cannot run is
-worse than no comparison, because it reports success.)
+(The recipe here used to unzip both builds into temp directories and `diff -rq` them, and to compare
+pixels with ImageMagick's `compare`. Both were dropped because **a comparison that cannot run reports
+success**: a `diff` of two directories that failed to populate calls them identical, so the check
+could not fail. The id above cannot fail that way — it has to read both archives to produce a number
+at all. Whether any given tool is on any given box is a question for that box, not for this file.)
 
 ### If the icons changed, find out why before accepting it
 
-`npm run icons` rasterises with the **headless Chromium in Playwright's cache**, not ImageMagick,
-which is not installed on the dev box. That is not a preference — swapping the rasteriser is how a
-long-standing bug was found, and the same trap is waiting for whoever swaps it again.
+`npm run icons` rasterises with the **headless Chromium in Playwright's cache**, not ImageMagick.
+That is not a preference — swapping the rasteriser is how a long-standing bug was found, and the same
+trap is waiting for whoever swaps it again.
 
 **The mark is 118 wide by 100 tall, and `bareMark` sizes by `viewBox` while the call site forces
 `width` and `height` to the same number.** A rasteriser that honours `preserveAspectRatio` *fits* it;
@@ -145,7 +145,9 @@ own tree. So a change confined to the second list is by definition not a release
 5. **`npm run release`.** Everything else: check, build, pack, validate, demo, then tag, push, create
    the GitHub release, and verify that the published asset is this same build.
 6. **Submit to Marketplace by hand**, through the Maker dashboard, with the notes from the page's
-   first box. There is no API for it, and it is the only step here that is not automatable.
+   first box — or hand-written ones if versions have piled up behind the listing, see *The generated
+   notes describe ONE version*. There is no API for it, and it is the only step here that is not
+   automatable. **Then record it** in *Record what was submitted*; nothing else will.
 
 The `.streamDeckPlugin` itself is gitignored. The GitHub release asset is the artefact of record, and
 the copy on the release page is the one to upload.
@@ -312,6 +314,46 @@ formatting fix, a tool. It belongs in the changelog, because repo-only work trav
 release rather than vanishing; it does not belong in front of somebody deciding whether to install an
 update. The generator drops that heading from the Marketplace notes and keeps it in the GitHub ones,
 which is the audience it was written for.
+
+### The generated notes describe ONE version, and a submission often spans several
+
+`npm run release` writes the notes for the version it is cutting. That is the right answer when every
+release is submitted — and the wrong one the moment two or more pile up behind a listing, which is
+the usual case here: thirteen versions sit between 3.2.0 and 3.11.0.
+
+**Do not merge the span mechanically.** Feeding all thirteen entries to the same reduction was tried
+and the output was unusable: the budget went on the *leads* of the newest entries, all eighteen
+`Fixed` bullets were dropped outright, and what survived described the per-minute health report —
+which 3.11.0 had removed. A reader of that listing would have been told about a feature that does not
+exist and nothing about the ten bugs that were fixed.
+
+**Write the span's notes by hand, as net effect.** What does somebody upgrading from the listed
+version actually get? Anything added and then removed inside the span cancels and is not mentioned.
+The last one is on the share as an example:
+`~/share/work/mat-mwk-dial-countdown/2026-09-18_elgato-submission-v3.11.0/`.
+
+This is settled practice rather than a new idea. The 2.0.1 page did the same for 1.0.0 through 1.5.0
+and recorded why: those versions each described the dial differently and 1.3.0 superseded two of
+them, so listing them in sequence would have read as three contradictions.
+
+### Record what was submitted, because nothing else does
+
+Marketplace does not tell us, the Maker dashboard cannot be reached from a dev box, and the public
+listing page renders client-side — so an empty result from fetching it proves nothing either way. The
+repo is therefore the only possible record, and when it does not carry one the question *which notes
+do I paste* has no answer. It has now come up twice: issue #15 opened on it, and the v3.11.0
+submission page had to ship with a caveat instead of an answer.
+
+**So: after submitting, add the version and the date here.**
+
+| Submitted | When | Evidence |
+| --- | --- | --- |
+| 2.0.1 | 2026-08-20 | inferred, not proven — [#15](https://github.com/matewishkey/mwk-dial-countdown/issues/15) reasons about the listing "still showing 2.0.1", which only holds if it went up. The folder on the share is a page prepared *for* the upload, which is not the same as evidence of one |
+| 3.2.0 | 2026-08-31 | comment on [#15](https://github.com/matewishkey/mwk-dial-countdown/issues/15) |
+
+3.0.0 was tagged and never submitted, which the 3.0.1 changelog entry says outright. **Whether 3.0.1
+itself was submitted is not recorded anywhere and is not known** — a submission page was prepared for
+it, which is not the same thing. That gap is the whole reason for this table.
 
 ## Changelog
 

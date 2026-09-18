@@ -17,6 +17,30 @@ renamed, and rewriting it would make the history describe a repo that never exis
 
 ## [Unreleased]
 
+### Internal
+
+- **`docs/releasing.md` records what has actually been submitted to Marketplace, and says how to
+  write notes when several versions have piled up behind the listing.** Neither was written down, and
+  both cost something the same day: the question *which version is the listing on* had no answer in
+  the repo, and merging thirteen changelog entries through the 1500-character reduction produced
+  notes that described a feature 3.11.0 had removed while dropping all eighteen fixes. Issue #15 had
+  already opened on the first half of that on 2026-08-30.
+
+- **Three claims that a tool "is not installed on this box" were all false, and one of them
+  contradicted a working instruction elsewhere.** `unzip`, `convert` and `compare` are all on this
+  machine — measured. The reasons those recipes were dropped survive without the availability claim
+  and are what is left standing: a comparison that cannot run reports success, and ImageMagick
+  stretched the 118×100 mark because it ignores `preserveAspectRatio`. A per-box tooling fact does
+  not belong in a repo doc; that is exactly how it drifts.
+
+- **Two counts had gone stale** — `README.md` said 323 tests against 345, and `docs/how-it-works.md`
+  said the scripted pass was 29 checks across 40 steps against 34 across 45.
+
+- **`src/diagnostics.ts` and `README.md` caught up with 3.11.0.** The file's own comment still sent a
+  reader looking for lines beginning `health:`, which that release deleted; the README's file table
+  listed every `src/` file except `src/diagnostics.ts`, and its feature list never mentioned *Copy
+  diagnostics* at all, which is a shipped button in the property inspector.
+
 ## [3.11.0] — 2026-09-18
 
 The fault that prompted most of the last two days was never in this plugin. A Stream Deck + was

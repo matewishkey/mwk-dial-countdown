@@ -1,11 +1,11 @@
 /**
- * Everything someone would need to answer "is this plugin what is making my machine slow", gathered
- * into one block of text that a button can put on the clipboard.
+ * Everything someone would need to answer "what is wrong with this thing", gathered into one block of
+ * text that a button can put on the clipboard.
  *
  * **It exists because the previous answer was a set of instructions, and instructions are work.** The
  * honest version ran: find your Stream Deck plugins folder, which is in a different place on each
  * platform and depends how you installed it; open the `.sdPlugin` directory; find `logs`; open the
- * newest file; scroll to the bottom; find the lines beginning `health:`; copy some of them. Every
+ * newest file; scroll to the bottom; work out which lines matter; copy some of them. Every
  * step of that is a place to give up, and none of it is the user's job — they reported a slow device,
  * which is a fact about the device, not a request to go filing.
  *
