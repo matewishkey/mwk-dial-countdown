@@ -216,7 +216,7 @@ It used to, and that is covered above under *What a rotation actually changes*. 
 
 It did not always. Reset used to restore the *working* duration, which meant a timer nudged once was nudged for good: 8m became the value every later reset returned to, the configured 5m was reachable only by holding the screen, and a number typed into the inspector had quietly lost an argument with a number nudged on the hardware. That is a last-used value wearing a preset's clothes — and the whole point of the dial no longer writing back to the preset list is that those two are different things.
 
-So the rule is one sentence: **the clock is the scratch value, the preset is the record.** Every gesture that means *put it back* has exactly one place to put it back to, and `Countdown#toPreset` is the one method all three of them call — the double tap, a hold that finds something to put right, and the auto-reset falling due. They used to agree by coincidence and did not quite: reset restored the working duration while the other two restored the preset, so which gesture you reached for decided what "the top of the clock" meant.
+So the rule is one sentence: **the clock is the scratch value, the preset is the record.** Every gesture that means *put it back* has exactly one place to put it back to, and `Countdown#toStage(0)` is the one method all three of them call — the double tap, a hold that finds something to put right, and the auto-reset falling due. They used to agree by coincidence and did not quite: reset restored the working duration while the other two restored the preset, so which gesture you reached for decided what "the top of the clock" meant.
 
 The dialled length is not recoverable afterwards, and that is the trade. It is the right way round — getting it back is one turn of the dial, while the configured length was otherwise two gestures deep — but it is a real loss and worth saying out loud rather than discovering.
 
@@ -304,7 +304,7 @@ It also walks the gesture vocabulary and asserts the parts a person would otherw
 
 ▸ a PUSHED turn's release does nothing — otherwise every minute-nudge would start the clock
 
-   was 21:47, after push-turn-release 23:49, said "+2m"
+   was 21:47, after push-turn-release 23:47, said "+2m"
    ✓ read as a turn, not as a press
 
 ▸ …and STOPS at the limit, saying `done`, rather than looping for ever or going quiet

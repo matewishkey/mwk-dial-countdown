@@ -730,7 +730,7 @@ describe("the end-of-timer fade", () => {
 		assert.equal(countdown.dimmed, false, "a paused clock is not counting down towards anything");
 	});
 
-	it("caps the window at half the preset, so a fresh timer never starts already fading", () => {
+	it("caps the window at half the step, so a fresh timer never starts already fading", () => {
 		// The bug this guards: a five minute warning on a five minute timer blinked from the off,
 		// which made adjusting the clock look like it had triggered the warning.
 		const { countdown, advance } = fading(300, 300);

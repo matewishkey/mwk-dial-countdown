@@ -73,7 +73,7 @@ There is no haptic feedback to be had on this hardware — the SDK exposes no su
 - **Countdown ring** that empties as the timer runs, with the clock beside it. A progress bar is available instead.
 - **Seven colour themes**. The middle of the ring shows the state — running, paused, done — and, on an idle clock, an optional logo instead.
 - **A pause glyph** rather than a colour change, so the state is stated outright.
-- **Fade near the end** — the same colour, shaded and unshaded, from a threshold you set in minutes and seconds, capped at half the preset's own length so a fresh timer never starts already fading.
+- **Fade near the end** — the same colour, shaded and unshaded, from a threshold you set in minutes and seconds, capped at half the current step's own length so a fresh timer never starts already fading.
 - **Sound when finished**, repeatable up to ten times, at a volume you set. Choose a bundled sound, any sound already installed on your machine, or your own file.
 - **Clear itself when finished**, after a wait you set. A finished timer otherwise sits reading `done` until somebody presses it, which is right for a timer you are watching and wrong for one on a page you left; switch this on and it goes back to a full, stopped clock on the preset's first step, on its own. It waits for the whole job, every step of it.
 - **Finish time** — `ends 14:35`, more useful than a raw remaining count on a long timer.
