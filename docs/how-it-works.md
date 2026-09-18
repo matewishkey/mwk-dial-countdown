@@ -96,7 +96,7 @@ That image is sent as a **data URI**, never as raw markup — `asDataUri`, the s
 
 This is worth stating carefully, because the obvious explanation is not proven. The key action originally sent bare `<svg>` markup and did nothing at all on hardware: no ring, no clock, and every gesture invisible because nothing it drew ever reached the screen. Sending a data URI fixed it. But Elgato's own documentation disagrees with itself on whether raw markup was ever valid — the WebSocket reference lists only a file path or "a base64 encoded string with the mime type declared", while the SDK's JSDoc for `setImage` explicitly allows "an SVG `string`". So the data URI is the form known to work, and the raw string is the form known to have failed; which of the two facts explains the other is not settled.
 
-With no room for a glyph behind the digits, the line under the clock carries the state instead: the gesture you just made, then `paused` if it is paused, then the lap tally, then what the timer is called.
+With no room for a glyph behind the digits, the line under the clock carries the state instead: the gesture you just made, then `paused` if it is paused, then the stage tally, then what the timer is called.
 
 ## Naming a timer
 
@@ -104,14 +104,14 @@ A preset carries no name of its own, so the line under the clock has always been
 
 **It is the plugin's field, not Stream Deck's.** The native Title box is switched off on both actions, and neither control could have used it. On a key, Stream Deck composites the user's title over whatever the plugin drew, so a native title would land on top of the clock — the very thing drawing the whole face as one image exists to prevent. On a dial there is no `title` item in either layout, both of which are the plugin's own files with every text box already spoken for, so a native title would have nowhere to land at all. Owning the field is what lets one name appear in one place on both.
 
-The rule lives in `src/label.ts` rather than in the two actions, which is where it used to live in two copies that had already drifted apart once over how a finished repeating timer reads. Each control takes the part of it that fits the room it has:
+The rule lives in `src/label.ts` rather than in the two actions, which is where it used to live in two copies that had already drifted apart once over how a finished multi-stage timer reads. Each control takes the part of it that fits the room it has:
 
 | | Dial | Key |
 | --- | --- | --- |
 | Unnamed | `20m` | `20m` |
 | Named | `Tea` | `Tea` |
 | Dialled off the preset | `Tea · from 20m` | `Tea` |
-| Repeating | `Tea · ×2/3` | `×2/3`, once it is running |
+| Several steps | `Tea · ×2/3` | `×2/3`, once it is running |
 | Finished | `Tea · ×3/3 · done` | `done ×3/3` |
 
 The drift note is the one thing the key cannot say: `from 20m` needs both halves, and a key has one line. The clock above it is the whole of what a key says about its duration.
@@ -124,11 +124,11 @@ The switch that hides the line is called **Show the label**. It was called *Show
 
 A finished timer sits reading `done` until somebody presses it. That is right for a timer you are watching and wrong for one on a page you left: you come back to a used clock and have to clear it before it is a timer again.
 
-**Clear itself when finished** waits a set time after the end of the job and then puts the countdown back where it started — full clock, stopped, repeat tally at zero. It is exactly the double tap, deliberately: the same state, arrived at two ways, rather than a second idea of what "the start" means.
+**Clear itself when finished** waits a set time after the end of the job and then puts the countdown back where it started — full clock, stopped, back on the first step. It is exactly the double tap, deliberately: the same state, arrived at two ways, rather than a second idea of what "the start" means.
 
 Three things about the timing.
 
-**It waits for the whole job, repeats and all.** A repeating timer's earlier laps restart themselves and never reach this; only the elapse that ends the last run starts the clock on it. Clearing between laps would end a job that was still running.
+**It waits for the whole job, every step of it.** The earlier steps of a preset load the next one and never reach this; only the elapse that ends the last step starts the clock on it. Clearing between steps would end a job that was still running.
 
 **It is silent.** The words under the clock name the gesture you just made, and nobody made this one.
 
@@ -146,7 +146,7 @@ Two things it deliberately does not do.
 
 **It is held in memory, so it does not survive the plugin restarting.** Writing it to disk would mean deciding what a timer that "finished" while Stream Deck was closed ought to do, and there is no good answer — page and profile switches are the case worth solving, and they are the case this solves.
 
-**A timer that ran out while you were away comes back silent.** The alert exists to say *the moment has arrived*; by the time you are looking at it again the moment has been and gone, and sounding an alarm for it then is old news at full volume, possibly hours of it. The screen still says `done`, in the elapsed colour, because that part is still true. For the same reason an auto-repeating timer does not pick up laps it never ran — quietly fast-forwarding a tally nobody watched would be inventing history.
+**A timer that ran out while you were away comes back silent.** The alert exists to say *the moment has arrived*; by the time you are looking at it again the moment has been and gone, and sounding an alarm for it then is old news at full volume, possibly hours of it. The screen still says `done`, in the elapsed colour, because that part is still true. For the same reason a multi-step timer does not pick up steps it never ran — quietly fast-forwarding a tally nobody watched would be inventing history.
 
 Settings edited in the property inspector while the control was away are picked up on the way back, by the same rule that applies at any other time: the clock reloads only if the **selected preset's length** changed. Nudge the volume while a timer is running on another page and it is still running when you return.
 
@@ -166,16 +166,45 @@ Two changes, because either alone leaves a hole:
 
 ## Presets
 
-A preset is **just a duration**. There is no name, because a countdown's length is its own label: the screen shows `20m`, or `20m 30s` once it has been nudged off a round number.
+A preset is **a list of durations** — most of them a list of one. There is no name, because a countdown's length is its own label: the screen shows `20m`, or `20m 30s` once it has been nudged off a round number.
 
-Out of the box: **5, 20, 30 and 40 minutes**.
+Out of the box: **5, 20, 30 and 40 minutes**, one step each.
 
-- **Edit them in the property inspector**, as hours, minutes and seconds. Add as many as you like; remove any but the last.
+- **Edit them in the property inspector**, as text — `20m`, or `40, 10, 10`. Add as many as you like; remove any but the last.
 - **Load any of them from the property inspector too**, by clicking the dot beside it. The hold only ever moves forward one at a time, so the fourth of four used to be three holds away with no way back; the panel already drew which one was active, and now it can be told.
 - **Hold the screen** — or the key itself — for the next one. The dial's press starts and pauses the clock instead; see above.
-- Anything from **one second to twenty-four hours**.
+- Anything from **one second to twenty-four hours**, and up to **twenty steps** in one preset.
 
 Each dial and each key keeps its own preset list and its own running countdown, so they never interfere.
+
+### A preset with several steps
+
+`40, 10, 10` is forty minutes, then ten, then ten. Each step runs for its own length and the next one starts the moment the last ends, with no gap — the alert has already sounded, and a gap between steps is exactly what an interval timer must not have. The line under the clock counts them off as `×2/3`, and says `done` when the list runs out.
+
+**This replaced the repeat switch**, which was a second idea of how long a timer runs for, standing beside the preset and speaking a different language: a duration over here, a number of times over there, and a stopping rule that had to reconcile the two. That reconciliation got it wrong twice — a count of three ran four times, because the count was compared against repeats *made* rather than runs *finished*; and raising the count mid-run reset the tally underneath it, so a count of four produced six runs labelled `×1/4`.
+
+A list says everything the switch said and more. Six minutes, six times over is six steps; 40/10/10 was not sayable at all. The stopping rule is the end of the list, which cannot be off by one against itself.
+
+Settings written while the switch still existed are translated on the way in: `repeat: true, repeatCount: 3` on a 20 minute preset becomes three steps of twenty minutes, in every preset, since the switch applied to whichever one was loaded. The panel then shows it as `20m, 20m, 20m` — both what it does and one edit away from being something else. `src/settings.ts` holds that rule, and the plugin writes the result straight back on `willAppear`, so nothing downstream ever sees the old shape.
+
+### Typing a preset
+
+One text field per preset, with a grey line under it saying what was read.
+
+| Typed | Read as |
+| --- | --- |
+| `20` | 20m |
+| `40, 10, 10` | 40m · 10m · 10m |
+| `90s` | 1m 30s |
+| `1h30m` | 1h 30m |
+| `10m x3` | 10m · 10m · 10m |
+| `40m, 10m x3` | 40m · 10m · 10m · 10m |
+
+**A bare number is minutes.** That is the only guess the parser makes, and it is made because that is what the field is for — `40, 10, 10` is what you would write on paper. Anything else names its unit.
+
+The echo is what makes a text field safe here. A guess that went the wrong way is visible while you are still on the row, rather than discovered by a timer that ran for forty seconds. A row that does not parse saves nothing at all and keeps both the text and the reason; half of a row saved is a preset nobody typed, arrived at silently.
+
+The multiplier is a typing convenience and deliberately not a canonical form: `10m x3` is stored and shown back as `10m, 10m, 10m`. A row that came back shorter than it was typed would be the panel arguing about how it was said.
 
 ### The dial does not edit them
 
@@ -265,7 +294,7 @@ Both layouts are the plugin's own files now (`layouts/ring.json`, `layouts/bar.j
 
 Through every one of those the preset list underneath reads `5m [20m] 30m 40m`, unchanged, and the label reads `from 20m`. Two later steps hold the screen twice: once to land back on `20:00`, and once more to move on to `30m`.
 
-It also walks the gesture vocabulary and asserts the parts a person would otherwise have to check by eye — that a hold really does leave the clock stopped, that the pulse appears and then clears, that a finished repeating timer says so, and that the two layouts agree:
+It also walks the gesture vocabulary and asserts the parts a person would otherwise have to check by eye — that a hold really does leave the clock stopped, that the pulse appears and then clears, that a finished multi-step timer says so, and that the two layouts agree:
 
 ```
 ▸ press the dial → starts the clock
@@ -281,7 +310,7 @@ It also walks the gesture vocabulary and asserts the parts a person would otherw
 ▸ …and STOPS at the limit, saying `done`, rather than looping for ever or going quiet
 
    clock 2s apart: 0:00 then 0:00; label reads "2s · ×2/2 · done"
-   ✓ and it says so — a finished job no longer looks like its own last lap
+   ✓ and it says so — a finished job no longer looks like its own last step
    ✓ the ring shows the done glyph, not the brand mark
 
 ▸ the ring's middle shows the STATE, and the brand mark only on an idle clock

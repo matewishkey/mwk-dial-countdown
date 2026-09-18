@@ -718,7 +718,7 @@ async function runDemo() {
 		[
 			"set 1:10:10 → font shrinks to fit",
 			async () => {
-				applySettings({ presets: [4210], presetIndex: 0 });
+				applySettings({ presets: [[4210]], presetIndex: 0 });
 				await wait(300);
 			}
 		],
@@ -743,7 +743,7 @@ async function runDemo() {
 		[
 			"a brush of the glass and a press of the dial → one start, not start then pause",
 			async () => {
-				applySettings({ presets: [600], presetIndex: 0 });
+				applySettings({ presets: [[600]], presetIndex: 0 });
 				await wait(400);
 
 				const stopped = screen.value;
@@ -770,7 +770,7 @@ async function runDemo() {
 		[
 			"a press with a no-detent rotation inside it → still a press",
 			async () => {
-				applySettings({ presets: [600], presetIndex: 0 });
+				applySettings({ presets: [[600]], presetIndex: 0 });
 				await wait(400);
 
 				// Asserted on the *word*, and on the word being one of the three a press can answer
@@ -803,7 +803,7 @@ async function runDemo() {
 		[
 			"flip away mid-press, flip back, let go → the stray release is not a press",
 			async () => {
-				applySettings({ presets: [600], presetIndex: 0 });
+				applySettings({ presets: [[600]], presetIndex: 0 });
 				await wait(400);
 				const stopped = screen.value;
 
@@ -830,7 +830,7 @@ async function runDemo() {
 		[
 			"an untouched, idle timer still re-sends its frame, so a dropped one cannot stick",
 			async () => {
-				applySettings({ presets: [3600], presetIndex: 0, theme: "default" });
+				applySettings({ presets: [[3600]], presetIndex: 0, theme: "default" });
 				await wait(1000);
 
 				const before = feedbackCount;
@@ -871,7 +871,7 @@ async function runDemo() {
 				// Only what this step needs. `applySettings` MERGES into the shared settings, so a key set
 				// here is set for every later step — adding `soundId: "none"` silenced the alarm check
 				// four steps down, which then reported a silent failure that was this step's doing.
-				applySettings({ presets: [660], presetIndex: 0 });
+				applySettings({ presets: [[660]], presetIndex: 0 });
 				await wait(400);
 				await spin(3, 1, 200); // +3s, so the clock and the preset disagree
 				await wait(400);
@@ -910,7 +910,7 @@ async function runDemo() {
 		[
 			"hold the screen → next preset, LOADED BUT NOT STARTED",
 			async () => {
-				applySettings({ presets: [4210, 600], presetIndex: 0 });
+				applySettings({ presets: [[4210], [600]], presetIndex: 0 });
 				await wait(400);
 				gestures.touch(false);
 				await wait(500);
@@ -931,7 +931,7 @@ async function runDemo() {
 		[
 			"fade on at 5 min, on a 5 min preset — must NOT fade immediately",
 			async () => {
-				applySettings({ presets: [300], presetIndex: 0, warnEnabled: true, warnSeconds: 300 });
+				applySettings({ presets: [[300]], presetIndex: 0, warnEnabled: true, warnSeconds: 300 });
 				await wait(300);
 				gestures.touch(false);
 				await wait(600);
@@ -940,7 +940,7 @@ async function runDemo() {
 		[
 			"fade at 20s on a 20s preset, run into the window → shades, one colour",
 			async () => {
-				applySettings({ presets: [20], presetIndex: 0, warnEnabled: true, warnSeconds: 20 });
+				applySettings({ presets: [[20]], presetIndex: 0, warnEnabled: true, warnSeconds: 20 });
 				await wait(300);
 				gestures.touch(false);
 				await wait(11_000);
@@ -963,7 +963,7 @@ async function runDemo() {
 			"label hidden, logo on, brand theme",
 			async () => {
 				applySettings({
-					presets: [600],
+					presets: [[600]],
 					presetIndex: 0,
 					warnEnabled: false,
 					showLabel: false,
@@ -979,7 +979,7 @@ async function runDemo() {
 		[
 			"titled `Tea`, then dialled off its preset",
 			async () => {
-				applySettings({ presets: [1200], presetIndex: 0, title: "Tea", showLabel: true, theme: "default" });
+				applySettings({ presets: [[1200]], presetIndex: 0, title: "Tea", showLabel: true, theme: "default" });
 				await wait(300);
 				gestures.rotate(3, false);
 				await wait(300);
@@ -993,7 +993,7 @@ async function runDemo() {
 			"alarm set to play 3 times, 2s timer → runs out",
 			async () => {
 				const before = alertCount;
-				applySettings({ presets: [2], presetIndex: 0, title: "", soundRepeat: 3, showLabel: true });
+				applySettings({ presets: [[2]], presetIndex: 0, title: "", soundRepeat: 3, showLabel: true });
 				await wait(300);
 				gestures.touch(false);
 				await wait(2600);
@@ -1006,21 +1006,22 @@ async function runDemo() {
 			}
 		],
 
-		// Auto-repeat, and the fact that it stops. A timer that loops for ever is a nuisance.
+		// A preset with several steps, and the fact that it stops at the end of the list. A timer that
+		// loops for ever is a nuisance.
 		[
-			"repeat on, limit 2, 2s preset → first lap",
+			"two-step preset, 2s each → first step",
 			async () => {
-				applySettings({ presets: [2], presetIndex: 0, repeat: true, repeatCount: 2, soundId: "none" });
+				applySettings({ presets: [[2, 2]], presetIndex: 0, soundId: "none" });
 				await wait(300);
 				gestures.touch(false);
 				await wait(2400);
 			}
 		],
-		["…second lap", async () => wait(2200)],
-		// A count of two is two RUNS, not two repeats after a first run. It used to be the latter,
-		// which quietly ran every repeating timer one lap more than it was told to.
+		["…second step", async () => wait(2200)],
+		// Two steps is two RUNS. The repeat count this replaced was compared against repeats *made*
+		// rather than runs *finished*, which quietly ran every repeating timer one lap more than told.
 		[
-			"…and STOPS at the limit, saying `done`, rather than looping for ever or going quiet",
+			"…and STOPS at the end of the list, saying `done`, rather than looping for ever or going quiet",
 			async () => {
 				await wait(3000);
 				const settled = screen.value;
@@ -1030,7 +1031,7 @@ async function runDemo() {
 				console.log(`\n   clock 2s apart: ${settled} then ${screen.value}; label reads "${said}"`);
 				console.log(`   ${settled === screen.value ? "\u2713 stopped" : "\u2717 still running"}`);
 				console.log(
-					`   ${said.includes("\u00d72/2") && said.includes("done") ? "\u2713 and it says so — a finished job no longer looks like its own last lap" : "\u2717 nothing on screen distinguishes finished from still-running"}`
+					`   ${said.includes("\u00d72/2") && said.includes("done") ? "\u2713 and it says so — a finished job no longer looks like its own last step" : "\u2717 nothing on screen distinguishes finished from still-running"}`
 				);
 				console.log(
 					`   ${screen.glyph === "done" ? "\u2713 the ring shows the done glyph, not the brand mark" : `\u2717 the middle of the ring shows "${screen.glyph}"`}`
@@ -1038,34 +1039,33 @@ async function runDemo() {
 			}
 		],
 
-		// The bug: the lap count was left where the spent run put it, so starting the timer again gave
-		// a run that could never repeat once — under a display still reading ×2/2.
+		// The bug: the tally was left where the spent run put it, so starting the timer again gave a
+		// run that could never move on once — under a display still reading ×2/2.
 		[
-			"…and starting it again is a FRESH run, with its laps back",
+			"…and starting it again is a FRESH run, back on the first step",
 			async () => {
 				gestures.touch(false);
 				await wait(700);
 				const restarted = screen.label;
 				await wait(2400);
-				console.log(`\n   label on restart: "${restarted}", one lap later: "${screen.label}"`);
+				console.log(`\n   label on restart: "${restarted}", one step later: "${screen.label}"`);
 				console.log(
-					`   ${restarted.includes("\u00d71/2") && !restarted.includes("done") && screen.label.includes("\u00d72/2") ? "\u2713 counter reset, and it repeats again" : "\u2717 the spent lap count stuck"}`
+					`   ${restarted.includes("\u00d71/2") && !restarted.includes("done") && screen.label.includes("\u00d72/2") ? "\u2713 counter reset, and it moves on again" : "\u2717 the spent tally stuck"}`
 				);
 			}
 		],
 
-		// Auto-reset: the other end of a finished timer. Repeat starts the next run at once; this waits
-		// for the whole job to be over and then clears the clock, so a page you left has a timer on it
-		// rather than a used one.
+		// Auto-reset: the other end of a finished timer. A next step starts at once; this waits for the
+		// whole job to be over and then clears the clock, so a page you left has a timer on it rather
+		// than a used one.
 		[
 			"auto-reset on, 1s wait, 3s preset → runs out, says `done`, then clears itself",
 			async () => {
 				// Three seconds, not the two the step above used: an unchanged duration is not a reload,
 				// so a 2s preset here would leave the previous step's clock running rather than start one.
 				applySettings({
-					presets: [3],
+					presets: [[3]],
 					presetIndex: 0,
-					repeat: false,
 					showLogo: true,
 					soundId: "none",
 					autoResetEnabled: true,
@@ -1097,7 +1097,7 @@ async function runDemo() {
 		[
 			"the ring's middle shows the STATE, and the brand mark only on an idle clock",
 			async () => {
-				applySettings({ presets: [600], presetIndex: 0, repeat: false, showLogo: true, layout: "ring" });
+				applySettings({ presets: [[600]], presetIndex: 0, repeat: false, showLogo: true, layout: "ring" });
 				await wait(600);
 				const whenIdle = screen.glyph;
 
@@ -1124,7 +1124,7 @@ async function runDemo() {
 			async () => {
 				// A different duration from the step before, so the clock is reloaded and genuinely
 				// idle rather than left paused — otherwise the "idle" sample is a paused one.
-				applySettings({ presets: [900], presetIndex: 0, layout: "bar", theme: "neon" });
+				applySettings({ presets: [[900]], presetIndex: 0, layout: "bar", theme: "neon" });
 				await wait(800);
 				const idleFill = screen.barFill;
 				const idleGlyph = screen.glyph;
@@ -1150,7 +1150,7 @@ async function runDemo() {
 		[
 			"key: one press → starts",
 			async () => {
-				applySettings({ presets: [600, 1200], presetIndex: 0, repeat: false, soundId: "none", showLabel: true });
+				applySettings({ presets: [[600], [1200]], presetIndex: 0, repeat: false, soundId: "none", showLabel: true });
 				await wait(400);
 				await keyPress(60);
 			}
@@ -1181,7 +1181,7 @@ async function runDemo() {
 		[
 			"key: a press, then a press-and-hold → the hold wins, and only the hold",
 			async () => {
-				applySettings({ presets: [540, 1200], presetIndex: 0 });
+				applySettings({ presets: [[540], [1200]], presetIndex: 0 });
 				await wait(500);
 				// Reset first, so the clock is idle and sitting on its preset however the step before
 				// this one left it — an unchanged duration is not a reload, so applySettings alone does
@@ -1223,7 +1223,7 @@ async function runDemo() {
 		[
 			"key: a repeated key-down does not leave a second long-press armed",
 			async () => {
-				applySettings({ presets: [300, 600, 1200], presetIndex: 0 });
+				applySettings({ presets: [[300], [600], [1200]], presetIndex: 0 });
 				await wait(500);
 				const before = key.value;
 

@@ -24,7 +24,7 @@ import {
 	DEFAULT_PRESETS,
 	DEFAULTS,
 	MAX_PRESET_SECONDS,
-	MAX_REPEAT_COUNT,
+	MAX_STAGES,
 	MAX_SOUND_REPEAT,
 	MAX_TITLE_LENGTH
 } from "../src/settings.ts";
@@ -78,10 +78,14 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 			assert.equal(await ui.evaluate("MAX_PRESET_SECONDS"), MAX_PRESET_SECONDS);
 		});
 
-		it("agrees on the repeat and sound-repeat ceilings, which it enforces in the markup", async () => {
+		it("agrees on the sound-repeat ceiling, which it enforces in the markup", async () => {
 			await ui.load({});
-			assert.equal(await ui.evaluate('document.getElementById("repeatCount").max'), String(MAX_REPEAT_COUNT));
 			assert.equal(await ui.evaluate('document.getElementById("soundRepeat").max'), String(MAX_SOUND_REPEAT));
+		});
+
+		it("agrees on how many stages one preset may hold", async () => {
+			await ui.load({});
+			assert.equal(await ui.evaluate("MAX_STAGES"), MAX_STAGES);
 		});
 
 		it("agrees on the longest title, which the field enforces before anything is typed", async () => {
@@ -95,7 +99,7 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 		it("shows what is stored, not what is default", async () => {
 			await ui.load({
 				...DEFAULTS,
-				presets: [90, 600],
+				presets: [[90], [600]],
 				presetIndex: 1,
 				layout: "bar",
 				theme: "neon",
@@ -108,13 +112,12 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 			assert.equal(await ui.evaluate('document.getElementById("layout").value'), "bar");
 			assert.equal(await ui.evaluate('document.getElementById("theme").value'), "neon");
 			assert.equal(await ui.evaluate('document.getElementById("showLogo").checked'), false);
-			assert.equal(await ui.evaluate('document.getElementById("repeat").checked'), true);
-			assert.equal(await ui.evaluate('document.getElementById("repeatCount").value'), "5");
 			assert.equal(await ui.evaluate('document.getElementById("volume").value'), "40");
+			assert.equal(await text('document.querySelectorAll("#rows .steps")[1].value'), "10m");
 		});
 
 		it("draws one row per preset, and marks the selected one", async () => {
-			await ui.load({ ...DEFAULTS, presets: [90, 600, 1800], presetIndex: 1 });
+			await ui.load({ ...DEFAULTS, presets: [[90], [600], [1800]], presetIndex: 1 });
 
 			assert.equal(await ui.evaluate('document.querySelectorAll("#rows li").length'), 3);
 			assert.equal(
@@ -123,14 +126,19 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 			);
 		});
 
-		it("splits a preset into hours, minutes and seconds", async () => {
-			await ui.load({ ...DEFAULTS, presets: [3671] });
+		it("writes a preset out as text the field would accept back", async () => {
+			await ui.load({ ...DEFAULTS, presets: [[3671]] });
 
-			assert.deepEqual(
-				await ui.evaluate('[...document.querySelectorAll("#rows li input")].map((i) => i.value)'),
-				["1", "1", "11"],
-				"1h 1m 11s"
-			);
+			assert.equal(await text('document.querySelector("#rows .steps").value'), "1h 1m 11s");
+		});
+
+		it("writes every stage of a preset, in order and unabbreviated", async () => {
+			// Not folded back into `10m x2`. The multiplier is there to save typing, not to be a
+			// canonical form — a row that came back shorter than it was typed would be the panel arguing
+			// about how it was said.
+			await ui.load({ ...DEFAULTS, presets: [[2400, 600, 600]] });
+
+			assert.equal(await text('document.querySelector("#rows .steps").value'), "40m, 10m, 10m");
 		});
 
 		it("falls back to the defaults when Stream Deck has nothing stored", async () => {
@@ -151,7 +159,7 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 		});
 
 		it("changes the one field it owns and leaves the rest alone", async () => {
-			const stored = { ...DEFAULTS, presets: [90, 600], presetIndex: 1, theme: "ocean", volume: 30 };
+			const stored = { ...DEFAULTS, presets: [[90], [600]], presetIndex: 1, theme: "ocean", volume: 30 };
 			await ui.load(stored);
 
 			await change("showFinishTime", true);
@@ -165,7 +173,7 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 			// itself; anything the page silently drops would show up here as a missing key.
 			const stored = {
 				...DEFAULTS,
-				presets: [1, MAX_PRESET_SECONDS],
+				presets: [[1], [MAX_PRESET_SECONDS, 60]],
 				presetIndex: 1,
 				layout: "bar",
 				theme: "mwk",
@@ -175,8 +183,6 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 				showFinishTime: true,
 				warnEnabled: true,
 				warnSeconds: 125,
-				repeat: true,
-				repeatCount: MAX_REPEAT_COUNT,
 				autoResetEnabled: true,
 				autoResetSeconds: 300,
 				soundId: "custom",
@@ -188,16 +194,6 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 
 			await change("showLabel", true);
 			assert.deepEqual(await lastSaved(), { ...stored, showLabel: true });
-		});
-
-		it("clamps a repeat count typed outside its range", async () => {
-			await ui.load({ ...DEFAULTS });
-
-			await change("repeatCount", "99");
-			assert.equal((await lastSaved())?.repeatCount, MAX_REPEAT_COUNT);
-
-			await change("repeatCount", "0");
-			assert.equal((await lastSaved())?.repeatCount, 1, "zero repeats is not a thing; one run is");
 		});
 
 		it("clamps the volume to 0-100", async () => {
@@ -307,47 +303,124 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 	});
 
 	describe("editing presets", () => {
-		it("writes hours, minutes and seconds back as one duration", async () => {
-			await ui.load({ ...DEFAULTS, presets: [60] });
-
-			await ui.evaluate(`(() => {
-				const [h, m, s] = document.querySelectorAll("#rows li input");
-				h.value = "1"; m.value = "30"; s.value = "15";
-				s.dispatchEvent(new Event("change", { bubbles: true }));
+		/** Types into a preset row's field and lets it settle, the way leaving the field would. */
+		const type = (index: number, value: string): Promise<unknown> =>
+			ui.evaluate(`(() => {
+				const field = document.querySelectorAll("#rows .steps")[${index}];
+				field.value = ${JSON.stringify(value)};
+				field.dispatchEvent(new Event("input", { bubbles: true }));
+				field.dispatchEvent(new Event("change", { bubbles: true }));
 				return true;
 			})()`);
 
-			assert.deepEqual((await lastSaved())?.presets, [3600 + 1800 + 15]);
+		it("reads a duration typed with its units", async () => {
+			await ui.load({ ...DEFAULTS, presets: [[60]] });
+
+			await type(0, "1h 30m 15s");
+			assert.deepEqual((await lastSaved())?.presets, [[3600 + 1800 + 15]]);
 		});
 
-		it("clamps a preset to twenty-four hours", async () => {
-			await ui.load({ ...DEFAULTS, presets: [60] });
+		it("reads a bare number as minutes, which is what the field is mostly used for", async () => {
+			await ui.load({ ...DEFAULTS, presets: [[60]] });
 
-			await ui.evaluate(`(() => {
-				const [h] = document.querySelectorAll("#rows li input");
-				h.value = "99";
-				h.dispatchEvent(new Event("change", { bubbles: true }));
-				return true;
-			})()`);
-
-			assert.deepEqual((await lastSaved())?.presets, [MAX_PRESET_SECONDS]);
+			await type(0, "40");
+			assert.deepEqual((await lastSaved())?.presets, [[2400]], "40 is forty minutes, not forty seconds");
 		});
 
-		it("clamps an emptied preset to one second rather than zero", async () => {
-			await ui.load({ ...DEFAULTS, presets: [60] });
+		it("reads a comma-separated list as the stages of one preset", async () => {
+			await ui.load({ ...DEFAULTS, presets: [[60]] });
 
-			await ui.evaluate(`(() => {
-				const [h, m, s] = document.querySelectorAll("#rows li input");
-				h.value = "0"; m.value = "0"; s.value = "0";
-				s.dispatchEvent(new Event("change", { bubbles: true }));
-				return true;
-			})()`);
+			await type(0, "40, 10, 10");
+			assert.deepEqual((await lastSaved())?.presets, [[2400, 600, 600]]);
+		});
 
-			assert.deepEqual((await lastSaved())?.presets, [1], "a zero-length countdown is not a countdown");
+		it("expands a multiplier into that many stages", async () => {
+			await ui.load({ ...DEFAULTS, presets: [[60]] });
+
+			await type(0, "40m, 10m x3");
+			assert.deepEqual((await lastSaved())?.presets, [[2400, 600, 600, 600]]);
+		});
+
+		it("says what it read, under the field", async () => {
+			// The one thing that makes a text field safe here: the parse is visible before the row is
+			// left, so a bare number read as the wrong unit is seen rather than discovered by a timer.
+			await ui.load({ ...DEFAULTS, presets: [[60]] });
+
+			await type(0, "40, 10, 10");
+			assert.equal(await text('document.querySelector("#rows .echo").textContent'), "40m · 10m · 10m — 1h in total");
+		});
+
+		it("says nothing but the length for a preset with one stage", async () => {
+			await ui.load({ ...DEFAULTS, presets: [[60]] });
+
+			await type(0, "90s");
+			assert.equal(await text('document.querySelector("#rows .echo").textContent'), "1m 30s");
+		});
+
+		it("saves nothing at all when the row does not parse, and says why", async () => {
+			// Half a row is worse than none: `40m, banana` saved as `[2400]` would be a preset nobody
+			// typed, arrived at silently. The stored preset stays exactly as it was.
+			await ui.load({ ...DEFAULTS, presets: [[60]] });
+
+			await type(0, "40m, banana");
+
+			assert.equal(await ui.evaluate("window.__calls.setSettings.length"), 0, "nothing was written");
+			assert.equal(await ui.evaluate('document.querySelector("#rows .steps").classList.contains("bad")'), true);
+			assert.match(await text('document.querySelector("#rows .echo").textContent'), /banana/);
+		});
+
+		it("leaves the text alone when it does not parse, rather than reverting it", async () => {
+			// Whatever was typed is what has to be corrected, so throwing it away and redrawing the old
+			// value would make the error impossible to fix and impossible to see.
+			await ui.load({ ...DEFAULTS, presets: [[60]] });
+
+			await type(0, "40m, banana");
+			assert.equal(await text('document.querySelector("#rows .steps").value'), "40m, banana");
+		});
+
+		it("canonicalises a row that does parse, so what is stored and what is shown agree", async () => {
+			await ui.load({ ...DEFAULTS, presets: [[60]] });
+
+			await type(0, "40,10,10");
+			assert.equal(await text('document.querySelector("#rows .steps").value'), "40m, 10m, 10m");
+		});
+
+		it("clamps a stage to twenty-four hours", async () => {
+			await ui.load({ ...DEFAULTS, presets: [[60]] });
+
+			await type(0, "99h");
+			assert.deepEqual((await lastSaved())?.presets, [[MAX_PRESET_SECONDS]]);
+		});
+
+		it("clamps an emptied stage to one second rather than zero", async () => {
+			await ui.load({ ...DEFAULTS, presets: [[60]] });
+
+			await type(0, "0s");
+			assert.deepEqual((await lastSaved())?.presets, [[1]], "a zero-length countdown is not a countdown");
+		});
+
+		it("refuses a list longer than the plugin would keep", async () => {
+			// The ceiling is enforced here rather than being quietly truncated on the way to disk, where
+			// the stages that went missing would have no explanation attached.
+			await ui.load({ ...DEFAULTS, presets: [[60]] });
+
+			await type(0, `1m x${MAX_STAGES + 1}`);
+
+			assert.equal(await ui.evaluate("window.__calls.setSettings.length"), 0);
+			assert.match(await text('document.querySelector("#rows .echo").textContent'), new RegExp(String(MAX_STAGES)));
+		});
+
+		it("edits the one row it was typed into", async () => {
+			// Each row closes over its own index. A loop that shared one would put every edit on the
+			// last preset, which is the kind of thing that passes every single-row test there is.
+			await ui.load({ ...DEFAULTS, presets: [[60], [120], [180]] });
+
+			await type(1, "9m");
+			assert.deepEqual((await lastSaved())?.presets, [[60], [540], [180]]);
 		});
 
 		it("adds a preset, and offers no remove button when only one is left", async () => {
-			await ui.load({ ...DEFAULTS, presets: [60] });
+			await ui.load({ ...DEFAULTS, presets: [[60]] });
 			assert.equal(await ui.evaluate('document.querySelectorAll("#rows .remove").length'), 0);
 
 			await ui.evaluate('document.getElementById("add").click()');
@@ -356,12 +429,12 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 		});
 
 		it("pulls the selection back in range when the selected preset is removed", async () => {
-			await ui.load({ ...DEFAULTS, presets: [60, 120], presetIndex: 1 });
+			await ui.load({ ...DEFAULTS, presets: [[60], [120]], presetIndex: 1 });
 
 			await ui.evaluate('document.querySelectorAll("#rows .remove")[1].click()');
 
 			const saved = await lastSaved();
-			assert.deepEqual(saved?.presets, [60]);
+			assert.deepEqual(saved?.presets, [[60]]);
 			assert.equal(saved?.presetIndex, 0, "an index pointing past the end would show the wrong preset");
 		});
 
@@ -392,7 +465,7 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 			// Choosing used to be possible only on the hardware, one forward hold at a time with no way
 			// back — so the fourth of four presets took three holds. The panel already knew which was
 			// active and already drew it; it just had no way to be told.
-			await ui.load({ ...DEFAULTS, presets: [60, 120, 180], presetIndex: 0 });
+			await ui.load({ ...DEFAULTS, presets: [[60], [120], [180]], presetIndex: 0 });
 
 			await ui.evaluate('document.querySelectorAll("#rows .pick")[2].click()');
 
@@ -405,7 +478,7 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 		});
 
 		it("does not write when the preset already loaded is clicked again", async () => {
-			await ui.load({ ...DEFAULTS, presets: [60, 120], presetIndex: 1 });
+			await ui.load({ ...DEFAULTS, presets: [[60], [120]], presetIndex: 1 });
 
 			await ui.evaluate('document.querySelectorAll("#rows .pick")[1].click()');
 
@@ -416,28 +489,30 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 			// Loading a preset on the hardware saves the new index, and that comes back here as a
 			// didReceiveSettings — which rebuilds every row. Without care that pulls the cursor out of
 			// a preset the user is halfway through typing, for something they did not do.
-			await ui.load({ ...DEFAULTS, presets: [60, 120] });
+			await ui.load({ ...DEFAULTS, presets: [[60], [120]] });
 
-			await ui.evaluate('document.querySelectorAll("#rows li")[1].querySelectorAll("input")[1].focus()');
+			await ui.evaluate('document.querySelectorAll("#rows .steps")[1].focus()');
 
 			await ui.evaluate(`window.__subs.didReceiveSettings({
-				payload: { settings: { ...DEFAULTS, presets: [60, 120], presetIndex: 1 } }
+				payload: { settings: { ...DEFAULTS, presets: [[60], [120]], presetIndex: 1 } }
 			})`);
 
 			assert.equal(
-				await ui.evaluate(`(() => {
-					const rows = document.querySelectorAll("#rows li");
-					return [...rows[1].querySelectorAll("input")].indexOf(document.activeElement);
-				})()`),
-				1,
+				await ui.evaluate('document.activeElement === document.querySelectorAll("#rows .steps")[1]'),
+				true,
 				"the redraw took the cursor with it"
+			);
+			assert.equal(
+				await ui.evaluate('[...document.querySelectorAll("#rows li")].findIndex((r) => r.className === "active")'),
+				1,
+				"positive control: the redraw did run, it just put the caret back"
 			);
 		});
 
 		it("keeps a loaded preset list independent of the defaults", async () => {
 			// The same hazard from the other side: settings that *do* carry presets must not be able
 			// to reach DEFAULTS either, whatever else is spread around them.
-			await ui.load({ ...DEFAULTS, presets: [60] });
+			await ui.load({ ...DEFAULTS, presets: [[60]] });
 
 			await ui.evaluate('document.getElementById("add").click()');
 
@@ -460,16 +535,16 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 			assert.equal(await disabled("preview"), false);
 		});
 
-		it("greys out the fade threshold and the repeat count", async () => {
-			await ui.load({ ...DEFAULTS, warnEnabled: false, repeat: false });
+		it("greys out the fade threshold and the auto-reset wait", async () => {
+			await ui.load({ ...DEFAULTS, warnEnabled: false, autoResetEnabled: false });
 
 			assert.equal(await disabled("warnMin"), true);
 			assert.equal(await disabled("warnSec"), true);
-			assert.equal(await disabled("repeatCount"), true);
+			assert.equal(await disabled("autoResetMin"), true);
 
 			await change("warnEnabled", true);
 			assert.equal(await disabled("warnMin"), false);
-			assert.equal(await disabled("repeatCount"), true, "one switch must not answer for another");
+			assert.equal(await disabled("autoResetMin"), true, "one switch must not answer for another");
 		});
 
 		it("dims the row rather than hiding it, so nothing below moves", async () => {
@@ -548,10 +623,10 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 		it("reloads its controls when the plugin saves settings of its own", async () => {
 			// The plugin writes the preset index back when the touchscreen cycles presets, and that
 			// echoes here. An inspector that ignored it would show a stale selection.
-			await ui.load({ ...DEFAULTS, presets: [60, 120], presetIndex: 0 });
+			await ui.load({ ...DEFAULTS, presets: [[60], [120]], presetIndex: 0 });
 
 			await ui.evaluate(
-				'window.__subs.didReceiveSettings({ payload: { settings: { ...DEFAULTS, presets: [60, 120], presetIndex: 1, theme: "forest" } } })'
+				'window.__subs.didReceiveSettings({ payload: { settings: { ...DEFAULTS, presets: [[60], [120]], presetIndex: 1, theme: "forest" } } })'
 			);
 
 			assert.equal(await ui.evaluate('document.getElementById("theme").value'), "forest");

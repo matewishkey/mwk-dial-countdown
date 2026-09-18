@@ -33,6 +33,19 @@ describe("what a timer is called", () => {
 		assert.equal(nameOf(fixture().countdown), "20m");
 	});
 
+	it("is the CURRENT stage's length on a preset with several", () => {
+		// The number the clock beside it is counting down, not the preset's total. On a 40/10/10 an
+		// unnamed label reading `1h` would be naming something nothing on screen is measuring.
+		const { countdown, advance } = fixture({ presets: [[2400, 600, 600]] });
+
+		assert.equal(nameOf(countdown), "40m");
+
+		countdown.toggle();
+		advance(2_400_000);
+		countdown.settle();
+		assert.equal(nameOf(countdown), "10m", "the second stage is ten minutes, and says so");
+	});
+
 	it("is the title when there is one", () => {
 		assert.equal(nameOf(fixture({ title: "Tea" }).countdown), "Tea");
 	});
@@ -64,14 +77,14 @@ describe("the dial's label", () => {
 		assert.equal(dialLabel(countdown, "idle"), "from 20m", "not `20m · from 20m`, which reads as agreement");
 	});
 
-	it("appends the lap tally, and says `done` at the end of the job", () => {
-		const { countdown } = fixture({ title: "Tea", repeat: true, repeatCount: 3 });
+	it("appends the stage tally, and says `done` at the end of the job", () => {
+		const { countdown } = fixture({ title: "Tea", presets: [[1200, 600, 600]] });
 
-		assert.equal(dialLabel(countdown, "idle"), "Tea · ×1/3", "the tally is the only sign repeat is on at all");
+		assert.equal(dialLabel(countdown, "idle"), "Tea · ×1/3", "the tally is the only sign there are stages at all");
 		assert.equal(dialLabel(countdown, "elapsed"), "Tea · ×1/3 · done");
 	});
 
-	it("says `done` on a finished timer that was not repeating", () => {
+	it("says `done` on a finished timer with only one stage", () => {
 		assert.equal(dialLabel(fixture({ title: "Tea" }).countdown, "elapsed"), "Tea · done");
 	});
 
@@ -86,7 +99,7 @@ describe("the key's caption", () => {
 		assert.equal(keyCaption(fixture({ title: "Tea" }).countdown, "idle"), "Tea");
 	});
 
-	it("keeps the name while the clock runs, when nothing is repeating", () => {
+	it("keeps the name while the clock runs, when there is only one stage", () => {
 		assert.equal(keyCaption(fixture({ title: "Tea" }).countdown, "running"), "Tea");
 	});
 
@@ -97,19 +110,19 @@ describe("the key's caption", () => {
 		assert.equal(keyCaption(countdown, "idle"), "Tea", "one line, and the clock above already shows the length");
 	});
 
-	it("gives the lap tally the line once the timer is under way", () => {
-		const { countdown } = fixture({ title: "Tea", repeat: true, repeatCount: 3 });
+	it("gives the stage tally the line once the timer is under way", () => {
+		const { countdown } = fixture({ title: "Tea", presets: [[1200, 600, 600]] });
 
 		assert.equal(keyCaption(countdown, "idle"), "Tea", "before it starts, the name is the more useful thing");
 		assert.equal(keyCaption(countdown, "running"), "×1/3");
 	});
 
-	it("says both when a repeating job has finished", () => {
-		const { countdown } = fixture({ repeat: true, repeatCount: 3 });
+	it("says both when a job with stages has finished", () => {
+		const { countdown } = fixture({ presets: [[1200, 600, 600]] });
 		assert.equal(keyCaption(countdown, "elapsed"), "done ×1/3");
 	});
 
-	it("says `done` on a finished timer that was not repeating", () => {
+	it("says `done` on a finished timer with only one stage", () => {
 		assert.equal(keyCaption(fixture({ title: "Tea" }).countdown, "elapsed"), "done");
 	});
 

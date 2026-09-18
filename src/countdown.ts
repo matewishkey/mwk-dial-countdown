@@ -2,7 +2,7 @@
  * Everything a countdown is, minus the Stream Deck.
  *
  * A countdown on a dial and a countdown on a key differ in exactly two ways: how they are driven,
- * and how they are drawn. The clock, the presets, the alert, the auto-repeat and the word that
+ * and how they are drawn. The clock, the presets, the alert, the stage sequence and the word that
  * acknowledges a gesture are identical, so they live here — once — rather than in each action.
  *
  * Nothing in this file imports the SDK, which is what lets the whole state machine be driven from a
@@ -28,15 +28,24 @@ export class Countdown {
 	#presetIndex: number;
 
 	/**
-	 * The preset duration the clock was last loaded from, in seconds.
+	 * Which stage of the selected preset is on the clock, 0-based.
 	 *
-	 * Not the same as the clock's own duration, which the dial moves freely, and not the same as the
-	 * selected preset either while an inspector edit is being taken. It exists so that
-	 * {@link Countdown.applySettings} can tell "the configured length changed" from "the clock has
-	 * been dialled off it" — comparing the settings against the live clock would make every touch of
-	 * the volume slider reload a countdown that had merely been nudged.
+	 * This is what became of the count of completed repeat laps, and it is a better thing to hold:
+	 * the old counter was a *tally* that the stopping rule had to compare against a separate setting,
+	 * and reading it as "repeats so far" rather than "runs finished" is what once made a count of 3
+	 * run four times. A position in a list cannot be off by one against itself — the timer moves on
+	 * while there is a next stage, and stops when there is not.
 	 */
-	#loadedSeconds: number;
+	#stageIndex = 0;
+
+	/**
+	 * The stage list the clock was last loaded from.
+	 *
+	 * Held rather than re-read so {@link Countdown.applySettings} can tell "the preset was edited"
+	 * from "the clock has been dialled off it" — comparing the settings against the live clock would
+	 * make every touch of the volume slider reload a countdown that had merely been nudged.
+	 */
+	#loadedStages: number[];
 
 	#settings: DialCountdownSettings;
 
@@ -44,21 +53,12 @@ export class Countdown {
 	#alerted = false;
 
 	/**
-	 * How many runs of a repeating timer have finished.
-	 *
-	 * Counted as *completed* runs rather than as repeats, because that is the number the stopping
-	 * rule needs: `repeatCount` is a total, so the timer stops the moment this reaches it. Reading it
-	 * as "repeats so far" is what made a count of 3 run four times.
-	 */
-	#completed = 0;
-
-	/**
 	 * When the whole job finished, or `null` when it has not.
 	 *
-	 * Only set on the elapse that ends the *last* run — a repeating timer's earlier laps restart
-	 * themselves and never come through here. It is the clock the auto-reset delay is measured from,
-	 * and it is cleared the moment the timer is anything but elapsed, so a finished timer somebody
-	 * restarted by hand does not carry a pending reset into its next run.
+	 * Only set on the elapse that ends the *last* stage — the earlier ones load the next stage and
+	 * never come through here. It is the clock the auto-reset delay is measured from, and it is
+	 * cleared the moment the timer is anything but elapsed, so a finished timer somebody restarted by
+	 * hand does not carry a pending reset into its next run.
 	 */
 	#finishedAt: number | null = null;
 
@@ -71,8 +71,8 @@ export class Countdown {
 		this.#settings = settings;
 		this.#presets = settings.presets;
 		this.#presetIndex = settings.presetIndex;
-		this.#loadedSeconds = this.#presets[this.#presetIndex];
-		this.timer = new Timer(this.#loadedSeconds * 1000, now);
+		this.#loadedStages = [...this.stages];
+		this.timer = new Timer(this.stageSeconds * 1000, now);
 	}
 
 	get settings(): DialCountdownSettings {
@@ -87,73 +87,50 @@ export class Countdown {
 		return this.#presetIndex;
 	}
 
+	/** The stages of the selected preset, in seconds — one entry for a plain countdown. */
+	get stages(): readonly number[] {
+		return this.#presets[this.#presetIndex];
+	}
+
+	/** How many stages the selected preset runs. Always at least one. */
+	get stageCount(): number {
+		return this.stages.length;
+	}
+
 	/**
-	 * Which run of a repeating timer is on screen, 1-based, or `0` when repeat is switched off.
+	 * Which stage is on screen, 1-based.
 	 *
-	 * While a repeating timer is on its first run this reads `1`, not `0` — the label says `×1/3`
-	 * from the moment it starts, so the count runs 1, 2, 3 and stops, rather than appearing a run
-	 * late and then over-running the total it was given.
+	 * A finished timer keeps the number of its last stage rather than running one past it: `×3/3`
+	 * with `done` beside it, not `×4/3`. The two together are what tell a finished job from one still
+	 * on its final stage — a distinction the tally alone could not make, and did not, for a while.
 	 */
-	get lap(): number {
-		if (!this.#settings.repeat) {
-			return 0;
-		}
-
-		// Clamped at both ends. The ceiling stops a finished timer reading `×3/2`; the floor of one
-		// covers the clock that is sitting elapsed when the repeat rules themselves are re-edited —
-		// the tally it had belonged to the old rule and has been dropped, and `×0/5` is not a lap.
-		const run = this.finished ? this.#completed : this.#completed + 1;
-		return Math.min(Math.max(run, 1), this.laps);
-	}
-
-	/** How many runs a repeating timer gets in total, or `0` when repeat is switched off. */
-	get laps(): number {
-		return this.#settings.repeat ? this.#settings.repeatCount : 0;
+	get stage(): number {
+		return this.#stageIndex + 1;
 	}
 
 	/**
-	 * True once the timer has run out with nothing left to repeat — the end of the whole job, not the
-	 * end of one lap.
-	 *
-	 * This is the state that had no name before, and having no name is why it had no appearance: a
-	 * finished repeating timer showed `×3/3` for ever, which is exactly what it showed while its last
-	 * lap was still running. Now the screen can say `done`.
+	 * True once the timer has run out with no stage left to move on to — the end of the whole job,
+	 * not the end of one stage.
 	 */
 	get finished(): boolean {
 		return this.timer.status === "elapsed";
 	}
 
-	/** Length of the selected preset, in seconds — as configured, not as the dial has since left it. */
-	get presetSeconds(): number {
-		return this.#presets[this.#presetIndex];
+	/**
+	 * Length of the current stage, in seconds — as configured, not as the dial has since left it.
+	 */
+	get stageSeconds(): number {
+		return this.stages[this.#stageIndex];
 	}
 
 	/**
-	 * True when the clock has been dialled away from the preset it was loaded from.
+	 * How long the stages *after* this one add up to, in seconds.
 	 *
-	 * The dial deliberately no longer writes back to the preset list, so this is the state that needs
-	 * saying out loud: the working duration says one thing and the configuration says another. It is
-	 * what puts `from 20m` on the label, and it is deliberately *only* about the duration — a timer
-	 * merely running has not been dialled anywhere, and labelling it as though it had would be noise.
+	 * What the finish time needs, and the reason it was wrong before: `ends 3:40` was the end of the
+	 * clock on screen, which on anything that repeated was the end of that lap and not of the job.
 	 */
-	get drifted(): boolean {
-		return this.timer.durationMs !== this.presetSeconds * 1000;
-	}
-
-	/**
-	 * True when the clock is sitting stopped, full, on exactly the preset it is set to.
-	 *
-	 * This is the "nothing to put right" state, and it is what decides whether a hold of the screen
-	 * restores or advances — see {@link Countdown.cyclePreset}. It is deliberately wider than
-	 * {@link Countdown.drifted}: a countdown that is *running*, paused, or finished is not sitting on
-	 * its preset either, even though its duration still matches.
-	 *
-	 * `idle` is enough to mean full: every path that reaches it — reset, loading a preset, adjusting a
-	 * stopped clock — puts the remaining time back to the whole duration. `test/countdown.test.ts`
-	 * holds that invariant, since this getter now leans on it.
-	 */
-	get onPreset(): boolean {
-		return !this.drifted && this.timer.status === "idle";
+	get remainingStagesSeconds(): number {
+		return this.stages.slice(this.#stageIndex + 1).reduce((total, seconds) => total + seconds, 0);
 	}
 
 	/** The word acknowledging the last gesture, or `""` once it has had its time. */
@@ -169,7 +146,7 @@ export class Countdown {
 	/**
 	 * True on the dim half of the end-of-timer blink.
 	 *
-	 * The window is capped at half the preset's own length: a five minute warning on a five minute
+	 * The window is capped at half the stage's own length: a five minute warning on a five minute
 	 * timer would blink from the moment it started, which is what once made adjusting the clock look
 	 * like it had triggered the warning.
 	 */
@@ -186,6 +163,34 @@ export class Countdown {
 		return Math.floor(this.#now() / BLINK_MS) % 2 === 1;
 	}
 
+	/**
+	 * True when the clock has been dialled away from the stage it was loaded from.
+	 *
+	 * The dial deliberately no longer writes back to the preset list, so this is the state that needs
+	 * saying out loud: the working duration says one thing and the configuration says another. It is
+	 * what puts `from 20m` on the label, and it is deliberately *only* about the duration — a timer
+	 * merely running has not been dialled anywhere, and labelling it as though it had would be noise.
+	 */
+	get drifted(): boolean {
+		return this.timer.durationMs !== this.stageSeconds * 1000;
+	}
+
+	/**
+	 * True when the clock is sitting stopped, full, on the first stage of the preset it is set to.
+	 *
+	 * This is the "nothing to put right" state, and it is what decides whether a hold of the screen
+	 * restores or advances — see {@link Countdown.cyclePreset}. It is deliberately wider than
+	 * {@link Countdown.drifted}: a countdown that is *running*, paused, finished or part-way through
+	 * its stages is not sitting on its preset either, even though its duration may still match.
+	 *
+	 * `idle` is enough to mean full: every path that reaches it — reset, loading a preset, adjusting a
+	 * stopped clock — puts the remaining time back to the whole duration. `test/countdown.test.ts`
+	 * holds that invariant, since this getter now leans on it.
+	 */
+	get onPreset(): boolean {
+		return !this.drifted && this.#stageIndex === 0 && this.timer.status === "idle";
+	}
+
 	/** The settings to persist: what the inspector wrote, plus whichever preset is now selected. */
 	get persistable(): DialCountdownSettings {
 		return { ...this.#settings, presets: this.#presets, presetIndex: this.#presetIndex };
@@ -194,44 +199,29 @@ export class Countdown {
 	/**
 	 * Takes an edit from the property inspector.
 	 *
-	 * @returns `true` when the selected duration actually changed, which is the only case that should
+	 * @returns `true` when the selected preset actually changed, which is the only case that should
 	 * reload the clock — otherwise nudging the volume slider would reset a running timer.
+	 *
+	 * Compared against the stage list the clock was *loaded* from, never against the clock itself: a
+	 * countdown dialled off its stage must not be yanked back to it by an unrelated edit. Editing the
+	 * stages does put the timer back to the first of them, tally included, because the run it was
+	 * part-way through belonged to a preset that no longer exists — and a `×2/3` counted against a
+	 * list that now has five entries is a number about nothing.
 	 */
 	applySettings(raw: unknown): boolean {
 		const settings = normaliseSettings(raw);
-
-		// Against the preset the clock was loaded from, never against the clock itself — otherwise a
-		// countdown dialled off its preset would be yanked back to it by an unrelated edit.
-		const durationChanged = settings.presets[settings.presetIndex] !== this.#loadedSeconds;
-
-		// Re-deciding how many times a timer repeats re-decides how far through it is. Without this a
-		// count raised from 3 to 5 after the timer had already finished read `×3/5` on a dead clock —
-		// three laps that belonged to a rule which no longer exists, counted against the new one.
-		//
-		// **Only on a clock that has finished**, which is the whole of the case that reasoning covers.
-		// Applied to a *running* timer it restarts the tally underneath the run: raising the count from
-		// 3 to 4 while on lap 3 put `#completed` back to zero, so four more laps followed — six runs in
-		// total from a setting of four, labelled `×1/4` on a lap that was really the third. The
-		// inspector sends this on every keystroke while a number is typed over, so it was not rare.
-		const repeatChanged =
-			(settings.repeat !== this.#settings.repeat || settings.repeatCount !== this.#settings.repeatCount) &&
-			this.finished;
+		const nextStages = settings.presets[settings.presetIndex];
+		const changed = !sameStages(nextStages, this.#loadedStages);
 
 		this.#settings = settings;
 		this.#presets = settings.presets;
 		this.#presetIndex = settings.presetIndex;
 
-		if (durationChanged) {
-			this.#loadedSeconds = this.presetSeconds;
-			this.timer.setDuration(this.#loadedSeconds * 1000);
-			this.#alerted = false;
+		if (changed) {
+			this.#toStage(0);
 		}
 
-		if (durationChanged || repeatChanged) {
-			this.#completed = 0;
-		}
-
-		return durationChanged;
+		return changed;
 	}
 
 	/**
@@ -243,9 +233,10 @@ export class Countdown {
 	 * volume, possibly hours late. The screen still says `done`, in the elapsed colour, because that
 	 * part is still true.
 	 *
-	 * The same reasoning stops an auto-repeating timer from picking up where it left off. Its laps
-	 * were not run, so it does not get to claim them, and quietly fast-forwarding a tally nobody
-	 * watched would be inventing history. It comes back finished, and starting it starts a fresh run.
+	 * The same reasoning stops a multi-stage timer from picking up where it left off. Its later
+	 * stages were not run, so it does not get to claim them, and quietly fast-forwarding a tally
+	 * nobody watched would be inventing history. It comes back where it stopped, and starting it
+	 * starts the sequence again from the top.
 	 */
 	resume(): void {
 		if (this.timer.status === "elapsed") {
@@ -275,15 +266,16 @@ export class Countdown {
 	/** Pause a running timer, start or resume a stopped one. */
 	toggle(): void {
 		// "resume" is only honest when there is something to resume. A timer that has run out goes
-		// back to its full duration when started, so calling that a resume would describe the one
+		// back to the top of its preset when started, so calling that a resume would describe the one
 		// case where the clock jumps rather than carries on.
 		const before = this.timer.status;
 
-		// Starting an expired timer puts the clock back to full, which begins a fresh run — so the lap
-		// count goes back with it. Leaving it where it was is what used to strand an auto-repeating
-		// timer: its budget read as already spent, so the restarted run never repeated even once.
+		// Starting a finished timer starts the sequence again from its first stage — not from the last
+		// one, which is merely where it happened to stop. Leaving the stage index where it was is what
+		// used to strand a repeating timer: its budget read as already spent, so the restarted run
+		// never repeated even once.
 		if (before === "elapsed") {
-			this.#completed = 0;
+			this.#toStage(0);
 		}
 
 		this.timer.toggle();
@@ -292,7 +284,7 @@ export class Countdown {
 	}
 
 	/**
-	 * Back to the preset, stopped — the double tap.
+	 * Back to the first stage of the preset, stopped — the double tap.
 	 *
 	 * **To the preset, not to wherever the dial left the clock.** It used to restore the working
 	 * duration, so a 5m preset wound up to 8m reset to 8m for ever after: the number you configured
@@ -311,23 +303,24 @@ export class Countdown {
 	 * way to reset without immediately committing to a fresh run.
 	 */
 	reset(): void {
-		this.#toPreset();
+		this.#toStage(0);
 		this.#say("reset");
 	}
 
 	/**
 	 * Puts things right, or moves on — in that order.
 	 *
-	 * **If the clock is not sitting stopped and full on its preset, the hold puts it there.** Only a
-	 * hold made when there is nothing left to put right moves to another preset. Hold once, hold
-	 * again: restore, then advance.
+	 * **If the clock is not sitting stopped and full on the first stage of its preset, the hold puts
+	 * it there.** Only a hold made when there is nothing left to put right moves to another preset.
+	 * Hold once, hold again: restore, then advance.
 	 *
 	 * The restore comes first because it is wanted far more often, and the rule was too narrow at
 	 * first. It originally fired only when the dial had wound the clock off its preset, on the
 	 * reasoning that a *running* timer has a reset of its own — the double tap. In the hand that was
 	 * wrong: reaching for the dial mid-run and being thrown onto the next preset is exactly the
 	 * surprise the restore exists to prevent, and the double tap lives on a different control. So
-	 * running, paused, finished and dialled-off all count as something to put right.
+	 * running, paused, finished, part-way through the stages and dialled-off all count as something
+	 * to put right.
 	 *
 	 * Nothing is lost by it. The press that would have advanced still advances, one press later, and
 	 * the word says which of the two it just did: `preset · 20m` against `next · 30m`.
@@ -349,29 +342,38 @@ export class Countdown {
 		this.#load("next");
 	}
 
-	/** Puts the clock on the selected preset, stopped, and says so. */
+	/**
+	 * Puts the clock on the first stage of the selected preset, stopped, and says so.
+	 *
+	 * A preset with stages is named by its first one with the count after it — `next · 40m ×3` — since
+	 * the word has a moment on screen to say what you have just loaded, and "forty minutes" alone
+	 * would be two thirds of a lie about a 40/10/10.
+	 */
 	#load(word: string): void {
-		this.#toPreset();
-		this.#say(`${word} · ${formatPresetLabel(this.presetSeconds * 1000)}`);
+		this.#toStage(0);
+
+		const name = formatPresetLabel(this.stageSeconds * 1000);
+		const tally = this.stageCount > 1 ? ` ×${this.stageCount}` : "";
+		this.#say(`${word} · ${name}${tally}`);
 	}
 
 	/**
-	 * The start state: the selected preset, full, stopped, nothing counted.
+	 * The start state for a given stage: that stage's length, full, stopped.
 	 *
-	 * Three gestures mean this and they now all mean the same thing by construction — the double tap,
-	 * a hold that finds something to put right, and the auto-reset falling due. They used to agree by
-	 * coincidence and did not quite: the double tap restored the *working* duration while the other
-	 * two restored the preset, so `reset` and `hold` disagreed about where the top of the clock was.
-	 * One private method, one answer, and nothing left to drift.
+	 * Three gestures mean stage zero and they now all mean the same thing by construction — the
+	 * double tap, a hold that finds something to put right, and the auto-reset falling due. They used
+	 * to agree by coincidence and did not quite: the double tap restored the *working* duration while
+	 * the other two restored the preset, so `reset` and `hold` disagreed about where the top of the
+	 * clock was. One private method, one answer, and nothing left to drift.
 	 *
 	 * Silent on purpose. What to say about it is the caller's business, and the auto-reset says
 	 * nothing at all.
 	 */
-	#toPreset(): void {
-		this.#loadedSeconds = this.presetSeconds;
-		this.timer.setDuration(this.#loadedSeconds * 1000);
+	#toStage(index: number): void {
+		this.#stageIndex = Math.min(Math.max(index, 0), this.stageCount - 1);
+		this.#loadedStages = [...this.stages];
+		this.timer.setDuration(this.stageSeconds * 1000);
 		this.#alerted = false;
-		this.#completed = 0;
 	}
 
 	/**
@@ -389,9 +391,11 @@ export class Countdown {
 		const before = this.timer.status;
 		const deltaSeconds = deltaFor(ticks, pressed);
 
-		// Adjusting an expired timer puts it back to a full, stopped clock, which ends that run.
+		// Adjusting a finished timer is the start of setting up the next one, so it goes back to the
+		// first stage before the nudge lands — same as starting it would. Nudging the *last* stage of a
+		// spent sequence and then pressing play would otherwise run that one stage alone.
 		if (before === "elapsed") {
-			this.#completed = 0;
+			this.#toStage(0);
 		}
 
 		this.timer.adjust(deltaSeconds * 1000);
@@ -400,16 +404,15 @@ export class Countdown {
 	}
 
 	/**
-	 * Moves an elapsed timer on, once per elapse.
+	 * Moves an elapsed timer on to its next stage, once per elapse.
 	 *
-	 * Auto-repeat restarts immediately rather than after a pause: the alert has already fired, and a
-	 * gap between cycles is exactly what an interval timer must not have. It is bounded, though — an
-	 * unattended timer that never stops is a nuisance, not a feature.
+	 * The next stage starts immediately rather than after a pause: the alert has already fired, and a
+	 * gap between stages is exactly what an interval timer must not have.
 	 *
-	 * @returns `true` on the one turn of the loop where the timer *has just* run out — once per
-	 * elapse, never twice. Whether that makes a noise is the caller's business, and deliberately so:
-	 * it keeps this file free of anything that touches the filesystem, and it keeps the question of
-	 * which sound to play in one place rather than half here and half there.
+	 * @returns `true` on the one turn of the loop where a stage *has just* run out — once per elapse,
+	 * never twice. Whether that makes a noise is the caller's business, and deliberately so: it keeps
+	 * this file free of anything that touches the filesystem, and it keeps the question of which sound
+	 * to play in one place rather than half here and half there.
 	 */
 	settle(): boolean {
 		if (this.timer.status !== "elapsed") {
@@ -425,18 +428,17 @@ export class Countdown {
 		}
 
 		this.#alerted = true;
-		this.#completed += 1;
 
-		// `repeatCount` is a total, so the comparison is against runs *completed*. Counting repeats
-		// instead is what made "repeat 3 times" run four times: the third repeat still passed the test.
-		if (this.#settings.repeat && this.#completed < this.#settings.repeatCount) {
-			this.#alerted = false;
-			this.timer.reset();
+		// While there is a stage left, take it. The stopping rule is the end of the list rather than a
+		// count compared against a tally, which is the whole reason the sequence replaced the repeat
+		// switch: there is no off-by-one available to get wrong.
+		if (this.#stageIndex + 1 < this.stageCount) {
+			this.#toStage(this.#stageIndex + 1);
 			this.timer.start();
 			return true;
 		}
 
-		// The end of the whole job, laps included — which is the only thing the auto-reset waits for.
+		// The end of the whole job, stages and all — which is the only thing the auto-reset waits for.
 		this.#finishedAt = this.#now();
 		return true;
 	}
@@ -447,8 +449,8 @@ export class Countdown {
 	 * A countdown that has run out otherwise sits reading `done` until somebody presses it, which is
 	 * right for a timer you are watching and wrong for one on a page you left — you come back to a
 	 * used clock and have to clear it before it is a timer again. After the delay it clears itself:
-	 * full clock, stopped, tally back to zero. Exactly the double tap, and deliberately so — the same
-	 * state, arrived at two ways, rather than a second idea of what "the start" means.
+	 * full clock, stopped, back on the first stage. Exactly the double tap, and deliberately so — the
+	 * same state, arrived at two ways, rather than a second idea of what "the start" means.
 	 *
 	 * Silent, with no acknowledgement drawn. The words under the clock name the gesture you just
 	 * made, and nobody made this one.
@@ -463,10 +465,15 @@ export class Countdown {
 		}
 
 		this.#finishedAt = null;
-		this.#toPreset();
+		this.#toStage(0);
 	}
 
 	#say(text: string): void {
 		this.#ack = { text, at: this.#now() };
 	}
+}
+
+/** Whether two stage lists are the same sequence of durations. */
+function sameStages(a: readonly number[], b: readonly number[]): boolean {
+	return a.length === b.length && a.every((seconds, index) => seconds === b[index]);
 }

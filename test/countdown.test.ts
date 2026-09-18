@@ -98,7 +98,7 @@ describe("the gestures a countdown answers to", () => {
 
 		countdown.adjust(60);
 		countdown.applySettings({ presets: [300, 1200], presetIndex: 1 });
-		assert.equal(countdown.presetSeconds, 1200, "precondition: the selection moved to 20m");
+		assert.equal(countdown.stageSeconds, 1200, "precondition: the selection moved to 20m");
 
 		countdown.reset();
 		assert.equal(countdown.timer.durationMs, 1_200_000);
@@ -186,13 +186,13 @@ describe("what the dial changes, and what it leaves alone", () => {
 
 		countdown.adjust(1);
 		assert.equal(countdown.timer.durationMs, 301_000, "the clock in front of you does move");
-		assert.equal(countdown.presets[0], 300, "the configured preset does not");
+		assert.deepEqual(countdown.presets[0], [300], "the configured preset does not");
 		assert.equal(countdown.toast, "+1s");
 
 		countdown.reset();
 		countdown.toggle();
 		countdown.adjust(-1);
-		assert.equal(countdown.presets[0], 300, "and a running nudge leaves it alone as it always did");
+		assert.deepEqual(countdown.presets[0], [300], "and a running nudge leaves it alone as it always did");
 		assert.equal(countdown.toast, "-1s");
 	});
 
@@ -215,7 +215,7 @@ describe("what the dial changes, and what it leaves alone", () => {
 		countdown.cyclePreset(); // and round again to the first
 		assert.equal(countdown.presetIndex, 0);
 		assert.equal(countdown.timer.durationMs, 300_000, "the preset is exactly what it was configured as");
-		assert.equal(countdown.persistable.presets[0], 300, "and that is what gets saved");
+		assert.deepEqual(countdown.persistable.presets[0], [300], "and that is what gets saved");
 	});
 
 	it("reports the change, not the raw click count", () => {
@@ -318,223 +318,238 @@ describe("holding for the next preset", () => {
 	});
 });
 
-describe("the lap counter", () => {
-	function repeating(repeatCount: number): { countdown: Countdown; advance: (ms: number) => void } {
+describe("the stage counter", () => {
+	/** A preset of `count` two-second stages — the sequence, driven by hand. */
+	function staged(count: number): { countdown: Countdown; advance: (ms: number) => void } {
 		let now = 1_000_000;
 		const countdown = new Countdown(
-			normaliseSettings({ presets: [2], presetIndex: 0, repeat: true, repeatCount, soundId: "none" }),
+			normaliseSettings({ presets: [Array.from({ length: count }, () => 2)], presetIndex: 0, soundId: "none" }),
 			() => now
 		);
 		return { countdown, advance: (ms: number) => void (now += ms) };
 	}
 
-	/** Runs a repeating timer until it stops of its own accord. */
-	function exhaust({ countdown, advance }: ReturnType<typeof repeating>): void {
+	/** Runs a sequence until it stops of its own accord. */
+	function exhaust({ countdown, advance }: ReturnType<typeof staged>): void {
 		countdown.toggle();
-		for (let i = 0; i < 20 && countdown.timer.status !== "elapsed"; i++) {
+		for (let i = 0; i < 40 && countdown.timer.status !== "elapsed"; i++) {
 			advance(2_000);
 			countdown.settle();
 		}
 	}
 
-	it("does not restart the repeat tally when the count changes mid-run", () => {
-		// Raising the count while the timer was running put `#completed` back to zero, so the laps
-		// already run were run again: a count raised from 3 to 4 on the third lap produced SIX runs,
-		// labelled `×1/4` on a lap that was really the third. The inspector emits a settings write on
-		// every keystroke while a number is typed over, so this fired without anyone meaning it to.
-		const base = { presets: [2], presetIndex: 0, repeat: true, repeatCount: 3, soundId: "none" };
-		let now = 1_000_000;
-		const countdown = new Countdown(normaliseSettings(base), () => now);
-
-		countdown.toggle();
-		let runs = 0;
-		for (let i = 0; i < 4 && runs < 2; i++) {
-			now += 2_000;
-			if (countdown.settle()) {
-				runs += 1;
-			}
-		}
-		assert.equal(runs, 2, "precondition: two of three laps done, on the third");
-		assert.equal(countdown.lap, 3);
-
-		countdown.applySettings({ ...base, repeatCount: 4 });
-		assert.equal(countdown.lap, 3, "the laps already run still count towards the new total");
-
-		for (let i = 0; i < 20 && countdown.timer.status !== "elapsed"; i++) {
-			now += 2_000;
-			if (countdown.settle()) {
-				runs += 1;
-			}
-		}
-		assert.equal(runs, 4, "four runs for a count of four, not six");
-	});
-
-	it("does clear a finished timer's repeat tally, which is the case that reasoning was for", () => {
-		// The positive control for the gate above: on a clock that has already finished, the tally
-		// belongs to a rule that no longer exists and must go, or the label reads `×3/5` on a dead
-		// clock — three laps counted against a total they were never run under.
-		const base = { presets: [2], presetIndex: 0, repeat: true, repeatCount: 3, soundId: "none" };
-		let now = 1_000_000;
-		const countdown = new Countdown(normaliseSettings(base), () => now);
-
-		countdown.toggle();
-		for (let i = 0; i < 6 && countdown.timer.status !== "elapsed"; i++) {
-			now += 2_000;
-			countdown.settle();
-		}
-		assert.equal(countdown.finished, true, "precondition: the whole job is over");
-
-		countdown.applySettings({ ...base, repeatCount: 5 });
-		assert.equal(countdown.lap, 1, "the new rule starts from the beginning of itself");
-	});
-
-	it("counts a total, not a number of repeats", () => {
-		// The off-by-one this closes: `repeatCount` was compared against repeats *made*, so the third
-		// repeat of a count of three still passed the test and the timer ran a fourth time.
+	it("runs each stage for its own length, in order", () => {
+		// The whole feature in one test: forty, then ten, then ten — three different lengths, taken in
+		// the order they were typed rather than one length taken three times.
 		let now = 1_000_000;
 		const countdown = new Countdown(
-			normaliseSettings({ presets: [2], presetIndex: 0, repeat: true, repeatCount: 3 }),
+			normaliseSettings({ presets: [[40, 10, 10]], presetIndex: 0, soundId: "none" }),
 			() => now
 		);
 
-		// The alert sounds once per elapse, so counting it counts the runs.
 		countdown.toggle();
+		assert.equal(countdown.timer.durationMs, 40_000, "the first stage is forty");
+
+		now += 40_000;
+		assert.equal(countdown.settle(), true);
+		assert.equal(countdown.stage, 2);
+		assert.equal(countdown.timer.durationMs, 10_000, "and the second is ten, not another forty");
+
+		now += 10_000;
+		countdown.settle();
+		assert.equal(countdown.stage, 3);
+		assert.equal(countdown.timer.durationMs, 10_000);
+
+		now += 10_000;
+		countdown.settle();
+		assert.equal(countdown.finished, true, "three stages, three runs, then it stops");
+	});
+
+	it("does not restart the tally when an unrelated setting changes mid-run", () => {
+		// The inspector writes on every edit, so a volume slider must not take a sequence back to its
+		// first stage. This is the guard the repeat count needed and did not have: raising it mid-run
+		// put the tally back to zero, and a count of four produced six runs labelled `×1/4`.
+		const base = { presets: [[2, 2, 2]], presetIndex: 0, soundId: "none", volume: 100 };
+		let now = 1_000_000;
+		const countdown = new Countdown(normaliseSettings(base), () => now);
+
+		countdown.toggle();
+		now += 2_000;
+		countdown.settle();
+		assert.equal(countdown.stage, 2, "precondition: one stage done, on the second");
+
+		countdown.applySettings({ ...base, volume: 40 });
+		assert.equal(countdown.stage, 2, "the stage already reached is still the stage it is on");
+		assert.equal(countdown.timer.status, "running", "and it did not stop");
+	});
+
+	it("does go back to the first stage when the stages themselves are edited", () => {
+		// The positive control for the gate above, and the rule in its own right: the run it was
+		// part-way through belonged to a preset that no longer exists, so `×2/3` counted against a list
+		// that now has two entries would be a number about nothing.
+		const base = { presets: [[2, 2, 2]], presetIndex: 0, soundId: "none" };
+		let now = 1_000_000;
+		const countdown = new Countdown(normaliseSettings(base), () => now);
+
+		countdown.toggle();
+		now += 2_000;
+		countdown.settle();
+		assert.equal(countdown.stage, 2, "precondition");
+
+		assert.equal(countdown.applySettings({ ...base, presets: [[5, 5]] }), true, "it reports the reload");
+		assert.equal(countdown.stage, 1);
+		assert.equal(countdown.stageCount, 2);
+		assert.equal(countdown.timer.durationMs, 5_000);
+	});
+
+	it("stops at the end of the list, having run every stage exactly once", () => {
+		// The off-by-one the list closes. The repeat count was a total compared against a tally of runs
+		// *made*, so the third repeat of a count of three still passed the test and a fourth run
+		// followed. A position in a list cannot be off by one against itself.
+		const fixtureState = staged(3);
+
+		fixtureState.countdown.toggle();
 		let runs = 0;
 		for (let i = 0; i < 20; i++) {
-			now += 2_000;
-			if (countdown.settle()) {
+			fixtureState.advance(2_000);
+			if (fixtureState.countdown.settle()) {
 				runs += 1;
 			}
 		}
 
-		assert.equal(runs, 3, "a count of three is three runs in total, not four");
-		assert.equal(countdown.finished, true);
+		assert.equal(runs, 3, "three stages is three runs, not four");
+		assert.equal(fixtureState.countdown.finished, true);
 	});
 
-	it("reads from one, so the first lap is ×1/3 and not ×0/3", () => {
-		const fixtureState = repeating(3);
-		const { countdown, advance } = fixtureState;
+	it("reads from one, so the first stage is ×1/3 and not ×0/3", () => {
+		const { countdown, advance } = staged(3);
 
 		countdown.toggle();
-		assert.equal(countdown.lap, 1, "the first run is the first lap the moment it starts");
-		assert.equal(countdown.laps, 3);
+		assert.equal(countdown.stage, 1, "the first stage is the first stage the moment it starts");
+		assert.equal(countdown.stageCount, 3);
 
 		advance(2_000);
 		countdown.settle();
-		assert.equal(countdown.lap, 2);
+		assert.equal(countdown.stage, 2);
 
 		advance(2_000);
 		countdown.settle();
-		assert.equal(countdown.lap, 3);
+		assert.equal(countdown.stage, 3);
 	});
 
-	it("never counts past the total it was given", () => {
-		const fixtureState = repeating(2);
+	it("never counts past the end of the list", () => {
+		const fixtureState = staged(2);
 		exhaust(fixtureState);
 
-		assert.equal(fixtureState.countdown.lap, 2, "×2/2, not ×3/2");
-		assert.equal(fixtureState.countdown.laps, 2);
+		assert.equal(fixtureState.countdown.stage, 2, "×2/2, not ×3/2");
+		assert.equal(fixtureState.countdown.stageCount, 2);
 	});
 
-	it("says nothing at all when repeat is switched off", () => {
+	it("counts one stage for a plain preset, which is what hides the tally", () => {
 		const { countdown } = fixture([2]);
 
-		assert.equal(countdown.laps, 0, "no total means no counter on screen");
-		assert.equal(countdown.lap, 0);
+		assert.equal(countdown.stageCount, 1, "a count of one is what the label reads as nothing to show");
+		assert.equal(countdown.stage, 1);
 	});
 
-	it("has a state for being finished, distinct from being on its last lap", () => {
-		// The bug this closes: `×2/2` was shown both while the last lap was still counting down and
+	it("has a state for being finished, distinct from being on its last stage", () => {
+		// The bug this closes: `×2/2` was shown both while the last stage was still counting down and
 		// for ever afterwards, so there was no way to tell a finished job from one still going.
-		const fixtureState = repeating(2);
-		const { countdown, advance } = fixtureState;
+		const { countdown, advance } = staged(2);
 
 		countdown.toggle();
 		advance(2_000);
 		countdown.settle();
-		assert.equal(countdown.lap, 2, "on the last lap");
+		assert.equal(countdown.stage, 2, "on the last stage");
 		assert.equal(countdown.finished, false, "but not finished — it is still running");
 
 		advance(2_000);
 		countdown.settle();
-		assert.equal(countdown.lap, 2, "still ×2/2");
+		assert.equal(countdown.stage, 2, "still ×2/2");
 		assert.equal(countdown.finished, true, "and now it is over, which the screen can finally say");
 	});
 
-	it("starts a restarted timer's repeats over, rather than finding the budget already spent", () => {
-		// The bug this guards: the count was left where the finished run put it, so starting an expired
-		// auto-repeating timer again gave a run that never repeated once, under a display reading ×2/2.
-		const fixtureState = repeating(2);
+	it("starts a restarted sequence over, rather than finding it already spent", () => {
+		// The bug this guards: the tally was left where the finished run put it, so starting an expired
+		// repeating timer gave a run that never repeated once, under a display reading ×2/2.
+		const fixtureState = staged(2);
 		const { countdown, advance } = fixtureState;
 
 		exhaust(fixtureState);
-		assert.equal(countdown.finished, true, "precondition: the repeats ran out");
+		assert.equal(countdown.finished, true, "precondition: the stages ran out");
 
 		countdown.toggle();
-		assert.equal(countdown.lap, 1, "starting it again is a fresh run, and a fresh run is on lap one");
+		assert.equal(countdown.stage, 1, "starting it again starts the sequence, not its last stage");
 		assert.equal(countdown.finished, false);
 
 		advance(2_000);
 		countdown.settle();
-		assert.equal(countdown.lap, 2, "so it repeats again, which it could not before");
+		assert.equal(countdown.stage, 2, "so it moves on again, which it could not before");
 		assert.equal(countdown.timer.status, "running");
 	});
 
-	it("goes back to lap one on a reset", () => {
-		const fixtureState = repeating(2);
+	it("puts a finished sequence back on its FIRST stage, at that stage's length", () => {
+		// Not merely back to zero on whichever stage it stopped on. A 40/10/10 that finished on a ten
+		// minute stage and were restarted there would run ten minutes and call it the whole job.
+		let now = 1_000_000;
+		const countdown = new Countdown(
+			normaliseSettings({ presets: [[40, 10, 10]], presetIndex: 0, soundId: "none" }),
+			() => now
+		);
+
+		countdown.toggle();
+		for (let i = 0; i < 10 && countdown.timer.status !== "elapsed"; i++) {
+			now += 40_000;
+			countdown.settle();
+		}
+		assert.equal(countdown.finished, true, "precondition");
+
+		countdown.toggle();
+		assert.equal(countdown.stage, 1);
+		assert.equal(countdown.timer.durationMs, 40_000, "the first stage's length, not the last one's");
+	});
+
+	it("goes back to the first stage on a reset", () => {
+		const fixtureState = staged(2);
 		exhaust(fixtureState);
 		assert.equal(fixtureState.countdown.finished, true, "precondition");
 
 		fixtureState.countdown.reset();
-		assert.equal(fixtureState.countdown.lap, 1);
+		assert.equal(fixtureState.countdown.stage, 1);
 		assert.equal(fixtureState.countdown.finished, false);
 	});
 
-	it("goes back to lap one when a preset is loaded", () => {
-		const fixtureState = repeating(2);
+	it("goes back to the first stage when a preset is loaded", () => {
+		const fixtureState = staged(2);
 		exhaust(fixtureState);
 
 		fixtureState.countdown.cyclePreset();
-		assert.equal(fixtureState.countdown.lap, 1);
+		assert.equal(fixtureState.countdown.stage, 1);
 	});
 
-	it("goes back to lap one when the dial moves an expired clock off zero", () => {
-		const fixtureState = repeating(2);
+	it("goes back to the first stage when the dial moves an expired clock off zero", () => {
+		const fixtureState = staged(2);
 		exhaust(fixtureState);
 
 		fixtureState.countdown.adjust(1);
 		assert.equal(fixtureState.countdown.timer.status, "idle", "adjusting a finished clock puts it back to full");
-		assert.equal(fixtureState.countdown.lap, 1, "which ends that run, count and all");
+		assert.equal(fixtureState.countdown.stage, 1, "which ends that run, tally and all");
 	});
 
-	it("goes back to lap one when the inspector changes the duration", () => {
-		const fixtureState = repeating(2);
-		exhaust(fixtureState);
+	it("is not sitting on its preset while it is part-way through the stages", () => {
+		// What decides whether a hold puts the clock right or advances to the next preset. A sequence
+		// paused on its second stage has something to put right, even though that stage's duration
+		// matches the settings perfectly.
+		const { countdown, advance } = staged(3);
 
-		fixtureState.countdown.applySettings({ presets: [900], presetIndex: 0, repeat: true, repeatCount: 2 });
-		assert.equal(fixtureState.countdown.lap, 1);
-	});
+		countdown.toggle();
+		advance(2_000);
+		countdown.settle();
+		countdown.toggle();
+		assert.equal(countdown.timer.status, "paused", "precondition: stopped on stage two");
+		assert.equal(countdown.drifted, false, "and not dialled anywhere — the duration is the stage's own");
 
-	it("goes back to lap one when the inspector changes the repeat rules themselves", () => {
-		// The bug this closes: raising the count from 2 to 5 after the timer had finished left the
-		// two laps it had already run counted against the new rule — `×2/5` on a dead clock.
-		const fixtureState = repeating(2);
-		exhaust(fixtureState);
-
-		fixtureState.countdown.applySettings({ presets: [2], presetIndex: 0, repeat: true, repeatCount: 5 });
-		assert.equal(fixtureState.countdown.laps, 5);
-		assert.equal(fixtureState.countdown.lap, 1, "a new rule counts from the start of itself");
-	});
-
-	it("goes back to lap one when repeat is switched off and on again", () => {
-		const fixtureState = repeating(2);
-		exhaust(fixtureState);
-
-		fixtureState.countdown.applySettings({ presets: [2], presetIndex: 0, repeat: false, repeatCount: 2 });
-		assert.equal(fixtureState.countdown.laps, 0);
-
-		fixtureState.countdown.applySettings({ presets: [2], presetIndex: 0, repeat: true, repeatCount: 2 });
-		assert.equal(fixtureState.countdown.lap, 1);
+		assert.equal(countdown.onPreset, false, "so a hold puts it right rather than moving on");
 	});
 });
 
@@ -550,10 +565,10 @@ describe("elapsing", () => {
 		assert.equal(countdown.settle(), false);
 	});
 
-	it("starts the next lap without a gap, and stops once the limit is reached", () => {
+	it("starts the next stage without a gap, and stops once the list runs out", () => {
 		let now = 1_000_000;
 		const countdown = new Countdown(
-			normaliseSettings({ presets: [2], presetIndex: 0, repeat: true, repeatCount: 2, soundId: "none" }),
+			normaliseSettings({ presets: [[2, 2]], presetIndex: 0, soundId: "none" }),
 			() => now
 		);
 
@@ -561,13 +576,13 @@ describe("elapsing", () => {
 
 		now += 2_000;
 		countdown.settle();
-		assert.equal(countdown.lap, 2, "the second lap starts as soon as the first ends");
+		assert.equal(countdown.stage, 2, "the second stage starts as soon as the first ends");
 		assert.equal(countdown.timer.status, "running", "it should carry straight on, with no gap");
 		assert.equal(countdown.timer.remainingMs, 2_000, "and it starts full, not where the last one ended");
 
 		now += 2_000;
 		countdown.settle();
-		assert.equal(countdown.timer.status, "elapsed", "the second elapse is the last — a count of two is two runs");
+		assert.equal(countdown.timer.status, "elapsed", "the second elapse is the last — two stages is two runs");
 		assert.equal(countdown.finished, true);
 	});
 
@@ -815,7 +830,7 @@ describe("settings arriving from the inspector", () => {
 
 		const saved = countdown.persistable;
 		assert.equal(saved.presetIndex, 1);
-		assert.equal(saved.presets[0], 300, "and the dial's turning is nowhere in it, by design");
+		assert.deepEqual(saved.presets[0], [300], "and the dial's turning is nowhere in it, by design");
 		assert.equal(saved.volume, 100, "while the untouched settings come along unchanged");
 	});
 });
@@ -912,20 +927,20 @@ describe("the auto-reset", () => {
 	});
 
 	it("takes the lap tally back to the start with it", () => {
-		const state = clearing({ repeat: true, repeatCount: 2 });
+		const state = clearing({ presets: [[10, 10]] });
 
 		state.countdown.toggle();
 		for (let i = 0; i < 4 && !state.countdown.finished; i++) {
 			state.advance(10_000);
 			state.countdown.settle();
 		}
-		assert.equal(state.countdown.lap, 2, "precondition: the repeats ran out");
+		assert.equal(state.countdown.stage, 2, "precondition: the stages ran out");
 
 		state.advance(60_000);
 		state.countdown.settle();
 
 		assert.equal(state.countdown.timer.status, "idle");
-		assert.equal(state.countdown.lap, 1, "×2/2 on a clock that has been put back to the start is not a lap");
+		assert.equal(state.countdown.stage, 1, "×2/2 on a clock put back to the start is not a stage it is on");
 	});
 
 	it("is called off the moment somebody restarts the timer by hand", () => {

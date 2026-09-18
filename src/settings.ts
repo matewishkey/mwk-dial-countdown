@@ -8,7 +8,17 @@
  * is discarded, so a stale key cannot survive to be shown back to the user as nonsense.
  */
 
-export type Preset = number;
+/**
+ * A preset is the list of stages it runs, in seconds — `[2400, 600, 600]` for forty minutes then
+ * ten then ten. A plain countdown is a preset with one stage.
+ *
+ * **This is what became of the repeat switch.** Repeating was a second idea of "how long this timer
+ * runs for", bolted beside the preset and expressed in a different vocabulary: a duration over here,
+ * a number of times over there, and a stopping rule that had to reconcile them. A stage list says
+ * the same things and more — `6m` six times is six stages, and 40/10/10 was not sayable at all. See
+ * {@link normalisePresets} for what happens to settings written while the switch still existed.
+ */
+export type Preset = number[];
 
 export type DialCountdownSettings = {
 	presets: Preset[];
@@ -24,12 +34,12 @@ export type DialCountdownSettings = {
 	 * nowhere to land on a dial and could only land *on top of* the clock on a key. Owning the field
 	 * is what lets the same name appear in the same place on both.
 	 *
-	 * Empty means unnamed, and an unnamed timer falls back to its preset's length.
+	 * Empty means unnamed, and an unnamed timer falls back to its current stage's length.
 	 */
 	title: string;
 	showLogo: boolean;
 	/**
-	 * Whether the line under the clock is drawn at all — the title or preset length, and the lap
+	 * Whether the line under the clock is drawn at all — the title or stage length, and the stage
 	 * tally with it.
 	 *
 	 * Called `showTitle` until the title became a real thing you can type. It never named a title:
@@ -40,21 +50,12 @@ export type DialCountdownSettings = {
 	showFinishTime: boolean;
 	warnEnabled: boolean;
 	warnSeconds: number;
-	repeat: boolean;
-	/**
-	 * How many times an auto-repeating timer runs **in total** before it stops for good.
-	 *
-	 * A total, not a number of repeats. Reading it as repeats is what made a setting of 3 run four
-	 * times: the third repeat was still under the limit.
-	 */
-	repeatCount: number;
 	/**
 	 * Whether a timer that has finished for good puts itself back to the start after a while.
 	 *
-	 * Distinct from repeat, which starts the next run immediately and keeps counting. This is the
-	 * opposite end: the job is over, the tally is spent, and the clock is left reading `done` until
-	 * somebody comes back to it. Switching this on means it tidies up after itself instead —
-	 * full clock, stopped, tally back to zero, exactly where it started.
+	 * The job is over, every stage is spent, and the clock is left reading `done` until somebody
+	 * comes back to it. Switching this on means it tidies up after itself instead — full clock,
+	 * stopped, back on the first stage, exactly where it started.
 	 */
 	autoResetEnabled: boolean;
 	/** How long a finished timer waits before it resets itself, in seconds. */
@@ -71,7 +72,7 @@ export type DialCountdownSettings = {
 	soundId: string;
 	customSoundPath: string;
 	volume: number;
-	/** How many times the alert sound plays when the timer finishes. */
+	/** How many times the alert sound plays at the end of a stage. */
 	soundRepeat: number;
 };
 
@@ -80,7 +81,7 @@ export const DEFAULT_SOUND = "default";
 export const NO_SOUND = "none";
 export const CUSTOM_SOUND = "custom";
 
-export const DEFAULT_PRESETS: Preset[] = [5 * 60, 20 * 60, 30 * 60, 40 * 60];
+export const DEFAULT_PRESETS: Preset[] = [[5 * 60], [20 * 60], [30 * 60], [40 * 60]];
 
 const MIN_PRESET_SECONDS = 1;
 export const MAX_PRESET_SECONDS = 24 * 60 * 60;
@@ -96,8 +97,15 @@ export const MAX_SOUND_REPEAT = 10;
  */
 export const MAX_TITLE_LENGTH = 32;
 
-/** A repeating timer is deliberately bounded: nothing here should still be going tomorrow. */
-export const MAX_REPEAT_COUNT = 10;
+/**
+ * Most stages one preset may hold.
+ *
+ * The bound the repeat count used to carry, for the same reason it carried it: nothing here should
+ * still be going tomorrow. Twenty rather than ten because a stage list is where a sequence typed out
+ * by hand now lives — four rounds of `25m, 5m` is eight stages, and that is an ordinary thing to
+ * want rather than an abuse of the field.
+ */
+export const MAX_STAGES = 20;
 
 export const DEFAULTS: DialCountdownSettings = {
 	presets: DEFAULT_PRESETS,
@@ -110,8 +118,6 @@ export const DEFAULTS: DialCountdownSettings = {
 	showFinishTime: false,
 	warnEnabled: false,
 	warnSeconds: 60,
-	repeat: false,
-	repeatCount: 3,
 	autoResetEnabled: false,
 	autoResetSeconds: 60,
 	soundId: DEFAULT_SOUND,
@@ -124,7 +130,7 @@ export const DEFAULTS: DialCountdownSettings = {
 export function normaliseSettings(raw: unknown): DialCountdownSettings {
 	const input = (typeof raw === "object" && raw !== null ? raw : {}) as Record<string, unknown>;
 
-	const presets = normalisePresets(input.presets);
+	const presets = normalisePresets(input.presets, repeatFactor(input));
 
 	return {
 		presets,
@@ -139,8 +145,6 @@ export function normaliseSettings(raw: unknown): DialCountdownSettings {
 		showFinishTime: bool(input.showFinishTime, DEFAULTS.showFinishTime),
 		warnEnabled: bool(input.warnEnabled, DEFAULTS.warnEnabled),
 		warnSeconds: int(input.warnSeconds, DEFAULTS.warnSeconds, 1, MAX_PRESET_SECONDS),
-		repeat: bool(input.repeat, DEFAULTS.repeat),
-		repeatCount: int(input.repeatCount, DEFAULTS.repeatCount, 1, MAX_REPEAT_COUNT),
 		autoResetEnabled: bool(input.autoResetEnabled, DEFAULTS.autoResetEnabled),
 		autoResetSeconds: int(input.autoResetSeconds, DEFAULTS.autoResetSeconds, 1, MAX_PRESET_SECONDS),
 		soundId: soundIdFrom(input),
@@ -151,12 +155,16 @@ export function normaliseSettings(raw: unknown): DialCountdownSettings {
 }
 
 /**
- * Presets are plain durations in seconds. Older builds stored `{ label, seconds }` objects, so those
- * are unwrapped rather than discarded — the durations are the part worth keeping.
+ * Presets are lists of stage durations in seconds. Three shapes have been stored here and all three
+ * are read: a list of stages is what this build writes, a bare number is what every build before it
+ * wrote, and `{ label, seconds }` is older still.
+ *
+ * @param repeats How many times each preset used to run — see {@link repeatFactor}. One, for
+ * anything this build wrote.
  */
-export function normalisePresets(raw: unknown): Preset[] {
+export function normalisePresets(raw: unknown, repeats = 1): Preset[] {
 	if (!Array.isArray(raw)) {
-		return [...DEFAULT_PRESETS];
+		return defaults();
 	}
 
 	// Annotated, because `Array.isArray` narrows an `unknown` to `any[]` rather than `unknown[]` — so
@@ -164,14 +172,54 @@ export function normalisePresets(raw: unknown): Preset[] {
 	// unchecked exactly where it matters most.
 	const items: unknown[] = raw;
 
-	const seconds = items
-		.map((preset) =>
-			typeof preset === "object" && preset !== null ? (preset as { seconds?: unknown }).seconds : preset
-		)
+	const presets = items
+		.map((preset) => normalisePreset(preset, repeats))
+		.filter((preset): preset is Preset => preset !== null);
+
+	return presets.length > 0 ? presets : defaults();
+}
+
+/** One preset's stages, or `null` when nothing usable survived. */
+function normalisePreset(raw: unknown, repeats: number): Preset | null {
+	const items: unknown[] = Array.isArray(raw) ? raw : [raw];
+
+	const stages = items
+		.map((stage) => (typeof stage === "object" && stage !== null ? (stage as { seconds?: unknown }).seconds : stage))
 		.filter((value): value is number => typeof value === "number" && Number.isFinite(value) && value > 0)
 		.map((value) => clamp(Math.round(value), MIN_PRESET_SECONDS, MAX_PRESET_SECONDS));
 
-	return seconds.length > 0 ? seconds : [...DEFAULT_PRESETS];
+	if (stages.length === 0) {
+		return null;
+	}
+
+	// Flattened rather than nested: a preset that ran three times *is* three stages, and expressing it
+	// as one is what lets the tally, the stopping rule and the label all stay single-minded.
+	const repeated = Array.from({ length: repeats }, () => stages).flat();
+	return repeated.slice(0, MAX_STAGES);
+}
+
+/**
+ * How many times each preset used to run, for settings written before stages existed.
+ *
+ * `repeat: true, repeatCount: 3` on a 20 minute preset meant twenty minutes, three times over — so
+ * the preset becomes three stages of twenty minutes, which is that instruction said in the
+ * vocabulary that survives. The panel then shows it as `20m, 20m, 20m`, which is both what it does
+ * and one edit away from being something else. Nothing is inferred: an install that never switched
+ * repeat on gets a factor of one and is untouched.
+ */
+function repeatFactor(input: Record<string, unknown>): number {
+	if (input.repeat !== true) {
+		return 1;
+	}
+	if (typeof input.repeatCount !== "number" || !Number.isFinite(input.repeatCount)) {
+		return 1;
+	}
+	return clamp(Math.round(input.repeatCount), 1, MAX_STAGES);
+}
+
+/** A fresh copy every time — the defaults are shared, and a preset list is edited in place. */
+function defaults(): Preset[] {
+	return DEFAULT_PRESETS.map((preset) => [...preset]);
 }
 
 /**
@@ -194,7 +242,7 @@ function soundIdFrom(input: Record<string, unknown>): string {
  * A title, trimmed and capped. Anything that is not a string is no title at all.
  *
  * Trimmed because a title that is only spaces would count as set — it would win the label line and
- * then draw nothing, leaving the preset length gone with no way to see why.
+ * then draw nothing, leaving the stage length gone with no way to see why.
  */
 function title(value: unknown): string {
 	if (typeof value !== "string") {

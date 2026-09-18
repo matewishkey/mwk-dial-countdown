@@ -288,12 +288,18 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 /**
  * The wall-clock time this timer will finish at. Only shown while running — on a stopped timer it
  * would be a prediction that quietly goes stale, which is worse than showing nothing.
+ *
+ * **The end of the whole job, stages included, not the end of the clock on screen.** Those were the
+ * same thing until a preset could hold more than one stage, and the old sum quietly stopped being
+ * true for anything that repeated: a 20m timer set to run three times said `ends` twenty minutes
+ * from now, and then went on for another forty. What the line is asked is when you can come back.
  */
 function finishText(countdown: Countdown, remainingMs: number, status: string): string {
 	if (!countdown.settings.showFinishTime || status !== "running") {
 		return "";
 	}
-	return `ends ${formatClockTime(Date.now() + remainingMs)}`;
+	const aheadMs = remainingMs + countdown.remainingStagesSeconds * 1000;
+	return `ends ${formatClockTime(Date.now() + aheadMs)}`;
 }
 
 /** Shrinks the clock as it gets longer, so `1:10:10` fits the same box as `5:00`. */

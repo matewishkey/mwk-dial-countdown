@@ -17,6 +17,41 @@ renamed, and rewriting it would make the history describe a repo that never exis
 
 ## [Unreleased]
 
+### Added
+
+- **A preset can have several steps.** Type `40, 10, 10` and the timer runs forty minutes, then ten,
+  then ten, with no gap between them. The line under the clock counts them off as `×2/3` and says
+  `done` when the list runs out. Up to twenty steps in one preset, each from one second to
+  twenty-four hours.
+
+- **Presets are typed as text.** One field per preset in place of the hours, minutes and seconds
+  boxes, with a grey line under it saying what was read: `40m · 10m · 10m — 1h in total`. A bare
+  number is minutes, which is what the field is mostly used for; `90s`, `1h30m` and `2m 30s` name
+  their own unit, and `10m x3` repeats a step. A row that does not parse saves nothing at all and
+  keeps both the text and the reason — half of a row saved would be a preset nobody typed.
+
+### Changed
+
+- **Repeat is gone, replaced by the step list.** It was a second idea of how long a timer runs for,
+  standing beside the preset in a different vocabulary — a duration over here, a number of times over
+  there, and a stopping rule that had to reconcile the two. A list says everything it said and more:
+  six minutes six times over is six steps, and 40/10/10 was not sayable at all. **Nothing is lost on
+  upgrade** — `repeat` on a 20 minute preset with a count of three becomes `20m, 20m, 20m`, in every
+  preset, since the switch applied to whichever one was loaded. It then shows in the panel as what it
+  actually does, one edit away from being something else.
+
+- **The property inspector's instructions are a table of gestures rather than four paragraphs about
+  them.** The reasoning was worth writing down and was the wrong thing to put in front of somebody
+  who has just added the action and wants to know what a hold does; it now lives in
+  `docs/how-it-works.md`.
+
+### Fixed
+
+- **`ends 14:35` is the end of the whole job, not the end of the clock on screen.** Those were the
+  same thing until a preset could hold more than one step — but they had already stopped being the
+  same thing for a repeating timer, which said `ends` twenty minutes from now and then went on for
+  another forty. What the line is asked is when you can come back.
+
 ### Internal
 
 - **`docs/releasing.md` records what has actually been submitted to Marketplace, and says how to

@@ -7,8 +7,8 @@ import {
 	DEFAULTS,
 	NO_SOUND,
 	MAX_PRESET_SECONDS,
-	MAX_REPEAT_COUNT,
 	MAX_SOUND_REPEAT,
+	MAX_STAGES,
 	MAX_TITLE_LENGTH,
 	normalisePresets,
 	normaliseSettings
@@ -39,7 +39,7 @@ describe("normaliseSettings", () => {
 			presetIndex: 1
 		};
 		const settings = normaliseSettings(legacy);
-		assert.deepEqual(settings.presets, [1500, 300], "the durations are the part worth keeping");
+		assert.deepEqual(settings.presets, [[1500], [300]], "the durations are the part worth keeping");
 		assert.equal(settings.presetIndex, 1);
 	});
 
@@ -63,7 +63,7 @@ describe("normaliseSettings", () => {
 	});
 
 	it("keeps values that are already good", () => {
-		const good = { ...DEFAULTS, presets: [30, 90], presetIndex: 1, theme: "mwk", showLogo: true, volume: 40 };
+		const good = { ...DEFAULTS, presets: [[30], [90, 15]], presetIndex: 1, theme: "mwk", showLogo: true, volume: 40 };
 		assert.deepEqual(normaliseSettings(good), good);
 	});
 
@@ -130,37 +130,90 @@ describe("the auto-reset", () => {
 });
 
 describe("normalisePresets", () => {
-	it("discards entries that are not usable durations", () => {
-		assert.deepEqual(normalisePresets([60, "90", null, -5, 0, Number.NaN, 120]), [60, 120]);
+	it("reads a preset as the list of stages it runs", () => {
+		assert.deepEqual(normalisePresets([[2400, 600, 600]]), [[2400, 600, 600]]);
+	});
+
+	it("discards stages that are not usable durations", () => {
+		assert.deepEqual(normalisePresets([[60, "90", null, -5, 0, Number.NaN, 120]]), [[60, 120]]);
+	});
+
+	it("drops a preset with no usable stage left, rather than keeping an empty one", () => {
+		// An empty stage list has no first stage, so everything downstream — the clock, the label, the
+		// tally — would be reading `undefined` off the front of it.
+		assert.deepEqual(normalisePresets([[60], ["x"], [120]]), [[60], [120]]);
 	});
 
 	it("falls back when nothing usable is left", () => {
 		assert.deepEqual(normalisePresets([-1, "x"]), DEFAULT_PRESETS);
 		assert.deepEqual(normalisePresets([]), DEFAULT_PRESETS);
+		assert.deepEqual(normalisePresets([[]]), DEFAULT_PRESETS);
 	});
 
-	it("clamps a preset longer than a day", () => {
-		assert.deepEqual(normalisePresets([99_999_999]), [MAX_PRESET_SECONDS]);
-	});
-});
+	it("hands back a fresh copy of the defaults, not the defaults themselves", () => {
+		// A preset list is edited in place — `push`, `splice`, `presets[i] = …`. Handing out the shared
+		// default would let the first edit rewrite what every later fallback falls back to.
+		const first = normalisePresets("nonsense");
+		first[0].push(999);
 
-describe("repeat count", () => {
-	it("is bounded, so a repeating timer cannot run for ever", () => {
-		assert.equal(normaliseSettings({ repeatCount: 999 }).repeatCount, MAX_REPEAT_COUNT);
-		assert.equal(normaliseSettings({ repeatCount: 0 }).repeatCount, 1);
-		assert.equal(normaliseSettings({ repeatCount: -4 }).repeatCount, 1);
+		assert.deepEqual(normalisePresets("nonsense"), DEFAULT_PRESETS);
+		assert.deepEqual(DEFAULT_PRESETS[0], [5 * 60], "the module's own defaults were edited");
 	});
 
-	it("defaults to a handful rather than the maximum", () => {
-		assert.ok(DEFAULTS.repeatCount >= 1 && DEFAULTS.repeatCount < MAX_REPEAT_COUNT);
+	it("clamps a stage longer than a day", () => {
+		assert.deepEqual(normalisePresets([[99_999_999]]), [[MAX_PRESET_SECONDS]]);
 	});
 
-	it("keeps a sensible value untouched", () => {
-		assert.equal(normaliseSettings({ repeatCount: 5 }).repeatCount, 5);
+	it("caps how many stages one preset may hold", () => {
+		const long = Array.from({ length: MAX_STAGES + 10 }, () => 60);
+		assert.equal(normalisePresets([long])[0].length, MAX_STAGES);
 	});
 });
 
 describe("settings written by an older build", () => {
+	it("reads a preset stored as a bare number as a single-stage one", () => {
+		// Every build before stages existed stored a plain duration per preset. It is the same timer,
+		// said with one stage.
+		assert.deepEqual(normalisePresets([300, 1200]), [[300], [1200]]);
+	});
+
+	it("still unwraps the `{ label, seconds }` presets of the build before that", () => {
+		assert.deepEqual(normalisePresets([{ label: "5m", seconds: 300 }]), [[300]]);
+	});
+
+	it("turns a repeating preset into that many stages", () => {
+		// `repeat: true, repeatCount: 3` on a 20 minute preset meant twenty minutes, three times over.
+		// Three stages of twenty minutes is that instruction in the vocabulary that survives, and the
+		// panel then shows it as `20m, 20m, 20m` — both what it does and one edit from being something
+		// else. Every preset is expanded, because the switch applied to whichever one was loaded.
+		const settings = normaliseSettings({ presets: [300, 1200], repeat: true, repeatCount: 3 });
+
+		assert.deepEqual(settings.presets, [
+			[300, 300, 300],
+			[1200, 1200, 1200]
+		]);
+	});
+
+	it("leaves a preset alone when repeat was switched off", () => {
+		// The positive control. A migration that fired unconditionally, or read the flag the wrong way
+		// round, would pass the test above just the same.
+		assert.deepEqual(normaliseSettings({ presets: [1200], repeat: false, repeatCount: 3 }).presets, [[1200]]);
+		assert.deepEqual(normaliseSettings({ presets: [1200], repeatCount: 3 }).presets, [[1200]], "no flag is not a flag");
+	});
+
+	it("treats a repeat count that is not a number as no repeat at all", () => {
+		assert.deepEqual(normaliseSettings({ presets: [1200], repeat: true, repeatCount: "three" }).presets, [[1200]]);
+	});
+
+	it("does not resurrect the repeat switch", () => {
+		// It is gone from the type; it must be gone from what is written back, or the next reader
+		// expands a preset that has already been expanded.
+		const settings = normaliseSettings({ presets: [1200], repeat: true, repeatCount: 3 });
+
+		assert.ok(!("repeat" in settings));
+		assert.ok(!("repeatCount" in settings));
+	});
+
 	it("turns a switched-off sound into the No sound option", () => {
 		// `soundEnabled` was removed in favour of the picker's own *No sound* entry. Settings outlive
 		// the build that wrote them, so without this an install upgrading with the sound deliberately

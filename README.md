@@ -63,19 +63,19 @@ There is no haptic feedback to be had on this hardware — the SDK exposes no su
 - **The ring pulses** on every gesture and every tick of the dial. It says only that *something* registered, which is the part you catch without reading — you cannot read a word per tick, but you can see the ring answer every one of them.
 - **A line names the action** — `+10s`, `start`, `pause`, `resume`, `reset`, `preset · 20m`, `next · 20m` — for about a second, then gives way to the finish time on a dial, or to the preset's length on a key.
 
-**[How the dial and the presets work →](docs/how-it-works.md)** — the step model and the presets, and the four designs that came before this one.
+**[How the dial and the presets work →](docs/how-it-works.md)** — the dial's step model and the presets, and the four designs that came before this one.
 
 ## Features
 
-- **Presets** — 5, 20, 30 and 40 minutes out of the box, edited as hours, minutes and seconds. They carry no names of their own, so an unnamed timer is labelled by its length: the display reads `20m`, or `20m 30s` once nudged off a round number. The dial cannot overwrite them.
+- **Presets** — 5, 20, 30 and 40 minutes out of the box, typed as text. They carry no names of their own, so an unnamed timer is labelled by its length: the display reads `20m`, or `20m 30s` once nudged off a round number. The dial cannot overwrite them.
+- **Several steps in one preset** — type `40, 10, 10` and the timer runs forty minutes, then ten, then ten, with no gap between them. The line under the clock counts them off as `×2/3`, and says `done` when the list runs out. A bare number is minutes; `90s`, `1h30m` and `10m x3` say the rest. Up to twenty steps.
 - **A title**, if you want one — `Tea` on the line under the clock rather than `20m`. It is the plugin's own field, not Stream Deck's Title box; see *The key draws its own text*, below, for why.
 - **Countdown ring** that empties as the timer runs, with the clock beside it. A progress bar is available instead.
 - **Seven colour themes**. The middle of the ring shows the state — running, paused, done — and, on an idle clock, an optional logo instead.
 - **A pause glyph** rather than a colour change, so the state is stated outright.
 - **Fade near the end** — the same colour, shaded and unshaded, from a threshold you set in minutes and seconds, capped at half the preset's own length so a fresh timer never starts already fading.
 - **Sound when finished**, repeatable up to ten times, at a volume you set. Choose a bundled sound, any sound already installed on your machine, or your own file.
-- **Auto-repeat**, counting laps on screen — `×2/3` while it runs, `done ×3/3` once it is over. The limit is a total number of runs, and it is a limit because nothing here should still be going tomorrow.
-- **Clear itself when finished**, after a wait you set. A finished timer otherwise sits reading `done` until somebody presses it, which is right for a timer you are watching and wrong for one on a page you left; switch this on and it goes back to a full, stopped clock — repeat tally included — on its own. It waits for the whole job, repeats and all.
+- **Clear itself when finished**, after a wait you set. A finished timer otherwise sits reading `done` until somebody presses it, which is right for a timer you are watching and wrong for one on a page you left; switch this on and it goes back to a full, stopped clock on the preset's first step, on its own. It waits for the whole job, every step of it.
 - **Finish time** — `ends 14:35`, more useful than a raw remaining count on a long timer.
 - **Copy diagnostics**, at the bottom of the property inspector. One press puts the plugin version, the machine, the Stream Deck application version and connected device, and any recent warnings and errors on the clipboard — ready to paste into a bug report. It costs nothing until it is pressed; nothing is collected in the background and nothing leaves your machine on its own.
 - **Timers survive a page or profile switch** — flip away and back and the clock is where you left it, still counting. They do not survive the plugin restarting, and one that ran out while you were away comes back silent rather than sounding an alarm for a moment that has passed.
@@ -88,7 +88,7 @@ Stream Deck runs on macOS and Windows only, so the plugin cannot be *run* on Lin
 ```sh
 npm install
 npm run build      # bundle into com.matewishkey.dial-countdown-v2.sdPlugin/bin
-npm test           # 345 tests — 41 of them drive the property inspector in a browser
+npm test           # 364 tests — 52 of them drive the property inspector in a browser
 npm run check      # everything CI runs: typecheck, lint, format, tests, versions
 npm run demo       # scripted gesture pass, prints one frame per step
 npm run mock       # the same harness, driven from the keyboard
