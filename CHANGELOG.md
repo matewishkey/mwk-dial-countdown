@@ -17,6 +17,48 @@ renamed, and rewriting it would make the history describe a repo that never exis
 
 ## [Unreleased]
 
+## [3.11.0] — 2026-09-18
+
+The fault that prompted most of the last two days was never in this plugin. A Stream Deck + was
+drawing **500 mA through a Studio Display's hub** — the documented ceiling for that port, and not
+enough for a touchscreen, eight LCD keys and four dials. Moved to a port on the Mac, everything
+works: the dials, the keys, and the built-in actions that had also stopped.
+
+So the instrumentation built to find it comes back out. The bug fixes stay, because none of them were
+ever about the hardware.
+
+### Removed
+
+- **The per-minute health report, and everything that fed it.** Two timers ran for the life of the
+  process — an event-loop sampler twice a second and a report every sixty seconds — writing a line of
+  performance telemetry into the log of every install, for ever. A countdown timer does not need to
+  file a report about itself once a minute.
+- **The round-trip probe**, which sent a message to Stream Deck every minute purely to time the reply.
+- **Per-gesture logging.** A line was written for every press, release, turn and tap.
+- **The `pressed || down` override on a rotation.** It was borrowed from another plugin on the theory
+  that the flag might lag the button, never measured, and a reviewer pointed out it trades a
+  self-correcting reading for a latch that stays wrong until the next complete press. No evidence for
+  it ever appeared — and the actual cause was three feet of USB away. The rotation's own flag decides
+  the step again.
+
+### Changed
+
+- **Copy diagnostics stays, and is leaner.** It costs nothing until it is pressed, and it is what
+  makes the next hardware problem ten minutes rather than a day. It now carries **warnings and
+  errors** rather than every gesture and a per-minute performance line, and gathers what it needs at
+  the moment you press it rather than from a reporter running in the background.
+
+### Kept
+
+For the record, since this release removes a great deal: **the ten fixes from the last two days all
+stay.** The paused clock that threw away its count, the no-detent rotation that ate a press, the
+duration ratchet, the floor that added time when you turned it down, the repeat tally that ran a
+timer six times for a setting of four, the key's press-then-hold firing twice, the stray release
+after a page flip, the orphaned long-press timer, the inspector undoing a gesture, and a release gate
+that can now actually fail. Every one was reproduced before it was written, and every one is still
+caught by deliberately breaking it and watching a test go red.
+
+
 ## [3.10.0] — 2026-09-17
 
 ### Added
@@ -1047,7 +1089,8 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.10.0...HEAD
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v3.11.0...HEAD
+[3.11.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.11.0
 [3.10.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.10.0
 [3.9.1]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.9.1
 [3.9.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.9.0
