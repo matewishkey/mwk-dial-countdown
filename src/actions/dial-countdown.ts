@@ -100,6 +100,12 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 			instance.turnedWhileDown = true;
 		}
 
+		// **Turning silences a ringing alarm, but is not swallowed by it.** Winding the dial on a
+		// finished timer is how you set up the next one, so the alert is announcing something you have
+		// plainly dealt with. The swallow is only for presses — losing one click of a rotation would
+		// read as the dial skipping, and a rotation is not the reflex grab for quiet that a press is.
+		this.silence(instance);
+
 		instance.countdown.adjust(ev.payload.ticks, ev.payload.pressed);
 		this.acknowledge(instance);
 	}

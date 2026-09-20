@@ -64,6 +64,14 @@ export class Countdown {
 
 	#ack: Acknowledgement | null = null;
 
+	/**
+	 * Whether the alert is still sounding, set from outside.
+	 *
+	 * The clock has no business knowing what a speaker is doing, and it does not — it knows one thing
+	 * about it, because one rule here depends on it. See {@link Countdown.ringing}.
+	 */
+	#ringing = false;
+
 	readonly #now: Clock;
 
 	constructor(settings: DialCountdownSettings, now: Clock = Date.now) {
@@ -131,6 +139,28 @@ export class Countdown {
 	 */
 	get remainingStagesSeconds(): number {
 		return this.stages.slice(this.#stageIndex + 1).reduce((total, seconds) => total + seconds, 0);
+	}
+
+	/**
+	 * Whether the alert is still sounding — told to the clock by whoever is playing it.
+	 *
+	 * **It exists to stop the auto-reset silencing the alarm.** The two features are otherwise in
+	 * direct opposition: the ring mode is for the finish you must not miss, the auto-reset is for
+	 * tidying a finish nobody came back to, and with both switched on the second one clears the clock
+	 * out from under the first — the ring stops, the screen goes back to a full timer, and the whole
+	 * point of the mode is gone with no trace that it ever fired. So a ringing timer is not tidied
+	 * away: the delay starts counting once the ringing stops, which is either when you press it or
+	 * when the last play finishes.
+	 *
+	 * Deliberately a plain flag rather than anything this file could work out for itself. How long a
+	 * sound lasts is a property of a file on disk, and nothing here is allowed to touch a disk.
+	 */
+	get ringing(): boolean {
+		return this.#ringing;
+	}
+
+	set ringing(value: boolean) {
+		this.#ringing = value;
 	}
 
 	/** The word acknowledging the last gesture, or `""` once it has had its time. */
@@ -460,12 +490,29 @@ export class Countdown {
 			return;
 		}
 
+		// Still ringing, so the finish has not been dealt with yet. See {@link Countdown.ringing}.
+		if (this.#ringing) {
+			return;
+		}
+
 		if (this.#now() - this.#finishedAt < this.#settings.autoResetSeconds * 1000) {
 			return;
 		}
 
 		this.#finishedAt = null;
 		this.#toStage(0);
+	}
+
+	/**
+	 * Says a word for something that was not one of this clock's own gestures.
+	 *
+	 * Exactly one caller: the press that silences a ring and is then swallowed. That press changes
+	 * nothing about the countdown, so it has no gesture to announce itself with — and a control that
+	 * visibly does nothing when you press it is a control you press again. `silenced` is the word for
+	 * it. See `CountdownAction.perform`.
+	 */
+	note(text: string): void {
+		this.#say(text);
 	}
 
 	#say(text: string): void {

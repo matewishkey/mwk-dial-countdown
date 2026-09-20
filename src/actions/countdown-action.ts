@@ -23,7 +23,7 @@ import { FLASH_MS } from "../feedback";
 import { collectDiagnostics, type HostInfo, logLocation } from "../diagnostics";
 import { DOUBLE_TAP_MS, type Gesture, TapResolver } from "../gestures";
 import { NO_SOUND, normaliseSettings, type DialCountdownSettings } from "../settings";
-import { listSounds, playSound, resolveSound, soundExists, wantsSound } from "../sound";
+import { listSounds, type Playback, playSound, resolveSound, soundExists, wantsSound } from "../sound";
 
 /**
  * Render cadence. Marketplace guidelines cap touchscreen updates at 10 per second; 4 is plenty to
@@ -61,6 +61,18 @@ const SUSPEND_TTL_MS = 24 * 60 * 60 * 1_000;
 /** A countdown waiting for its control to come back, and when it stopped being watched. */
 type Suspended = { countdown: Countdown; at: number };
 
+/**
+ * The alert currently sounding for one control, and whether it is a *ring*.
+ *
+ * One object rather than two fields, so the two cannot come to disagree. `ringing` is the plugin's
+ * policy — it is not something the player knows or should — and it is fixed when the run starts:
+ * whether this particular alert is the kind a press silences instead of obeying.
+ */
+type Alert = { playback: Playback; ringing: boolean };
+
+/** How often a running preview is checked, so the inspector's button can go back to saying Test. */
+const PREVIEW_POLL_MS = 250;
+
 /** Everything that lives only for as long as the action is on screen. */
 export type Instance<A> = {
 	action: A;
@@ -74,6 +86,8 @@ export type Instance<A> = {
 	last: string;
 	/** Turns of the render loop, counted only so the frame can be re-asserted periodically. */
 	ticks: number;
+	/** The alert sounding for this control, or `null` when nothing is. */
+	alert: Alert | null;
 };
 
 export abstract class CountdownAction<
@@ -105,6 +119,19 @@ export abstract class CountdownAction<
 	 * no good answer to that. Page and profile switches are the case worth solving.
 	 */
 	readonly #suspended = new Map<string, Suspended>();
+
+	/**
+	 * The property inspector's *Test* sound, and the poll that notices it finishing.
+	 *
+	 * On the class rather than on an instance because the preview belongs to the panel, not to a
+	 * control: there is one inspector open at a time and it is auditioning settings, not ringing a
+	 * timer. Held at all because clicking *Test* twice used to start a second run over the top of the
+	 * first — which was a curiosity at three plays and is a minute of chime you cannot call off now
+	 * that the count goes to {@link MAX_SOUND_REPEAT}.
+	 */
+	#preview: Playback | null = null;
+
+	#previewWatch: NodeJS.Timeout | null = null;
 
 	/** Which control this action runs on, as the manifest declares it. */
 	protected abstract readonly controller: "Encoder" | "Keypad";
@@ -171,6 +198,7 @@ export abstract class CountdownAction<
 			flashHandle: null,
 			last: "",
 			ticks: 0,
+			alert: null,
 			...this.extras()
 		} as unknown as I;
 		instance.taps = new TapResolver((gesture) => this.perform(instance, gesture), this.tapWindowMs);
@@ -215,6 +243,13 @@ export abstract class CountdownAction<
 	#teardown(instance: I): void {
 		this.detach(instance);
 		instance.taps.cancel();
+
+		// **A control that has left the screen takes its alarm with it.** Not because a page flip means
+		// you heard it — it does not, and `Countdown.resume` is where that reasoning lives — but
+		// because the handle that stops a ring lives on the instance being thrown away. An alert left
+		// running here is one nothing can ever silence, which is the one thing worse than a missed one.
+		this.silence(instance);
+
 		this.#suspend(instance);
 
 		if (instance.renderHandle !== null) {
@@ -307,13 +342,33 @@ export abstract class CountdownAction<
 	/** Auditions a sound, and answers whether a chosen file actually resolves. */
 	override onSendToPlugin(ev: { payload: unknown }): void {
 		const payload = ev.payload as
-			{ event?: string; soundId?: string; customSoundPath?: string; volume?: number; soundRepeat?: number } | undefined;
+			| {
+					event?: string;
+					soundId?: string;
+					customSoundPath?: string;
+					volume?: number;
+					soundRepeat?: number;
+					fadeRepeats?: boolean;
+			  }
+			| undefined;
 
 		if (payload?.event === "preview") {
-			// The preview plays the full repeat count, so what you hear is what the timer will do.
+			// **Test is a toggle.** A second click while it is still going stops it rather than starting
+			// a second run underneath the first, which is what it used to do — bearable at three plays,
+			// and not at the sixty the ring mode makes settable.
+			if (this.#preview !== null && this.#preview.active) {
+				this.#stopPreview();
+				return;
+			}
+
+			// The preview plays the full count, with the fade, so what you hear is what the timer will
+			// do. It does not ring: the ringing state is a property of a control you can press, and
+			// there is nothing in the panel to press it with except the button that started it.
 			const path = resolveSound(payload);
-			const played = playSound(path, payload.volume ?? 100, payload.soundRepeat ?? 1);
-			void this.#reportSound(path, played);
+			this.#preview = playSound(path, payload.volume ?? 100, payload.soundRepeat ?? 1, payload.fadeRepeats === true);
+			void this.#reportSound(path, this.#preview !== null);
+			void this.#reportPreview(this.#preview !== null);
+			this.#watchPreview();
 			return;
 		}
 
@@ -335,6 +390,27 @@ export abstract class CountdownAction<
 	 * and book a second redraw for the moment the pulse expires.
 	 */
 	protected perform(instance: I, gesture: Gesture): void {
+		// **A press silences the alert before it does anything else, always.** That alone is new
+		// behaviour worth having: until now nothing at all could call off a sound that was already
+		// playing, so an alert you had heard went on announcing itself while you pressed the control
+		// to deal with it.
+		const wasRinging = this.silence(instance);
+
+		// **And on a ring, silencing it is the whole of what the press does.** This is the state the
+		// ring mode exists to create: you set twenty plays precisely because you expect to be absorbed
+		// in something else, and the press you make on hearing it is a press to stop the noise — not a
+		// considered instruction to the clock. Letting it also toggle would mean reaching for quiet and
+		// finding you had started the next run by reflex.
+		//
+		// The hold is the one exception, because it is the gesture that means *put this right*: it
+		// clears the ringing and does its job, so one long press gets you back to a settled timer
+		// rather than two presses where the first is spent.
+		if (wasRinging && gesture !== "next") {
+			instance.countdown.note("silenced");
+			this.acknowledge(instance);
+			return;
+		}
+
 		instance.countdown.apply(gesture);
 
 		// Only a preset change alters anything worth keeping. Pausing and restarting are states of a
@@ -368,28 +444,164 @@ export abstract class CountdownAction<
 	/** One turn of the render loop: move an elapsed timer on, sound its alert, then draw. */
 	protected refresh(instance: I, force = false): void {
 		if (instance.countdown.settle()) {
-			const { settings } = instance.countdown;
-			const path = resolveSound(settings);
-			const played = playSound(path, settings.volume, settings.soundRepeat);
-
-			// The alert sound is the only thing here that can fail outside the plugin's control: a
-			// custom file that has since been moved or renamed, or a platform with no player to hand
-			// it to. Elgato's guidelines ask for `showAlert` when an action was unsuccessful, and this
-			// is the case that most needs it — a timer that finishes in silence when it was asked to
-			// make a noise is indistinguishable from a timer that has not finished yet, which is the
-			// one thing an alarm must never be.
-			//
-			// Which is exactly why it has to know the difference between a sound that failed and a
-			// sound nobody asked for. `wantsSound` is that question, and getting it half right is what
-			// put an error triangle on every finish of a timer set to *No sound*: the volume check was
-			// here, the picker check was not. See `../sound`.
-			if (wantsSound(path, settings.volume) && !played) {
-				instance.action.showAlert().catch((err) => streamDeck.logger.error("Failed to show alert", err));
-			}
+			this.#sound(instance);
 		}
+
+		this.#tendAlert(instance);
 
 		instance.ticks += 1;
 		this.draw(instance, force || instance.ticks % RESEND_EVERY_TICKS === 0);
+	}
+
+	/** Sounds the alert for a stage that has just run out, and decides whether it is a ring. */
+	#sound(instance: I): void {
+		const { countdown } = instance;
+		const { settings } = countdown;
+
+		// One alert at a time, and the newer one wins. A second stage running out used to start its
+		// plays over the top of the first stage's, which nothing could then tell apart from the
+		// overlap bug this release fixes.
+		this.silence(instance);
+
+		const path = resolveSound(settings);
+
+		// **Only the end of the whole job rings, never the end of a stage.** It is forced by the rule
+		// below it: a ring is called off the moment the clock is running again, and an intermediate
+		// stage starts the next one immediately — so a ring begun here would be cancelled in the same
+		// breath. A stage boundary gets the ordinary alert, which is what it is: a marker, not an alarm.
+		const ringing = settings.keepRinging && countdown.finished;
+		const playback = this.play(path, settings.volume, settings.soundRepeat, settings.fadeRepeats);
+
+		if (playback !== null) {
+			instance.alert = { playback, ringing };
+			countdown.ringing = ringing;
+		}
+
+		// The alert sound is the only thing here that can fail outside the plugin's control: a
+		// custom file that has since been moved or renamed, or a platform with no player to hand
+		// it to. Elgato's guidelines ask for `showAlert` when an action was unsuccessful, and this
+		// is the case that most needs it — a timer that finishes in silence when it was asked to
+		// make a noise is indistinguishable from a timer that has not finished yet, which is the
+		// one thing an alarm must never be.
+		//
+		// Which is exactly why it has to know the difference between a sound that failed and a
+		// sound nobody asked for. `wantsSound` is that question, and getting it half right is what
+		// put an error triangle on every finish of a timer set to *No sound*: the volume check was
+		// here, the picker check was not. See `../sound`.
+		if (wantsSound(path, settings.volume) && playback === null) {
+			instance.action.showAlert().catch((err) => streamDeck.logger.error("Failed to show alert", err));
+		}
+	}
+
+	/**
+	 * Keeps the ringing state honest, once per frame.
+	 *
+	 * Two things end a ring that no press ended. It can simply run out of plays — nobody came, and
+	 * sixty chimes is where it stops — after which the control is an ordinary finished timer again and
+	 * the next press must do what it says rather than being swallowed by a state that is over.
+	 *
+	 * Or **the clock can stop being finished underneath it**, which is the case worth spelling out.
+	 * A ring outlives the instant it announces: it is still going when the timer is started again,
+	 * reset, handed an edited preset, or dialled somewhere new. Any of those means the finish has been
+	 * dealt with, whoever dealt with it, so the alarm is announcing a moment that has passed. Checking
+	 * the *state* rather than enumerating the gestures is the point — this cannot be got wrong by a
+	 * path nobody thought of, which is how the last few bugs in this file got in.
+	 *
+	 * The press is still handled explicitly in {@link CountdownAction.perform}, because a quarter of a
+	 * second of extra ringing is a long time when your finger is on the button. This is the net.
+	 */
+	#tendAlert(instance: I): void {
+		const alert = instance.alert;
+		if (alert === null) {
+			return;
+		}
+
+		if (!alert.playback.active) {
+			this.#forgetAlert(instance);
+			return;
+		}
+
+		if (alert.ringing && !instance.countdown.finished) {
+			this.silence(instance);
+		}
+	}
+
+	/**
+	 * Stops whatever is sounding for this control.
+	 *
+	 * @returns `true` if what it stopped was a *ring* — the state in which a press means "be quiet"
+	 * and nothing else. A run that had already finished its plays answers `false`, so a press arriving
+	 * in the quarter-second before {@link CountdownAction.#tendAlert} notices is not swallowed by a
+	 * ring that is already over.
+	 */
+	protected silence(instance: I): boolean {
+		const alert = instance.alert;
+		if (alert === null) {
+			return false;
+		}
+
+		const wasRinging = alert.ringing && alert.playback.active;
+		alert.playback.stop();
+		this.#forgetAlert(instance);
+		return wasRinging;
+	}
+
+	#forgetAlert(instance: I): void {
+		instance.alert = null;
+		instance.countdown.ringing = false;
+	}
+
+	/**
+	 * The operating system's player, behind a seam.
+	 *
+	 * Overridable for one reason: a test of the ringing state must be able to hear what was asked for
+	 * without making a noise on the machine running it. It is not a pretend boundary — `playSound` is
+	 * the only thing in this class that spawns a process, and on Linux, which is where this plugin is
+	 * written, it answers `null` on every call.
+	 */
+	protected play(soundId: string | undefined, volumePercent: number, repeat: number, fade: boolean): Playback | null {
+		return playSound(soundId, volumePercent, repeat, fade);
+	}
+
+	/** Watches a running preview so the inspector's button can stop saying *Stop*. */
+	#watchPreview(): void {
+		if (this.#previewWatch !== null) {
+			clearInterval(this.#previewWatch);
+			this.#previewWatch = null;
+		}
+
+		if (this.#preview === null) {
+			return;
+		}
+
+		this.#previewWatch = setInterval(() => {
+			if (this.#preview !== null && this.#preview.active) {
+				return;
+			}
+			this.#stopPreview();
+		}, PREVIEW_POLL_MS);
+		this.#previewWatch.unref?.();
+	}
+
+	/** Ends the preview, however it ended, and tells the panel so its button can go back. */
+	#stopPreview(): void {
+		if (this.#previewWatch !== null) {
+			clearInterval(this.#previewWatch);
+			this.#previewWatch = null;
+		}
+
+		this.#preview?.stop();
+		this.#preview = null;
+		void this.#reportPreview(false);
+	}
+
+	/** Whether a preview is sounding, so the panel can offer to stop it. */
+	async #reportPreview(playing: boolean): Promise<void> {
+		try {
+			await streamDeck.ui.sendToPropertyInspector({ event: "preview", playing });
+		} catch (err) {
+			streamDeck.logger.error("Failed to report the preview", err);
+		}
 	}
 
 	protected scheduleSave(instance: I): void {

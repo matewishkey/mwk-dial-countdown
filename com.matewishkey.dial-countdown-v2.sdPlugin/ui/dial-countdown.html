@@ -463,8 +463,22 @@
 		</div>
 		<div class="row">
 			<label for="soundRepeat">Play it</label>
-			<input type="number" id="soundRepeat" min="1" max="10" step="1" />
+			<input type="number" id="soundRepeat" min="1" max="60" step="1" />
 			<span class="muted">times</span>
+		</div>
+		<div class="row">
+			<label for="keepRinging">Keep ringing until pressed</label>
+			<input type="checkbox" id="keepRinging" />
+		</div>
+		<p class="hint">
+			For the finish you must not miss. Set a high count and the alarm keeps going until you press the control —
+			<em>that</em> press only stops the noise, it does not start or reset the clock, so you cannot silence it into
+			doing something you did not mean. Press and <em>hold</em> to silence it and put the timer right in one go. It
+			rings at the end of the whole job, not between steps, and a timer that is ringing will not clear itself.
+		</p>
+		<div class="row">
+			<label for="fadeRepeats">Quieter after the third play</label>
+			<input type="checkbox" id="fadeRepeats" />
 		</div>
 		<div class="row">
 			<label>Custom sound file</label>
@@ -502,6 +516,7 @@
 			const MAX_PRESET_SECONDS = 24 * 60 * 60;
 			const MAX_TITLE_LENGTH = 32;
 			const MAX_STAGES = 20;
+			const MAX_SOUND_REPEAT = 60;
 
 			/**
 			 * Mirrors `src/settings.ts`. The plugin sanitises everything it is given and writes the
@@ -523,7 +538,9 @@
 				soundId: "default",
 				customSoundPath: "",
 				volume: 100,
-				soundRepeat: 1
+				soundRepeat: 1,
+				keepRinging: false,
+				fadeRepeats: false
 			};
 
 			/**
@@ -852,6 +869,8 @@
 				el("autoResetSec").value = String(state.autoResetSeconds % 60);
 				el("autoResetTotal").textContent = `after · ${label(state.autoResetSeconds)}`;
 				el("soundRepeat").value = String(state.soundRepeat);
+				el("keepRinging").checked = state.keepRinging;
+				el("fadeRepeats").checked = state.fadeRepeats;
 				el("volume").value = String(state.volume);
 				el("soundId").value = state.soundId;
 				renderEnabled();
@@ -890,7 +909,9 @@
 				["showFinishTime", "showFinishTime", (i) => i.checked],
 				["warnEnabled", "warnEnabled", (i) => i.checked],
 				["autoResetEnabled", "autoResetEnabled", (i) => i.checked],
-				["soundRepeat", "soundRepeat", (i) => clamp(Math.round(Number(i.value) || 1), 1, 10)],
+				["soundRepeat", "soundRepeat", (i) => clamp(Math.round(Number(i.value) || 1), 1, MAX_SOUND_REPEAT)],
+				["keepRinging", "keepRinging", (i) => i.checked],
+				["fadeRepeats", "fadeRepeats", (i) => i.checked],
 				["volume", "volume", (i) => clamp(Number(i.value) || 0, 0, 100)]
 			]) {
 				el(id).addEventListener("change", () => {
@@ -950,13 +971,22 @@
 				checkSound();
 			});
 
+			/**
+			 * Auditions the sound — and stops it, since the same button does both.
+			 *
+			 * The plugin owns that state, not this page: a preview also ends on its own when the last play
+			 * finishes, and only the plugin knows when that is. So the button's word is set by the `preview`
+			 * message coming back, in both directions, rather than toggled here and hoped for. A count of
+			 * sixty is why it matters — a preview with no way to call it off is most of a minute of chime.
+			 */
 			el("preview").addEventListener("click", () => {
 				SDPIComponents.streamDeckClient.send("sendToPlugin", {
 					event: "preview",
 					soundId: state.soundId,
 					customSoundPath: state.customSoundPath,
 					volume: state.volume,
-					soundRepeat: state.soundRepeat
+					soundRepeat: state.soundRepeat,
+					fadeRepeats: state.fadeRepeats
 				});
 			});
 
@@ -1084,6 +1114,13 @@
 					// Straight to the clipboard: the point of the button is that nothing further is asked
 					// of whoever pressed it.
 					copyText(payload.report ?? "", el("reportStatus"), "Copied — paste it wherever you are reporting this");
+					return;
+				}
+
+				// The plugin is the one that knows whether a sound is still going — a run of plays ends on
+				// its own as often as it is stopped, and this page has no idea how long a file lasts.
+				if (payload?.event === "preview") {
+					el("preview").textContent = payload.playing ? "Stop" : "Test";
 					return;
 				}
 

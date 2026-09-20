@@ -72,8 +72,38 @@ export type DialCountdownSettings = {
 	soundId: string;
 	customSoundPath: string;
 	volume: number;
-	/** How many times the alert sound plays at the end of a stage. */
+	/**
+	 * How many times the alert sound plays at the end of a stage, one after the other.
+	 *
+	 * Plays, not overlapping copies. They used to overlap — see `REPEAT_GAP_MS` in `./sound` for why
+	 * a count of three was heard as three chimes sounding at once.
+	 */
 	soundRepeat: number;
+	/**
+	 * Whether the alert keeps sounding until somebody presses the control.
+	 *
+	 * The switch exists for the alarms you must not miss. Without it the alert is a fixed number of
+	 * plays that finish whether or not anyone heard them, which is fine for a tea timer and useless
+	 * for the thing you set precisely because you know you will be absorbed in something else.
+	 *
+	 * Switching it on does two things, and only these two: {@link MAX_SOUND_REPEAT} plays become
+	 * worth setting, and the control gets a **ringing state** in which the first press silences the
+	 * alarm instead of doing what it normally does. That swallowed press is the reason this is a
+	 * setting rather than always-on behaviour — on a one-play chime, having the press that restarts
+	 * the timer quietly do nothing would be a bug, not a feature.
+	 *
+	 * Deliberately not called `ringEnabled`: the dial already draws something called a ring, and
+	 * `render.ts` is full of it.
+	 */
+	keepRinging: boolean;
+	/**
+	 * Whether the later plays drop to half volume.
+	 *
+	 * One checkbox, no curve and no second number — the point is a long alarm that stops boring a
+	 * hole in the room, not a fade you have to tune. `FADE_AFTER_PLAYS` and `FADED_VOLUME` in
+	 * `./sound` are the two figures, and they are in one place should either want moving.
+	 */
+	fadeRepeats: boolean;
 };
 
 /** Plays the bundled chime; resolved at playback time, since its path is only known at runtime. */
@@ -86,7 +116,16 @@ export const DEFAULT_PRESETS: Preset[] = [[5 * 60], [20 * 60], [30 * 60], [40 * 
 const MIN_PRESET_SECONDS = 1;
 export const MAX_PRESET_SECONDS = 24 * 60 * 60;
 
-export const MAX_SOUND_REPEAT = 10;
+/**
+ * Most times one alert may play.
+ *
+ * **Raised from 10 when the ring mode arrived**, which is what a large number is for: an alarm you
+ * have to be pressed to stop wants to outlast you walking back to the desk, and twenty plays of a
+ * two second chime is under a minute of ringing. It is safe to raise because a press now silences
+ * the alert whatever the mode — see `CountdownAction.silence` — so no setting here can produce a
+ * noise there is no way to stop.
+ */
+export const MAX_SOUND_REPEAT = 60;
 
 /**
  * Longest title kept, in characters.
@@ -123,7 +162,9 @@ export const DEFAULTS: DialCountdownSettings = {
 	soundId: DEFAULT_SOUND,
 	customSoundPath: "",
 	volume: 100,
-	soundRepeat: 1
+	soundRepeat: 1,
+	keepRinging: false,
+	fadeRepeats: false
 };
 
 /** Rebuilds a complete, valid settings object from anything at all. Never throws. */
@@ -150,7 +191,9 @@ export function normaliseSettings(raw: unknown): DialCountdownSettings {
 		soundId: soundIdFrom(input),
 		customSoundPath: typeof input.customSoundPath === "string" ? input.customSoundPath : "",
 		volume: int(input.volume, DEFAULTS.volume, 0, 100),
-		soundRepeat: int(input.soundRepeat, DEFAULTS.soundRepeat, 1, MAX_SOUND_REPEAT)
+		soundRepeat: int(input.soundRepeat, DEFAULTS.soundRepeat, 1, MAX_SOUND_REPEAT),
+		keepRinging: bool(input.keepRinging, DEFAULTS.keepRinging),
+		fadeRepeats: bool(input.fadeRepeats, DEFAULTS.fadeRepeats)
 	};
 }
 

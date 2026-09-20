@@ -78,8 +78,12 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 			assert.equal(await ui.evaluate("MAX_PRESET_SECONDS"), MAX_PRESET_SECONDS);
 		});
 
-		it("agrees on the sound-repeat ceiling, which it enforces in the markup", async () => {
+		it("agrees on the sound-repeat ceiling, in its constant and in the markup both", async () => {
+			// Two copies of the same number live on the page — the constant the change handler clamps
+			// with, and the `max` the field enforces before anything is typed — and until this said so,
+			// only the second was checked against `src/settings.ts`.
 			await ui.load({});
+			assert.equal(await ui.evaluate("MAX_SOUND_REPEAT"), MAX_SOUND_REPEAT);
 			assert.equal(await ui.evaluate('document.getElementById("soundRepeat").max'), String(MAX_SOUND_REPEAT));
 		});
 
@@ -639,15 +643,43 @@ describe("the property inspector", { skip: noBrowser ? "no Chromium in Playwrigh
 
 	describe("auditioning a sound", () => {
 		it("asks the plugin to play exactly what the timer would play", async () => {
-			await ui.load({ ...DEFAULTS, soundId: "beep", volume: 55, soundRepeat: 3 });
+			// The fade is in here for the same reason the count and the volume are: the button says
+			// *Test*, and a preview that left one of the settings out would be auditioning something the
+			// timer is not going to do.
+			await ui.load({ ...DEFAULTS, soundId: "beep", volume: 55, soundRepeat: 3, fadeRepeats: true });
 
 			await ui.evaluate('document.getElementById("preview").click()');
 
 			const sent = await ui.evaluate("window.__calls.send.at(-1)");
 			assert.deepEqual(sent, {
 				event: "sendToPlugin",
-				payload: { event: "preview", soundId: "beep", customSoundPath: "", volume: 55, soundRepeat: 3 }
+				payload: {
+					event: "preview",
+					soundId: "beep",
+					customSoundPath: "",
+					volume: 55,
+					soundRepeat: 3,
+					fadeRepeats: true
+				}
 			});
+		});
+
+		/**
+		 * The button is a toggle, and the plugin owns which way round it is.
+		 *
+		 * It has to: a run of plays ends on its own as often as it is stopped, and this page cannot
+		 * know how long a sound file lasts. A page that flipped its own label would say *Stop* over a
+		 * preview that finished thirty seconds ago.
+		 */
+		it("says Stop while the plugin reports a preview playing, and Test again when it ends", async () => {
+			await ui.load({ ...DEFAULTS });
+			assert.equal(await text('document.getElementById("preview").textContent'), "Test");
+
+			await ui.evaluate('window.__subs.toInspector({ payload: { event: "preview", playing: true } })');
+			assert.equal(await text('document.getElementById("preview").textContent'), "Stop");
+
+			await ui.evaluate('window.__subs.toInspector({ payload: { event: "preview", playing: false } })');
+			assert.equal(await text('document.getElementById("preview").textContent'), "Test");
 		});
 
 		it("checks the sound resolves as soon as it opens, not when the alarm is due", async () => {

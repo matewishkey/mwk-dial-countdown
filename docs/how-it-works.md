@@ -120,6 +120,86 @@ The drift note is the one thing the key cannot say: `from 20m` needs both halves
 
 The switch that hides the line is called **Show the label**. It was called *Show the title* and never named a title — it switched this line — so it was renamed when the title became a real thing you can type. `normaliseSettings` carries the old key across, since an install that had the line switched off must not come back with it switched on.
 
+## The alarm
+
+The timer hands a sound file to the operating system's own player when a step runs out — `afplay` on
+macOS, PowerShell's WPF `MediaPlayer` on Windows. **Play it *n* times** repeats it, up to sixty.
+
+### Repeats used to play on top of each other
+
+They were scheduled all at once, each one `i × 900 ms` after the first was launched, with a comment
+saying 900 ms was "long enough that two plays do not run into one another". Nothing had ever checked
+that against the files the plugin ships. `chime.wav`, the default, is **2.00 s** long; `alarm.wav` is
+1.95 s.
+
+So the second play started while the first was still sounding, and the third while both were. Set to
+three, what you heard was one chime, then two at once, then three — and never more than three,
+because by the fourth play the 2.7 s offset had finally cleared the 2.00 s file. That is exactly how
+it was reported: *"it is starting to play 2 times, 3 times… never goes over but it is stacking up."*
+
+The gap cannot be got right from a constant, because it depends on a file the user chose. So it is
+not got from a constant. **A play now begins when the previous one has *ended*** — both platforms'
+players run for as long as the sound does, so the process exiting is the signal, and the plugin never
+has to parse a WAV header, an MP3 or an AIFF. `REPEAT_GAP_MS` is now what it always claimed to be: the
+silence *between* two plays, at 500 ms.
+
+The other half of the same fix is that a run of plays is now **one object you can stop**, rather than
+a fan of timers nothing held. Nothing could previously call a sound off — not a second step running
+out on top of the first, not a press, not the inspector's *Test* button clicked twice. Everything
+below depends on that handle existing.
+
+### Keep ringing until pressed
+
+For the finish you must not miss. Set a high count, switch this on, and the alarm keeps going until
+somebody presses the control.
+
+**The press that silences it does nothing else.** That swallowed press is the whole of what the
+switch adds, and it is why it is a switch rather than always-on behaviour: you set twenty plays
+precisely because you expect to be absorbed in something else, so the press you make on hearing it is
+a reflex grab for quiet, not a considered instruction to the clock. Letting it also toggle would mean
+reaching to stop a noise and finding you had started the next run by accident. On a one-play chime,
+though, having the press that restarts the timer quietly do nothing would be a bug — so the default
+is off.
+
+**A hold is the exception.** Press and hold and it silences the alarm *and* does its job, putting the
+clock back to the top of its preset. It is the gesture that means *put this right*, so making it cost
+two presses would be the mode getting in the way of the repair. Turning the dial is likewise not
+swallowed: it silences the alarm and adjusts the clock, because winding a finished timer is how you
+set up the next one, and losing a click of a rotation would read as the dial skipping.
+
+**It rings at the end of the whole job, never between steps.** That is forced rather than chosen: a
+ring is called off the moment the clock is running again, and an intermediate step starts the next
+one immediately, so a ring begun at a step boundary would be cancelled in the same breath. A step
+boundary gets the ordinary alert, which is what it is — a marker, not an alarm.
+
+**Anything that leaves the clock no longer finished stops the ring.** Started again, reset, handed an
+edited preset, dialled somewhere new — whoever dealt with the finish, the alarm is now announcing a
+moment that has passed. The plugin checks that *state* once a frame rather than enumerating the
+gestures, so it cannot be got wrong by a path nobody thought of. The press is still handled
+explicitly on top of that, because a quarter of a second of extra ringing is a long time with your
+finger on the button.
+
+**A ringing timer will not clear itself.** See below: the two features are otherwise in direct
+opposition, and the auto-reset would win.
+
+**A control that leaves the screen takes its alarm with it.** Not because flipping the page means you
+heard it, but because the handle that stops a ring lives on the instance being thrown away — an alert
+left running there is one nothing can ever silence, which is worse than a missed one.
+
+### Quieter after the third play
+
+One checkbox. The first three plays sound at the volume you set and everything after them at half of
+it — a step, not a curve, and half of *your* volume rather than a fixed level, so a quiet alarm does
+not get louder as it goes on. `FADE_AFTER_PLAYS` and `FADED_VOLUME` in `src/sound.ts` are the two
+figures, should either want moving.
+
+### Test is a toggle
+
+Clicking *Test* while a preview is still going stops it. It used to start a second run underneath the
+first, which was a curiosity at three plays and is most of a minute of chime at sixty. The button's
+word comes from the plugin rather than being flipped by the panel, because a run also ends on its own
+and only the plugin knows when.
+
 ## Clearing itself when it is finished
 
 A finished timer sits reading `done` until somebody presses it. That is right for a timer you are watching and wrong for one on a page you left: you come back to a used clock and have to clear it before it is a timer again.
@@ -133,6 +213,13 @@ Three things about the timing.
 **It is silent.** The words under the clock name the gesture you just made, and nobody made this one.
 
 **It is called off the moment anybody touches the timer.** A press, a turn, a reset, a preset load — anything that moves the countdown off `elapsed` drops the pending reset, so it cannot reach into the run that follows.
+
+**It waits while the alarm is still ringing.** With *Keep ringing until pressed* switched on, the two
+features are in direct opposition: the ring mode is for the finish you must not miss, the auto-reset
+is for tidying a finish nobody came back to, and the second would clear the clock out from under the
+first — alarm stopped, screen back to a full timer, no trace it ever fired. Which is precisely the
+failure the ring mode exists to prevent. So the delay starts counting once the ringing stops, either
+because you pressed it or because the last play finished.
 
 The delay is measured from the finish, with one exception: a timer that ran out while its page was elsewhere is dated from **the moment the page came back**. Nothing was running to notice the real moment, and dating it back would clear the clock on the first frame you see — the one frame where `done` is the whole point.
 

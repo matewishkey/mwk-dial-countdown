@@ -17,6 +17,47 @@ renamed, and rewriting it would make the history describe a repo that never exis
 
 ## [Unreleased]
 
+## [4.1.0] - 2026-09-20
+
+### Added
+
+- **Keep ringing until pressed.** For the alarm you must not miss. Switch it on, set a high count —
+  up to sixty now — and the alert keeps sounding until somebody presses the control. **That press
+  only stops the noise:** it does not start, pause or reset the clock, because a press made on
+  hearing an alarm is a reflex grab for quiet rather than an instruction, and silencing it into
+  starting the next run by accident is the one thing it must not do. Press and *hold* to silence it
+  and put the timer right in the one gesture. Turning the dial also silences it, and still adjusts.
+
+  It rings at the end of the whole job, never between steps — a step starts the next one
+  immediately, and a ring is called off the moment the clock is running again, so a ring between
+  steps would be cancelled in the same breath. Anything that leaves the clock no longer finished
+  stops it: started, reset, an edited preset, dialled somewhere new. A ringing timer will not clear
+  itself, either, since *Clear itself when finished* would otherwise silence the alarm and wipe the
+  screen clean of it — which is precisely the failure this was asked for to prevent.
+
+- **Quieter after the third play.** One checkbox: the first three plays sound at the volume you set,
+  everything after at half of it. Half of *your* volume, not a fixed level, so a quiet alarm does not
+  get louder as it goes on.
+
+### Fixed
+
+- **Repeats no longer play on top of each other.** Set to three, the alert was heard as one chime,
+  then two at once, then three — stacking up and never going past three. Every repeat was scheduled
+  at a fixed 900 ms from the first, and the bundled `chime.wav` is 2.00 s long, so the second play
+  started while the first was still sounding. A play now begins when the previous one has *ended*,
+  which is right for a sound file of any length, on either platform, including your own.
+
+- **A press now silences an alert that is already playing**, whatever the mode. Until now nothing
+  could call one off: an alarm you had plainly heard went on announcing itself while you pressed the
+  control to deal with it.
+
+- **A step running out no longer layers its alert over the previous step's.** Two runs playing at
+  once sound exactly like the bug above.
+
+- **The inspector's *Test* button is a toggle.** Clicking it while a preview was still going used to
+  start a second one underneath the first — bearable at three plays, and most of a minute of chime at
+  sixty.
+
 ## [4.0.0] - 2026-09-18
 
 ### Added

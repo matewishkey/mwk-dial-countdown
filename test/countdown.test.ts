@@ -873,6 +873,40 @@ describe("the auto-reset", () => {
 		assert.equal(state.countdown.timer.status, "elapsed", "a minute has not passed yet");
 	});
 
+	/**
+	 * The two features are in direct opposition, and without this the wrong one wins.
+	 *
+	 * The ring mode is for the finish you must not miss; the auto-reset is for tidying a finish
+	 * nobody came back to. With both on, the second clears the clock out from under the first — the
+	 * alarm stops, the screen goes back to a full timer, and there is no trace it ever fired. Which
+	 * is precisely the failure the ring mode was asked for to prevent.
+	 */
+	it("does not tidy away a timer that is still ringing", () => {
+		const state = clearing();
+		finish(state);
+		state.countdown.ringing = true;
+
+		state.advance(600_000);
+		state.countdown.settle();
+
+		assert.equal(state.countdown.timer.status, "elapsed", "ten minutes on, and it is still ringing");
+	});
+
+	it("tidies it away as soon as the ringing stops", () => {
+		// The positive control for the test above: without it, that one would pass just as well if
+		// the auto-reset had been broken outright.
+		const state = clearing();
+		finish(state);
+		state.countdown.ringing = true;
+
+		state.advance(600_000);
+		state.countdown.settle();
+		state.countdown.ringing = false;
+		state.countdown.settle();
+
+		assert.equal(state.countdown.timer.status, "idle", "the wait was long over; only the alarm was holding it");
+	});
+
 	it("puts the clock back to full and stopped once the wait is up", () => {
 		const state = clearing();
 		finish(state);
