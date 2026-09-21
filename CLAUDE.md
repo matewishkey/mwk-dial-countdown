@@ -16,14 +16,16 @@ behaves is [docs/how-it-works.md](docs/how-it-works.md), what changed is
 | `npm run release` | every gate, then tags, pushes and creates the GitHub release; writes the hand-over page |
 | `npm run release -- --no-publish` | the same, touching nothing outward-facing |
 
-There is no hardware on this box. `npm run demo` is the only thing that exercises the two action
-subclasses end to end, so run it after touching anything in `src/actions/`.
+There is no hardware on this box. `test/actions-live.test.ts` drives the two action subclasses
+in-process; `npm run demo` is the only thing that runs the *built* bundle over a real socket, so run
+it after touching anything in `src/actions/`.
 
 ## Layout
 
 - `src/` — the plugin. Every module except `plugin.ts` and `src/actions/` imports no SDK and is
   tested directly; `ls src/` is the list, and `grep -l '@elgato/streamdeck' src/*.ts src/actions/*.ts`
-  is the exception to it.
+  is the exception to it — plus `src/frame.ts`, which that grep also finds and which imports a
+  *type* only, erased at build, so it stays pure.
 - `src/actions/` — the SDK-facing half. `countdown-action.ts` is the shared base. They decide *when*
   to draw and how to send it; `src/frame.ts` decides *what* each frame says, and is pure so a test
   can read it.
@@ -42,14 +44,12 @@ under *How it fits together*; the short version:
 - `setImage` takes a **data URI**, never raw SVG markup.
 - Settings arriving from any build go through `normaliseSettings`; nothing else reads them raw.
 - Frames are re-asserted every 2 s. Awaiting `setFeedbackLayout` does not help.
-- The test loader compiles with **TypeScript's own compiler**, not Node's type stripping, because
-  stripping leaves `@action` decorators standing and made both action subclasses unimportable. They
-  are importable now (`test/actions-live.test.ts` drives them); keep it that way. The Stream Deck
-  SDK was never the obstacle — it imports in under 100 ms and needs no connection.
+- `test/ts-resolve.mjs` compiles with **`tsc`, not Node's type stripping** — stripping leaves
+  `@action` decorators standing. Keep it; it is what makes the action subclasses importable.
 - **Nothing on this box can make a sound.** `playSound` finds no player on Linux and returns `null`,
   so no alert ever rings — not in the suite and not in `npm run demo`. Everything downstream of a
-  ringing alert is therefore reachable only through `src/frame.ts` and `src/label.ts`. Say this out
-  loud when handing over anything to do with sound; a green suite is not evidence there.
+  ringing alert is reachable only by faking the player at the `play()` seam. Say this out loud when
+  handing over anything to do with sound; a green suite is not evidence there.
 - **Whether the user can see something is a claim about the frame, not about a flag.** Assert it
   against what `dialFeedback` / `keyFace` return. A flag that nothing renders is how 4.1.0 shipped
   a ringing state with nothing on screen.
@@ -59,9 +59,10 @@ under *How it fits together*; the short version:
 
 ## Tests
 
-- **Every test in `test/actions.test.ts` must tear its instance down**, and register that teardown
-  with `t.after` rather than at the end of the body. The render loop is a `setInterval`; one left
-  running holds the event loop open and hangs the whole suite with no output.
+- **Every test in `test/actions.test.ts` and `test/actions-live.test.ts` must tear its instance
+  down**, and register that teardown with `t.after` rather than at the end of the body. The render
+  loop is a `setInterval`; one left running holds the event loop open and hangs the whole suite with
+  no output.
 - A guard is not proven by a green test. Break the code and confirm the test goes red — several
   tests here have been found asserting nothing, and two were asserting the wrong behaviour outright.
 - Keep a **positive control** beside any test of an absence, or it passes just as well when the
