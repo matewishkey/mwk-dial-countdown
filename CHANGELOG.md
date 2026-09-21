@@ -35,8 +35,15 @@ anybody only in 4.1.0.
   was opened on.
 
   Reintroducing the 4.1.0 bug — the ringing flag set and nothing rendering it — now fails two of
-  those tests as well as four in `test/frame.test.ts`. The packaged plugin is untouched: same
-  content id, `2ca616ec…`.
+  those tests as well as four in `test/frame.test.ts`. This commit leaves the packaged plugin
+  untouched — its own source edits are comments, which minification strips.
+
+  **The `2ca616ec…` that stood here was the wrong baseline.** That is what v4.2.0 shipped, and the
+  refactor above had already moved the bundle off it, so the id was stale the moment it was written.
+  Measured since: v4.2.0's published asset is `2ca616ec…`, and everything from the refactor onward
+  builds `530160038f…`, differing in `bin/plugin.js` alone and by 46 bytes. Nothing a user can see
+  changed, so this still is not a release — but the claim that the bytes were identical was false,
+  and that claim is the one the release rule turns on.
 
 - **What each control puts on screen is now a value, in `src/frame.ts`, and is tested directly.**
   Both `draw` methods built their payload inline, inside classes no test can import — the `@action`
