@@ -299,6 +299,14 @@ gitignored, so there is no copy of the right build left to put back.
 `work/<own>-<repo>/<date>_v<version>/`. Open `report.html`; `README.md` beside it is what the folder
 index shows.
 
+**It rewrites that `README.md` on every run, so anything hand-written into it is gone.** Adding *what
+to try, and why* to the page is worth doing — it is the difference between a build and a build
+somebody knows how to evaluate — but keep the text in a file and re-apply it after the last run, not
+before. It was lost twice in one afternoon, and the second time the page mate would have opened
+described a design that had already been replaced. The folder name carries the **date**, not just the
+version, so a re-run the next day writes a second folder for the same version and leaves the stale
+one sitting beside it in the index.
+
 It exists because **the last step cannot be automated.** Marketplace submission is a form a human
 fills in, and the last useful thing this repo can do is hand that human everything the form wants in
 a shape that can be copied rather than retyped.

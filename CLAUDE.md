@@ -21,8 +21,9 @@ subclasses end to end, so run it after touching anything in `src/actions/`.
 
 ## Layout
 
-- `src/` — the plugin. Pure modules (`timer`, `countdown`, `settings`, `gestures`, `step`, `label`,
-  `feedback`, `render`, `sound`) import no SDK and are tested directly.
+- `src/` — the plugin. Every module except `plugin.ts` and `src/actions/` imports no SDK and is
+  tested directly; `ls src/` is the list, and `grep -l '@elgato/streamdeck' src/*.ts src/actions/*.ts`
+  is the exception to it.
 - `src/actions/` — the SDK-facing half. `countdown-action.ts` is the shared base.
 - `com.matewishkey.dial-countdown-v2.sdPlugin/` — what ships: manifest, `bin/`, `imgs/`, `layouts/`,
   `sounds/`, `ui/`. Everything else in the repo is not packaged.

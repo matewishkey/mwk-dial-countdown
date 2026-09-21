@@ -21,7 +21,19 @@ anybody only in 4.1.0.
 
 ## [Unreleased]
 
-## [4.1.0] - 2026-09-21
+### Internal
+
+- **Publishing no longer waits to be asked.** `npm run release` with no flag is the procedure, and
+  the Marketplace form is the only step left to a human. `docs/releasing.md` keeps the reasoning it
+  replaced rather than deleting it, and also now warns that a release run rewrites the hand-over
+  page's `README.md`, so anything hand-written into it has to be re-applied afterwards.
+
+- **Three claims in this file were wrong.** 4.1.0 was dated the day the entry was written rather
+  than the day it shipped, and both the *Unreleased* compare link and 4.0.0's own link pointed at a
+  `v4.0.0` tag that has never existed — measured, 404 — so a heading that reads as a link to a
+  release led to a GitHub error page.
+
+## [4.1.0] — 2026-09-21
 
 ### Added
 
@@ -90,7 +102,7 @@ anybody only in 4.1.0.
   cost report that no longer exists. The packaged plugin is unaffected — same content id before and
   after.
 
-## [4.0.0] - 2026-09-18
+## [4.0.0] — 2026-09-18
 
 ### Added
 
