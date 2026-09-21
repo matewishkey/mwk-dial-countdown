@@ -76,6 +76,16 @@ renamed, and rewriting it would make the history describe a repo that never exis
   have stopped it gone from the screen. The reason the repeat count could be raised at all is that
   no setting may produce a noise there is no way to call off; this was the hole in that.
 
+### Internal
+
+- **The code and the docs now state what is true today; the changelog keeps the history.** `src/`
+  lost a third of its comment volume to passages narrating designs that had already been replaced,
+  `docs/how-it-works.md` lost its archaeology, and a `CLAUDE.md` was added carrying the constraints a
+  tidy-up would otherwise undo. Nothing was deleted until it had been located by name elsewhere. One
+  live defect fell out of it: `src/plugin.ts` carried a truncated comment describing a per-minute
+  cost report that no longer exists. The packaged plugin is unaffected — same content id before and
+  after.
+
 ## [4.0.0] - 2026-09-18
 
 ### Added
