@@ -296,16 +296,22 @@ gitignored, so there is no copy of the right build left to put back.
 ## The release page
 
 `npm run release` puts one page per version on the shared drive, under
-`work/<own>-<repo>/<date>_v<version>/`. Open `report.html`; `README.md` beside it is what the folder
-index shows.
+`work/<own>-<repo>/v<version>/`. Open `report.html`; `README.md` beside it is what the folder index
+shows. **The folder is named for the version alone, so a re-cut overwrites the page in place** — one
+version, one folder, whichever day it was cut on. The date is on the page, under the title.
 
-**It rewrites that `README.md` on every run, so anything hand-written into it is gone.** Adding *what
-to try, and why* to the page is worth doing — it is the difference between a build and a build
-somebody knows how to evaluate — but keep the text in a file and re-apply it after the last run, not
-before. It was lost twice in one afternoon, and the second time the page mate would have opened
-described a design that had already been replaced. The folder name carries the **date**, not just the
-version, so a re-run the next day writes a second folder for the same version and leaves the stale
-one sitting beside it in the index.
+It used to be `<date>_v<version>`, which quietly broke that promise: cutting the same version on two
+days left two folders for it side by side in the index with nothing to say which was current. That
+is [#19](https://github.com/matewishkey/mwk-dial-countdown/issues/19), and it cost a real testing
+session on a superseded build. Folders cut before the change keep their dates — the links to them in
+old issues still work — so the index holds both shapes for a while. **Anything hand-made beside these
+follows the same rule**: name it for the version, not the day.
+
+**The run rewrites that `README.md`, so anything hand-written into it is gone.** Adding *what to try,
+and why* to the page is worth doing — it is the difference between a build and a build somebody knows
+how to evaluate — but keep the text in a file and re-apply it after the last run, not before. It was
+lost twice in one afternoon, and the second time the page mate would have opened described a design
+that had already been replaced.
 
 It exists because **the last step cannot be automated.** Marketplace submission is a form a human
 fills in, and the last useful thing this repo can do is hand that human everything the form wants in

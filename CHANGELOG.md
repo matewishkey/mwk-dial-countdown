@@ -50,6 +50,16 @@ anybody only in 4.1.0.
   the 4.1.0 bug exactly — the flag set, nothing reading it — now fails four of its tests. No
   behaviour changed, so this is not a release; it travels with the next one.
 
+- **The release page is one folder per version again, named for the version and not the day.** It was
+  `<date>_v<version>`, so cutting the same version twice across midnight wrote a second folder beside
+  the first, with nothing in the index to say which was current. That is not cosmetic: mate has the
+  only hardware and opens these by browsing the index, and `2026-09-20_v4.1.0` described a design —
+  a *Keep ringing until pressed* checkbox, no hold on the knob, alerts only at the end of a job —
+  that had been replaced by the morning of the 21st. A re-cut now overwrites the page in place. The
+  date is still on the page, under the title, where it cannot multiply. Folders cut before this keep
+  their names so the links in old issues still resolve. Closes
+  [#19](https://github.com/matewishkey/mwk-dial-countdown/issues/19).
+
 ## [4.2.0] — 2026-09-21
 
 ### Added

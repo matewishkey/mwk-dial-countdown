@@ -390,7 +390,17 @@ function shareFolder() {
 	return `${match[1].slice(0, 3).toLowerCase()}-${match[2]}`;
 }
 
-const out = resolve(value("out", resolve(homedir(), "share/work", shareFolder(), `${today}_v${version}`)));
+/**
+ * Where the page goes: **one folder per version, named for the version alone.**
+ *
+ * It used to carry the date as well, and that was a bug rather than extra information. Cut the same
+ * version on two days and there were two folders for it, sitting next to each other in the index
+ * with nothing to say which was current — and mate, who has the only hardware, opens these by
+ * browsing that index. It happened with 4.1.0 and the stale page described a design that had been
+ * replaced the next morning. A re-cut now overwrites in place, which is what one page per version
+ * meant all along. The date still appears, on the page itself, where it cannot multiply.
+ */
+const out = resolve(value("out", resolve(homedir(), "share/work", shareFolder(), `v${version}`)));
 mkdirSync(out, { recursive: true });
 
 /** Everything downloadable, copied beside the page rather than linked into a directory that moves. */
