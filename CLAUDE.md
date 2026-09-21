@@ -13,7 +13,8 @@ behaves is [docs/how-it-works.md](docs/how-it-works.md), what changed is
 | `npm run build` | rollup → `com.matewishkey.dial-countdown-v2.sdPlugin/bin/` |
 | `npm run demo` | scripted pass over a real socket against the **built** plugin (~130s) |
 | `npm run mock` | drive the plugin by keyboard, no hardware |
-| `npm run release -- --no-publish` | every gate, then writes the hand-over page; tags nothing |
+| `npm run release` | every gate, then tags, pushes and creates the GitHub release; writes the hand-over page |
+| `npm run release -- --no-publish` | the same, touching nothing outward-facing |
 
 There is no hardware on this box. `npm run demo` is the only thing that exercises the two action
 subclasses end to end, so run it after touching anything in `src/actions/`.
@@ -58,5 +59,7 @@ under *How it fits together*; the short version:
 
 `package.json`, `manifest.json` (four parts) and the git tag move together; `npm run version:check`
 asserts it. A change that does not alter the packaged plugin is not a release — it goes under
-*Unreleased* in the changelog. Cut a release only when asked: build the `--no-publish` page and hand
-over the link first, because the only person who can try it needs a build, not a tag.
+*Unreleased* in the changelog. **Cut the release without being asked** — `npm run release`, no flag,
+which tags, pushes and creates the GitHub release — then hand over the link to the page it wrote.
+The Marketplace form is the only step that is his. His call, 2026-09-21; `docs/releasing.md` →
+*Run all five, and do not wait to be asked* has the reasoning and what it replaced.

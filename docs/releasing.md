@@ -149,20 +149,29 @@ own tree. So a change confined to the second list is by definition not a release
    notes describe ONE version*. There is no API for it, and it is the only step here that is not
    automatable. **Then record it** in *Record what was submitted*; nothing else will.
 
-### Steps 1-4, then stop and hand it over
+### Run all five, and do not wait to be asked
 
 **A user-facing change gets a build before it gets a release.** The hardware is on one desk and
 this repo is on another, so a commit is a thing nobody can evaluate — and the only person who can
-try it will ask for a build, not for a tag.
+try it needs something installable, not a tag.
 
-So run steps 1 to 4, then `npm run release -- --no-publish`. It runs every gate — check, build,
-pack, validate, the scripted demo — and writes the page with the `.streamDeckPlugin` beside it,
-while tagging nothing, pushing no tag and creating no GitHub release. Hand over the `work-url` of
-that page and wait. **Step 5 is the same command without the flag**, once the thing has actually
-been used, and it re-runs every gate rather than trusting the earlier pass.
+So run steps 1 to 5: `npm run release`, no flag. It runs every gate, writes the page with the
+`.streamDeckPlugin` beside it, and tags, pushes and creates the GitHub release. Then hand over the
+`work-url` of that page. **Step 6 is his** — the Marketplace form is the only part of this that
+cannot be done from here.
 
-The cost of getting this the wrong way round is a version number spent on a design that came back
-changed. v4.0.0 sat unpublished for exactly this reason.
+That is a decision, not an oversight, and it reversed an earlier one. This section used to say
+*stop after step 4 and wait*, on the grounds that a version number spent on a design that comes
+back changed is wasted — which had just happened, and is why v4.0.0 sits in the changelog with no
+tag. The reversal is his, on 2026-09-21: *"pls always publish and push I will do the rest"*. The
+waste is real and he has priced it. A version number is cheap; a round trip through the one person
+who can test anything is not.
+
+What the old rule was protecting is still protected, by `publish` rather than by asking. It refuses
+a dirty tree, a tag that already names a different commit, a tag someone else pushed, and a
+published release carrying a different build; nothing is tagged unless every gate passed in that
+same invocation. What it cannot judge is whether the design is right — so if a release turns out to
+be wrong on the hardware, the answer is the next version, not an unpushed tag.
 
 The `.streamDeckPlugin` itself is gitignored. The GitHub release asset is the artefact of record, and
 the copy on the release page is the one to upload.

@@ -15,9 +15,13 @@ reconstructed from git years later. And **an entry is a record of what shipped**
 things as they were called at the time — a file mentioned in the 3.2.0 entry may since have been
 renamed, and rewriting it would make the history describe a repo that never existed.
 
+**4.0.0 has no tag and no release.** It was built, handed over and tried, and the design came back
+changed before it was ever published — so its heading links nowhere, and what it describes reached
+anybody only in 4.1.0.
+
 ## [Unreleased]
 
-## [4.1.0] - 2026-09-20
+## [4.1.0] - 2026-09-21
 
 ### Added
 
@@ -1219,8 +1223,8 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v4.0.0...HEAD
-[4.0.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v4.0.0
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v4.1.0...HEAD
+[4.1.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v4.1.0
 [3.11.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.11.0
 [3.10.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.10.0
 [3.9.1]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.9.1
