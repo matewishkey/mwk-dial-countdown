@@ -54,7 +54,7 @@ Turning **never edits a preset** — running or stopped, it moves the clock in f
 
 There is no hour step. Nothing you dial by hand is four hours long — that is a preset, typed in the property inspector, and the dial is for nudging what a preset loaded.
 
-**Pressing the dial starts and pauses the clock.** A press that did not turn the dial is the start/stop control; a press that *did* turn it was a minute-step adjustment, and letting go simply ends the turn. There is no long press on the dial at all, which is what lets you lean on it for as long as a wind takes without a third meaning quietly accruing.
+**Pressing the dial starts and pauses the clock.** A press that did not turn the dial is the start/stop control; a press that *did* turn it was a minute-step adjustment, and letting go simply ends the turn. **Holding the knob** puts the clock back on its preset, the same as holding the touchscreen — decided on release rather than by a timer, so leaning on it to wind in minutes still means nothing however long the wind takes.
 
 ## Feedback
 
@@ -75,7 +75,7 @@ There is no haptic feedback to be had on this hardware — the SDK exposes no su
 - **A pause glyph** rather than a colour change, so the state is stated outright.
 - **Fade near the end** — the same colour, shaded and unshaded, from a threshold you set in minutes and seconds, capped at half the current step's own length so a fresh timer never starts already fading.
 - **Sound when finished**, repeatable up to sixty times, at a volume you set. Choose a bundled sound, any sound already installed on your machine, or your own file. Repeats play one after the other, never on top of one another.
-- **Keep ringing until pressed** — for the alarm you must not miss. The alert keeps sounding until you press the control, and *that* press only stops the noise; it does not start or reset the clock. Press and hold to silence it and put the timer right in one gesture. Optionally drop to half volume after the third play.
+- **Keep ringing until pressed** — for the alarm you must not miss. The alert keeps sounding until you press the control, and *that* press only stops the noise; it does not start or reset the clock. Press and hold — the dial, the touchscreen or a key — to silence it and put the timer right in one gesture. Optionally drop to half volume after the third play.
 - **Clear itself when finished**, after a wait you set. A finished timer otherwise sits reading `done` until somebody presses it, which is right for a timer you are watching and wrong for one on a page you left; switch this on and it goes back to a full, stopped clock on the preset's first step, on its own. It waits for the whole job, every step of it.
 - **Finish time** — `ends 14:35`, more useful than a raw remaining count on a long timer.
 - **Copy diagnostics**, at the bottom of the property inspector. One press puts the plugin version, the machine, the Stream Deck application version and connected device, and any recent warnings and errors on the clipboard — ready to paste into a bug report. It costs nothing until it is pressed; nothing is collected in the background and nothing leaves your machine on its own.

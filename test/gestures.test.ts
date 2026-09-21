@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { DOUBLE_PRESS_MS, DOUBLE_TAP_MS, type Gesture, LONG_PRESS_MS, TapResolver } from "../src/gestures.ts";
+import {
+	dialPress,
+	DOUBLE_PRESS_MS,
+	DOUBLE_TAP_MS,
+	type Gesture,
+	LONG_PRESS_MS,
+	TapResolver
+} from "../src/gestures.ts";
 
 /** The window is shortened so the suite does not spend a quarter of a second per assertion. */
 const WINDOW = 20;
@@ -162,5 +169,43 @@ describe("the key's own window", () => {
 		// Past the window, so a toggle left pending by a missed pair would have fired by now.
 		await wait(DOUBLE_PRESS_MS + 100);
 		assert.deepEqual(seen, ["reset"], "two presses at a human cadence are one reset, not two toggles");
+	});
+});
+
+/**
+ * The dial's own button, which decides on release rather than by running a timer.
+ *
+ * The dial had no hold at all until now, and the reason it did not is the thing this must not break:
+ * pushing the dial in is how you ask for minutes, so a threshold firing *while the finger is down*
+ * would go off in the pause between pushing in and starting to turn. Deciding on release cannot do
+ * that — and a press that turned the dial never gets here, because the action returns before it.
+ */
+describe("dialPress", () => {
+	it("reads an ordinary press as pause or resume", () => {
+		assert.equal(dialPress(0), "toggle");
+		assert.equal(dialPress(120), "toggle");
+	});
+
+	it("reads a held press as the restore", () => {
+		// The same gesture the touchscreen hold makes: put the clock right, and only then move on.
+		// It is also the one gesture a ringing alarm does not swallow, so this is how a dial silences
+		// and resets in one go.
+		assert.equal(dialPress(LONG_PRESS_MS), "next");
+		assert.equal(dialPress(5_000), "next", "leaning on it for five seconds is still one hold");
+	});
+
+	it("puts the boundary exactly on the threshold, not a millisecond either side", () => {
+		// Stated because it is the kind of thing a later edit flips without noticing, and the failure
+		// is a press that does the wrong one of two things at the moment you are least watching.
+		assert.equal(dialPress(LONG_PRESS_MS - 1), "toggle");
+		assert.equal(dialPress(LONG_PRESS_MS), "next");
+	});
+
+	it("never answers reset, which is not a gesture this control has", () => {
+		// The dial's button has two meanings and the touchscreen's double tap owns the third. A
+		// `reset` from here would be a gesture with no way to make it.
+		for (const held of [0, 1, 599, 600, 10_000]) {
+			assert.notEqual(dialPress(held), "reset");
+		}
 	});
 });

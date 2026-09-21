@@ -33,7 +33,11 @@ The most-used control on a countdown ought to be the one under the hand that is 
 
 A press that *did* turn the dial is a different matter: that was a minute-step adjustment, and its release ends the turn and means nothing on its own. Otherwise every pushed nudge would start the timer as you let go of it.
 
-**There is no long press on the dial.** A push is a push however long you lean on it. That is what lets you hold it in for as long as a wind takes without a third meaning quietly accruing underneath — and it means there is no threshold to learn, no timer to beat, and nothing to get wrong.
+**Holding the knob puts the clock right** — the same gesture the touchscreen hold makes: back to the top of the preset, and only once there is nothing left to put right, on to the next one. It is also how a dial silences a ringing alarm *and* resets it in one go, since the hold is the one gesture a ring does not swallow.
+
+The dial had no hold at all for most of this plugin's life, and the reason it did not is the thing the current one is built around. **The threshold is measured on release, never by a timer running while your finger is down.** Pushing the dial in is how you ask for minutes, so a timer firing mid-press would go off in the pause between pushing in and starting to turn, and a wind that began a beat late would silently load a preset before it. Deciding on release cannot do that: a press that turned the dial has already been discarded as the end of a wind, so what reaches the threshold can only be a finger that went in, stayed, and came back up with the clock untouched. Holding it in to wind still means exactly nothing, however long the wind takes.
+
+The trade is real and worth knowing: a slow, deliberate press meant as a pause reads as a hold. The cost of getting one you did not want is one more hold to get back.
 
 ### What a rotation actually changes
 
@@ -161,11 +165,12 @@ reaching to stop a noise and finding you had started the next run by accident. O
 though, having the press that restarts the timer quietly do nothing would be a bug — so the default
 is off.
 
-**A hold is the exception.** Press and hold and it silences the alarm *and* does its job, putting the
-clock back to the top of its preset. It is the gesture that means *put this right*, so making it cost
-two presses would be the mode getting in the way of the repair. Turning the dial is likewise not
-swallowed: it silences the alarm and adjusts the clock, because winding a finished timer is how you
-set up the next one, and losing a click of a rotation would read as the dial skipping.
+**A hold is the exception.** Press and hold — the knob, the touchscreen or a key — and it silences the
+alarm *and* does its job, putting the clock back to the top of its preset. It is the gesture that
+means *put this right*, so making it cost two presses would be the mode getting in the way of the
+repair. Turning the dial is likewise not swallowed: it silences the alarm and adjusts the clock,
+because winding a finished timer is how you set up the next one, and losing a click of a rotation
+would read as the dial skipping.
 
 **It rings at the end of the whole job, never between steps.** That is forced rather than chosen: a
 ring is called off the moment the clock is running again, and an intermediate step starts the next
@@ -259,7 +264,7 @@ Out of the box: **5, 20, 30 and 40 minutes**, one step each.
 
 - **Edit them in the property inspector**, as text — `20m`, or `40, 10, 10`. Add as many as you like; remove any but the last.
 - **Load any of them from the property inspector too**, by clicking the dot beside it. The hold only ever moves forward one at a time, so the fourth of four used to be three holds away with no way back; the panel already drew which one was active, and now it can be told.
-- **Hold the screen** — or the key itself — for the next one. The dial's press starts and pauses the clock instead; see above.
+- **Hold the screen**, the key, or the dial itself for the next one. A short press of the dial starts and pauses the clock instead; see above.
 - Anything from **one second to twenty-four hours**, and up to **twenty steps** in one preset.
 
 Each dial and each key keeps its own preset list and its own running countdown, so they never interfere.

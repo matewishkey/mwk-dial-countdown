@@ -35,6 +35,19 @@ renamed, and rewriting it would make the history describe a repo that never exis
   itself, either, since *Clear itself when finished* would otherwise silence the alarm and wipe the
   screen clean of it — which is precisely the failure this was asked for to prevent.
 
+- **Holding the dial's own knob puts the clock right**, the same as holding the touchscreen: back to
+  the top of the preset, and on to the next one only when there was nothing to put right. It is also
+  how a dial silences a ringing alarm *and* resets it in one gesture, the hold being the one gesture
+  a ring does not swallow — until now that needed the touchscreen, because the knob had no hold.
+
+  **The threshold is measured on release, never by a timer running while your finger is down**, and
+  that is the whole reason the dial can have a hold at all. Pushing the knob in is how you ask for
+  minutes, so a timer firing mid-press would go off in the pause between pushing in and starting to
+  turn, silently loading a preset under a wind that began a beat late. A press that turned the dial
+  is already discarded as the end of a wind, so what reaches the threshold can only be a finger that
+  went in, stayed, and came back up with the clock untouched. The trade: a slow, deliberate press
+  meant as a pause reads as a hold, and costs one more hold to undo.
+
 - **Quieter after the third play.** One checkbox: the first three plays sound at the volume you set,
   everything after at half of it. Half of *your* volume, not a fixed level, so a quiet alarm does not
   get louder as it goes on.

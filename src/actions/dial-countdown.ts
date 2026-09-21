@@ -10,6 +10,7 @@ import streamDeck, {
 } from "@elgato/streamdeck";
 
 import type { Countdown } from "../countdown";
+import { dialPress } from "../gestures";
 import { dialLabel } from "../label";
 import { asDataUri, renderGlyph, renderRing, ringColour, themeFor } from "../render";
 import type { DialCountdownSettings } from "../settings";
@@ -47,6 +48,13 @@ type DialInstance = Instance<Dial> & {
 	 * wrong until the next complete press. The rotation's own flag is the authority again.
 	 */
 	down: boolean;
+	/**
+	 * When the button went in, so the release can tell a press from a hold.
+	 *
+	 * `null` while nothing is pressed. Held as a timestamp rather than run as a timer, and that is
+	 * the whole design of the dial's hold — see {@link DialCountdown.onDialUp}.
+	 */
+	pressedAt: number | null;
 	lastLayout: string | null;
 };
 
@@ -59,7 +67,7 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 	}
 
 	protected extras(): Omit<DialInstance, keyof Instance<Dial>> {
-		return { turnedWhileDown: false, down: false, lastLayout: null };
+		return { turnedWhileDown: false, down: false, pressedAt: null, lastLayout: null };
 	}
 
 	protected override attach(instance: DialInstance): void {
@@ -115,9 +123,11 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 	 * on.**
 	 *
 	 * A push is only ever half a gesture until it is known whether the dial turned before it came back
-	 * up, which is what `turnedWhileDown` records. There is deliberately no long-press timer here any
-	 * more. A hold on the dial does nothing at all, which is what lets holding it in mean "minutes" for
-	 * as long as you like without a second meaning quietly accruing underneath.
+	 * up, which is what `turnedWhileDown` records, and how long it was down for, which is what
+	 * `pressedAt` records. **There is still deliberately no long-press timer here**, even though the
+	 * dial now has a hold: nothing may fire while the finger is down, or holding it in to wind in
+	 * minutes would trip it. The threshold is applied on release instead — see
+	 * {@link DialCountdown.onDialUp} and `dialPress` in `../gestures`.
 	 *
 	 * The cancel is the part that matters. A tap on the touchscreen is held back for
 	 * `DOUBLE_TAP_MS` in case a second one is coming, and the screen sits directly above the
@@ -140,6 +150,7 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 
 		instance.taps.cancel();
 		instance.down = true;
+		instance.pressedAt = Date.now();
 		instance.turnedWhileDown = false;
 	}
 
@@ -161,7 +172,9 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 		}
 
 		const sawThePress = instance.down;
+		const heldFrom = instance.pressedAt;
 		instance.down = false;
+		instance.pressedAt = null;
 
 		if (instance.turnedWhileDown) {
 			instance.turnedWhileDown = false;
@@ -182,7 +195,24 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 			return;
 		}
 
-		this.perform(instance, "toggle");
+		// **A hold on the knob is measured on release, never by a timer**, and that is what makes it
+		// safe to have one at all.
+		//
+		// The dial had no hold for a good reason: pushing it in is how you ask for minutes, so a
+		// threshold that fired *while the finger was down* would go off in the pause between pushing
+		// in and starting to turn — and a wind that began a beat late would silently load a preset
+		// first. That is the trap, and it is why `LONG_PRESS_MS` on the key fires early and this one
+		// cannot copy it.
+		//
+		// Deciding on release removes it completely. A press that turned the dial has already
+		// returned above, so a hold can only ever be a hold: the finger went in, stayed, and came
+		// back up with the clock untouched. Nothing runs while you lean on it, so holding it in to
+		// wind still means exactly nothing, however long the wind takes.
+		//
+		// The trade, which is real: a slow, deliberate press meant as a pause reads as a hold. It is
+		// the same gesture the touchscreen already has, doing the same thing — put the clock right,
+		// then move on — so the cost of getting it is one more hold to get back.
+		this.perform(instance, dialPress(heldFrom === null ? 0 : Date.now() - heldFrom));
 	}
 
 	/**

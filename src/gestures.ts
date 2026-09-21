@@ -76,6 +76,26 @@ export const DOUBLE_PRESS_MS = 500;
  */
 export const LONG_PRESS_MS = 600;
 
+/**
+ * What a completed press of the **dial's own button** turned out to mean.
+ *
+ * The dial reports a down and an up and decides nothing for itself, and unlike the key this cannot
+ * run a timer while the finger is down. Pushing the dial in is how you ask for minutes, so a
+ * threshold that fired mid-press would go off in the pause between pushing in and starting to turn,
+ * and a wind that began a beat late would silently load a preset first. Measuring on release removes
+ * that entirely — a press that turned the dial never reaches here at all.
+ *
+ * It lives beside {@link LONG_PRESS_MS} rather than in the action because the action cannot be
+ * imported by a test: `dial-countdown.ts` carries an `@action` decorator, which Node's type
+ * stripping leaves standing, so the file is a syntax error in the test runner. A rule nothing can
+ * reach is a rule nothing checks.
+ *
+ * @param heldMs How long the button was down, in milliseconds.
+ */
+export function dialPress(heldMs: number): Gesture {
+	return heldMs >= LONG_PRESS_MS ? "next" : "toggle";
+}
+
 export class TapResolver {
 	#handle: NodeJS.Timeout | null = null;
 
