@@ -64,10 +64,6 @@ renamed, and rewriting it would make the history describe a repo that never exis
   started while the first was still sounding. A play now begins when the previous one has *ended*,
   which is right for a sound file of any length, on either platform, including your own.
 
-- **A press now silences an alert that is already playing**, whatever the mode. Until now nothing
-  could call one off: an alarm you had plainly heard went on announcing itself while you pressed the
-  control to deal with it.
-
 - **A step running out no longer layers its alert over the previous step's.** Two runs playing at
   once sound exactly like the bug above.
 
