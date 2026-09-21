@@ -1,26 +1,17 @@
 /**
  * The action layer: appearing, disappearing, and what survives the difference.
  *
- * This is the half of the plugin that had no tests, and all three of the lifecycle bugs it shipped
- * lived here — which is not a coincidence. `src/countdown.ts` and `src/timer.ts` are pure and were
- * exercised hard; the code that owns the timers, the intervals and the debounced write to disk was
- * exercised only by using the plugin.
+ * `@elgato/streamdeck` imports cleanly without connecting — `streamDeck.connect()` is a separate
+ * call the entry point makes — so an action can be driven with a stand-in control that records what
+ * was asked of it. Events are cast loosely on the way in.
  *
- * It turns out to be testable without a Stream Deck. `@elgato/streamdeck` imports cleanly without
- * connecting to anything — `streamDeck.connect()` is a separate call the plugin entry point makes —
- * so an action can be driven with a stand-in control that records what was asked of it. The events
- * are cast loosely on the way in: what is under test is the behaviour, and building complete SDK
- * event objects would be transcription rather than coverage.
+ * **The subject is {@link CountdownAction}, not either subclass.** They carry an `@action`
+ * decorator, which Node's type stripping leaves standing, so importing them here is a syntax error.
+ * A minimal subclass below reaches the same code.
  *
- * **The subject is {@link CountdownAction} itself, not one of its two subclasses**, for two reasons.
- * All three lifecycle bugs were in the base — the subclasses contribute only which events drive them
- * and how they are drawn — and the subclasses carry an `@action` decorator, which Node's type
- * stripping cannot transform: it erases types and leaves decorators standing, so importing
- * `dial-countdown.ts` here is a syntax error rather than a test. A minimal subclass declared below
- * reaches the same code by the same route.
- *
- * **Every test here must tear its instance down.** The render loop is a `setInterval`, and one left
- * running holds the event loop open and hangs the suite.
+ * **Every test must tear its instance down, via `t.after` rather than at the end of the body.** The
+ * render loop is a `setInterval`, and one left running holds the event loop open and hangs the
+ * suite — which a failing assertion would otherwise cause, since the call at the end never runs.
  */
 
 import assert from "node:assert/strict";
@@ -51,11 +42,8 @@ type Calls = {
 };
 
 /**
- * A dial that records rather than draws.
- *
- * Every method answers with a resolved promise, because the code under test attaches a `.catch` to
- * each one and a rejection would be reported as a log line rather than a failure — a stand-in that
- * rejected would make tests pass quietly.
+ * A dial that records rather than draws. Every method resolves, because the code under test
+ * attaches a `.catch` to each and a rejecting stand-in would make tests pass quietly.
  */
 function fakeDial(id: string): { action: Record<string, unknown>; calls: Calls } {
 	const calls: Calls = { setSettings: [], setFeedback: [], setFeedbackLayout: [], showAlert: 0 };

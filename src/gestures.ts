@@ -1,12 +1,10 @@
 /**
  * Turns raw presses into the three things a countdown can be asked to do.
  *
- * The hardware reports taps, never double taps, so the difference has to be decided here: a tap is
- * held back for as long as a second one could still arrive, and only becomes a toggle once that
- * window has closed without one. The cost is that pause lags by the width of the window. The
- * alternative — acting at once and undoing it when the second tap lands — makes every double tap
- * flash a state the user did not ask for, on a screen that is redrawn four times a second and would
- * show it.
+ * The hardware reports taps, never double taps, so a tap is held back for as long as a second one
+ * could still arrive and only becomes a toggle once that window closes. The cost is that pause lags
+ * by the width of the window; the alternative, acting at once and undoing it, makes every double tap
+ * flash a state the user did not ask for.
  */
 
 /**
@@ -19,78 +17,46 @@
 export type Gesture = "toggle" | "reset" | "next";
 
 /**
- * How long a second tap has to arrive for the pair to count as one double tap.
+ * How long a second tap has to arrive for the pair to count as one double tap, on the touchscreen.
  *
- * This is the touchscreen's figure, and only the touchscreen's. Glass has no travel, so the window
- * can be shorter than the key's and a single tap acts almost at once.
- *
- * **250 has never been measured against a hand**, and it is the same number that turned out to be too
- * short on the key — see {@link DOUBLE_PRESS_MS}, which was raised to 500 after an ordinary double
- * press landed 320 ms apart. Driven against the built plugin, two taps **300 ms** apart arrive here as
- * two separate toggles: start, then pause, with the clock back exactly where it began. That is the
- * same failure the key had, and it fails the same way — worst on a finished timer, which is the one
- * you most want to start again. Whether a real finger on glass is quick enough to stay inside 250 is
- * the open question; nothing in this repo can answer it.
+ * Glass has no travel, so this can be shorter than the key's. Not measured against a real hand:
+ * driven against the built plugin, two taps 300 ms apart arrive as two separate toggles rather than
+ * one double tap, so a finger slower than 250 ms is misread. See {@link DOUBLE_PRESS_MS}.
  */
 export const DOUBLE_TAP_MS = 250;
 
 /**
  * The same window for a key, which needs a wider one.
  *
- * A key is not glass. It has travel, a click, and a finger that has to come all the way back up
- * before it can go down again, and the hardware only reports the release — so the gap being measured
- * is release-to-release, with the second press's own travel inside it. Driven against the built
- * plugin, two presses 320 ms apart — an ordinary, deliberate double-press — fell outside the
- * touchscreen's 250 ms and were read as two separate toggles instead, which start the clock and then
- * immediately pause it again.
+ * A key has travel and the hardware reports only the release, so the gap being measured is
+ * release-to-release with the second press's own travel inside it. At 250 ms an ordinary double
+ * press landing 320 ms apart was read as two toggles, which start the clock and immediately pause
+ * it — the key looks dead, and pressing again cannot recover because an even number of toggles
+ * lands back where it started.
  *
- * What makes that worth a constant of its own rather than a wider shared one is how it fails. The
- * clock does not move, so the key looks dead rather than misread; and pressing it again cannot
- * recover, because an even number of toggles always lands back where it started. The obvious
- * response to a button that seems not to have worked is the one response that guarantees it stays
- * that way.
- *
- * The cost is that a single press is held back for half a second before it acts, which is the price
- * of having a double-press gesture on a control this slow.
- *
- * **500 is a starting value, not a measured one, and it cannot be raised freely** — see
- * {@link LONG_PRESS_MS}, which it has to stay under.
+ * 500 is a starting value, not a measured one. It is free to move in either direction; it no longer
+ * has to stay under {@link LONG_PRESS_MS}.
  */
 export const DOUBLE_PRESS_MS = 500;
 
 /**
- * How long a press must be held to count as a long one rather than a tap. Only used where the
- * hardware does not decide for itself — the touchscreen reports `hold` on the event, a key does not.
+ * How long a press must be held to count as a long one, where the hardware does not decide for
+ * itself. The touchscreen reports `hold` on the event; a key and the dial do not.
  *
- * **This no longer has to outlast the double-press windows, and it never actually did.** The claim
- * used to be that a hold settles a press still waiting on a partner, so a window outlasting the hold
- * would resolve that press as a toggle and then fire the hold as well. The reasoning was sound and
- * the inequality was backwards: a pending press starts at the *previous* release and the hold starts
- * at the *next* press, so the pending one always expired first however the two constants were set,
- * and the cancel in the hold's callback was dead code. Press, then press-and-hold, measured against
- * the built bundle, answered `["start", "preset · 5m"]`.
- *
- * {@link TapResolver.hold} fixes it at the source — a press cannot resolve while a finger is down —
- * which leaves both constants free to be tuned on feel alone. {@link DOUBLE_PRESS_MS} was the one
- * most likely to move, and it can now move in either direction without breaking a gesture.
+ * It does not have to outlast the double-press windows, because {@link TapResolver.hold} stops a
+ * pending press from resolving while a finger is down.
  */
 export const LONG_PRESS_MS = 600;
 
 /**
- * What a completed press of the **dial's own button** turned out to mean.
+ * What a completed press of the dial's own button meant, from how long it was held.
  *
- * The dial reports a down and an up and decides nothing for itself, and unlike the key this cannot
- * run a timer while the finger is down. Pushing the dial in is how you ask for minutes, so a
- * threshold that fired mid-press would go off in the pause between pushing in and starting to turn,
- * and a wind that began a beat late would silently load a preset first. Measuring on release removes
- * that entirely — a press that turned the dial never reaches here at all.
+ * **Measured on release, never by a timer running while the finger is down.** Pushing the dial in is
+ * how minutes are asked for, so anything firing mid-press would go off in the pause before the wind
+ * started. A press that turned the dial never reaches here — the action returns first.
  *
- * It lives beside {@link LONG_PRESS_MS} rather than in the action because the action cannot be
- * imported by a test: `dial-countdown.ts` carries an `@action` decorator, which Node's type
- * stripping leaves standing, so the file is a syntax error in the test runner. A rule nothing can
- * reach is a rule nothing checks.
- *
- * @param heldMs How long the button was down, in milliseconds.
+ * It lives here rather than in the action because `dial-countdown.ts` carries an `@action`
+ * decorator, which Node's type stripping leaves standing, so no test can import that file.
  */
 export function dialPress(heldMs: number): Gesture {
 	return heldMs >= LONG_PRESS_MS ? "next" : "toggle";
@@ -100,9 +66,9 @@ export class TapResolver {
 	#handle: NodeJS.Timeout | null = null;
 
 	/**
-	 * Set when {@link TapResolver.hold} stopped the clock on a press that was still waiting for a
-	 * partner. The press is every bit as pending as it was — it simply is not counting down, because
-	 * a finger is on the control and whatever that finger does next will settle it.
+	 * Set when {@link TapResolver.hold} stopped the clock on a press still waiting for a partner.
+	 * The press is as pending as it was; it simply is not counting down while a finger is on the
+	 * control.
 	 */
 	#frozen = false;
 
@@ -125,22 +91,12 @@ export class TapResolver {
 	}
 
 	/**
-	 * **A new press has begun, so a press still waiting on a partner stops counting down.**
+	 * A new press has begun, so a press still waiting on a partner stops counting down.
 	 *
-	 * Only a control that reports its presses as a down and an up can call this, which on this plugin
-	 * means the key: the touchscreen reports a completed tap and nothing else, so there is no moment
-	 * at which a finger is known to be resting on it.
-	 *
-	 * It exists because the window and the hold were racing, and the window always won. A pending
-	 * press starts at the *previous* release, so it expires `DOUBLE_PRESS_MS` after that; the hold
-	 * belongs to the *next* press and cannot fire until `LONG_PRESS_MS` after it began, which is
-	 * necessarily later. So `taps.cancel()` in the hold's own callback could never cancel anything,
-	 * and a press followed by a held press arrived as **toggle, then next** — the clock started *and*
-	 * the preset moved. That is precisely the outcome the comment on `LONG_PRESS_MS` claimed the
-	 * ordering prevented; the ordering guaranteed it.
-	 *
-	 * Freezing settles it without touching either constant, and removes the ordering requirement
-	 * altogether: nothing can resolve while a finger is down, so the hold is always free to win.
+	 * Only a control reporting separate down and up events can call this — on this plugin, the key.
+	 * It exists because a pending press starts at the *previous* release and so always expires
+	 * before a hold on the *next* press can fire; without freezing, a press followed by a held press
+	 * arrives as toggle **and** next. Nothing can resolve while a finger is down.
 	 */
 	hold(): void {
 		if (this.#handle !== null) {

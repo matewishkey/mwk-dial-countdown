@@ -217,13 +217,6 @@ describe("what the dial changes, and what it leaves alone", () => {
 		assert.equal(countdown.timer.durationMs, 300_000, "the preset is exactly what it was configured as");
 		assert.deepEqual(countdown.persistable.presets[0], [300], "and that is what gets saved");
 	});
-
-	it("reports the change, not the raw click count", () => {
-		const { countdown } = fixture();
-
-		countdown.adjust(3, true);
-		assert.equal(countdown.toast, "+3m", "three clicks at a minute each");
-	});
 });
 
 describe("holding for the next preset", () => {

@@ -1,14 +1,9 @@
 /**
  * Sound playback.
  *
- * The Stream Deck SDK has no audio API, so the plugin plays sound by handing a file to whatever the
- * operating system ships with. Nothing here hard-codes a sound that might not exist: the bundled
- * sounds are read from the plugin's own folder, and the system sounds are enumerated from disk, so
- * an unavailable sound is simply absent from the list rather than a path that fails at 2am.
- *
- * **A run of plays is one object you can stop, not a burst of unowned `setTimeout`s.** It used to be
- * the latter, and that one line held two bugs: the plays overlapped each other (see
- * {@link REPEAT_GAP_MS}), and nothing anywhere could call them off (see {@link sequence}).
+ * The SDK has no audio API, so the plugin hands a file to whatever player the operating system
+ * ships with. Nothing is hard-coded: bundled sounds are read from the plugin's own folder and system
+ * sounds are enumerated from disk, so an unavailable sound is simply absent from the list.
  */
 
 import { spawn } from "node:child_process";
@@ -30,28 +25,14 @@ const DEFAULT_SOUND_FILE = "chime.wav";
 /**
  * Silence between one play ending and the next beginning.
  *
- * **Measured from the end of the previous play, which is the whole of the fix.** It used to be
- * measured from the *start*: every repeat was scheduled at `i * 900 ms` from the moment the first
- * one was launched, on the stated reasoning that 900 ms was "long enough that two plays do not run
- * into one another". Nothing had checked that against the files the plugin ships. `chime.wav` — the
- * default — is 2.00 s, and `alarm.wav` is 1.95 s, so the second play began while the first was still
- * sounding and the third while both were. What you heard was one chime, then two at once, then
- * three, and never more than three, because by the fourth the 2.7 s offset had finally cleared the
- * 2.00 s file. That is exactly how it was reported.
- *
- * The gap cannot be got right from a constant, because it depends on a file the user chose — so it
- * is not got from a constant any more. {@link sequence} waits for the player process to *exit*,
- * which both platforms' players do only when the sound has finished, and this is the pause it leaves
- * afterwards. Long enough to read as separate rings; short enough to be an alarm.
+ * **Measured from the end of the previous play, not its start.** A fixed offset cannot be right,
+ * because the length depends on a file the user chose — `chime.wav` alone is 2.00 s, so plays
+ * scheduled 900 ms apart sounded on top of each other. {@link sequence} waits for the player
+ * process to exit instead, which both platforms' players do only when the sound has finished.
  */
 const REPEAT_GAP_MS = 500;
 
-/**
- * How many plays sound at the chosen volume before the fade takes hold, when it is switched on.
- *
- * A step rather than a ramp, deliberately: the ask was for something that stops a long alarm boring
- * a hole in the room, not a curve. Three full-volume plays is the part that has to be heard.
- */
+/** How many plays sound at the chosen volume before the fade takes hold. A step, not a ramp. */
 export const FADE_AFTER_PLAYS = 3;
 
 /** What the fade drops to, as a fraction of the chosen volume. */
@@ -143,26 +124,14 @@ export function soundExists(path: string | undefined): boolean {
 /**
  * Whether a sound was asked for at all.
  *
- * **There are two ways to ask for silence, and neither one is a failure:** pick *No sound* in the
- * picker, or pull the volume to zero. This exists because only one of them was being honoured — a
- * timer set to *No sound* still took the "the alert did not play" branch and raised Stream Deck's
- * error triangle on every finish, on a countdown that had done exactly what it was configured to do.
- *
- * Kept here, next to {@link playSound}, because it answers a question about the same settings and
- * has to stay true as they change. See the alert in `actions/countdown-action.ts`.
+ * Two ways to ask for silence and neither is a failure: pick *No sound*, or pull the volume to
+ * zero. Both must answer false, or a timer doing as it was told raises Stream Deck's error triangle.
  */
 export function wantsSound(path: string | undefined, volumePercent: number): boolean {
 	return path !== undefined && path !== NO_SOUND && volumePercent > 0;
 }
 
-/**
- * A run of plays, in progress.
- *
- * **The handle that did not exist.** Repeats used to be a fan of `setTimeout`s that nothing held, so
- * there was no way to say "stop" — not when a second stage ran out on top of the first, not when the
- * user pressed the control, not when the inspector's *Test* button was clicked twice. Everything
- * that follows from a press being able to silence an alert needs this one object.
- */
+/** A run of plays, in progress — the handle that lets a press, a newer alert or teardown stop it. */
 export type Playback = {
 	/** True until the last play has finished, or {@link Playback.stop} was called. */
 	readonly active: boolean;
@@ -181,12 +150,10 @@ export type Launch = (play: number, done: (ok: boolean) => void) => (() => void)
 /**
  * Runs `plays` plays back to back, each beginning `gapMs` after the last one *ended*.
  *
- * Separated from {@link playSound} so the part with all the ordering in it can be tested without an
- * audio device: everything below is about when a play starts and what stops it, and none of it needs
- * to know that a play is a process. `test/sound.test.ts` drives it with a fake launcher.
+ * Separated from {@link playSound} so the ordering can be tested without an audio device: the
+ * launcher is injected, and nothing here needs to know a play is a process.
  *
- * @returns `null` when the very first play could not be started, which is the one case a caller has
- * to report — see `wantsSound`.
+ * @returns `null` when the first play could not be started, which is the case a caller must report.
  */
 export function sequence(plays: number, gapMs: number, launch: Launch): Playback | null {
 	let index = 0;
@@ -291,12 +258,8 @@ export function volumeForPlay(play: number, volume: number, fade: boolean): numb
 
 /**
  * Plays a sound, detached, and never throws — a timer that finishes silently is a disappointment,
- * but one that crashes the plugin is a bug.
+ * one that crashes the plugin is a bug.
  *
- * @param soundId Absolute path to a sound file, or {@link NO_SOUND}.
- * @param volumePercent 0-100, as set in the property inspector.
- * @param repeat How many times to play it, one after the other rather than on top of each other.
- * @param fade Whether to drop to half volume after the first few plays.
  * @returns The run in progress, or `null` if nothing was launched.
  */
 export function playSound(soundId: string | undefined, volumePercent = 100, repeat = 1, fade = false): Playback | null {
@@ -319,9 +282,9 @@ export function playSound(soundId: string | undefined, volumePercent = 100, repe
 /**
  * Spawns one player and reports when it is done.
  *
- * **Exit is the signal.** `afplay` runs for as long as the sound does, and the PowerShell script
- * sleeps for the file's own `NaturalDuration`, so "the process closed" means "the sound finished" on
- * both platforms — without this plugin having to parse a WAV header, or an MP3, or an AIFF.
+ * **Exit is the signal.** `afplay` runs for as long as the sound does and the PowerShell script
+ * sleeps for the file's `NaturalDuration`, so process exit means playback finished — without this
+ * plugin parsing a WAV, MP3 or AIFF header.
  */
 function launch(command: { file: string; args: string[] } | null, done: (ok: boolean) => void): (() => void) | null {
 	if (command === null) {

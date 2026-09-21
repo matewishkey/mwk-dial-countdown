@@ -1,22 +1,14 @@
 /**
  * Settings, and the one place they are made safe.
  *
- * Stream Deck keeps an action's settings across an uninstall and reinstall, so a build will be
- * handed settings written by an older build — with fields that have since changed shape, been
- * renamed, or been dropped. Every read therefore goes through {@link normaliseSettings}, which
- * rebuilds a known-good object from whatever arrived rather than trusting it. Anything unrecognised
- * is discarded, so a stale key cannot survive to be shown back to the user as nonsense.
+ * Stream Deck keeps an action's settings across an uninstall, so a build will be handed settings
+ * written by an older one. Every read goes through {@link normaliseSettings}, which rebuilds a
+ * known-good object from whatever arrived; anything unrecognised is discarded.
  */
 
 /**
  * A preset is the list of stages it runs, in seconds — `[2400, 600, 600]` for forty minutes then
  * ten then ten. A plain countdown is a preset with one stage.
- *
- * **This is what became of the repeat switch.** Repeating was a second idea of "how long this timer
- * runs for", bolted beside the preset and expressed in a different vocabulary: a duration over here,
- * a number of times over there, and a stopping rule that had to reconcile them. A stage list says
- * the same things and more — `6m` six times is six stages, and 40/10/10 was not sayable at all. See
- * {@link normalisePresets} for what happens to settings written while the switch still existed.
  */
 export type Preset = number[];
 
@@ -28,46 +20,27 @@ export type DialCountdownSettings = {
 	/**
 	 * A name for this timer, drawn on the label line — `Tea` rather than `20m`.
 	 *
-	 * The plugin's own field rather than Stream Deck's Title box, which stays switched off in the
-	 * manifest. Both controls draw their own text: the key's whole face is one image, and neither
-	 * touchscreen layout has a `title` item for the application to fill. A native title therefore had
-	 * nowhere to land on a dial and could only land *on top of* the clock on a key. Owning the field
-	 * is what lets the same name appear in the same place on both.
-	 *
-	 * Empty means unnamed, and an unnamed timer falls back to its current stage's length.
+	 * The plugin's own field rather than Stream Deck's Title box, which stays off in the manifest:
+	 * both controls draw their own text, so a native title had nowhere to land on a dial and could
+	 * only land on top of the clock on a key. Empty means unnamed.
 	 */
 	title: string;
 	showLogo: boolean;
 	/**
-	 * Whether the line under the clock is drawn at all — the title or stage length, and the stage
-	 * tally with it.
-	 *
-	 * Called `showTitle` until the title became a real thing you can type. It never named a title:
-	 * what it switches is the label line, so it is called that now, and {@link normaliseSettings}
-	 * carries the old name across.
+	 * Whether the line under the clock is drawn at all — the title or stage length, and the tally.
+	 * Stored as `showTitle` by builds before 3.6.0; {@link normaliseSettings} carries that across.
 	 */
 	showLabel: boolean;
 	showFinishTime: boolean;
 	warnEnabled: boolean;
 	warnSeconds: number;
-	/**
-	 * Whether a timer that has finished for good puts itself back to the start after a while.
-	 *
-	 * The job is over, every stage is spent, and the clock is left reading `done` until somebody
-	 * comes back to it. Switching this on means it tidies up after itself instead — full clock,
-	 * stopped, back on the first stage, exactly where it started.
-	 */
+	/** Whether a timer that has finished for good puts itself back to the start after a while. */
 	autoResetEnabled: boolean;
 	/** How long a finished timer waits before it resets itself, in seconds. */
 	autoResetSeconds: number;
 	/**
-	 * Which sound plays when the timer finishes, or {@link NO_SOUND} for none.
-	 *
-	 * There is no separate on/off switch. There was, and it was one switch too many: *Play a sound
-	 * when done* and a *No sound* entry in the picker are two ways to say the same thing, and the
-	 * combination they disagreed about — enabled, but set to no sound — is what raised Stream Deck's
-	 * error triangle on every finish of a timer that was doing exactly as it was told. One control,
-	 * one answer. See {@link normaliseSettings} for what becomes of the old flag.
+	 * Which sound plays when the timer finishes, or {@link NO_SOUND} for none. There is no separate
+	 * on/off switch: *No sound* in the picker is how it is turned off, so the two cannot disagree.
 	 */
 	soundId: string;
 	customSoundPath: string;
@@ -75,25 +48,11 @@ export type DialCountdownSettings = {
 	/**
 	 * How many times the alert sound plays at the end of a stage, one after the other.
 	 *
-	 * Plays, not overlapping copies. They used to overlap — see `REPEAT_GAP_MS` in `./sound` for why
-	 * a count of three was heard as three chimes sounding at once.
-	 *
-	 * **Set it high for the alert you must not miss.** There is no separate "keep ringing" switch,
-	 * and there was one for exactly one release. It was a second idea of the same thing: a count over
-	 * here, a mode over there, and a rule reconciling them that got the reconciliation wrong — a ring
-	 * was allowed only at the end of the whole job, so the end of a *step* sounded an alert that a
-	 * press could not call off, and the press paused the step that had just started instead. One
-	 * number, and a press that always silences, says everything the pair said and cannot disagree
-	 * with itself.
+	 * Set it high for the alert you must not miss; a press silences whatever is playing, so there is
+	 * no separate "keep ringing" mode.
 	 */
 	soundRepeat: number;
-	/**
-	 * Whether the later plays drop to half volume.
-	 *
-	 * One checkbox, no curve and no second number — the point is a long alarm that stops boring a
-	 * hole in the room, not a fade you have to tune. `FADE_AFTER_PLAYS` and `FADED_VOLUME` in
-	 * `./sound` are the two figures, and they are in one place should either want moving.
-	 */
+	/** Whether the later plays drop to half volume. `FADE_AFTER_PLAYS` in `./sound` is the figure. */
 	fadeRepeats: boolean;
 };
 
@@ -107,33 +66,16 @@ export const DEFAULT_PRESETS: Preset[] = [[5 * 60], [20 * 60], [30 * 60], [40 * 
 const MIN_PRESET_SECONDS = 1;
 export const MAX_PRESET_SECONDS = 24 * 60 * 60;
 
-/**
- * Most times one alert may play.
- *
- * **Raised from 10 once a press could silence an alert**, which is what makes a large number usable:
- * an alarm meant to outlast you walking back to the desk is no good if it cannot be called off, and
- * twenty plays of a two second chime is under a minute. `CountdownAction.silence` is what makes it
- * safe — no value here can produce a noise there is no way to stop.
- */
+/** Most times one alert may play. Safe to be large because a press silences whatever is playing. */
 export const MAX_SOUND_REPEAT = 60;
 
 /**
- * Longest title kept, in characters.
- *
- * Not a display limit — the dial's label ellipsises and the key's caption shrinks to fit, so a long
- * title degrades on its own. It is a limit on what is *stored*, so a paragraph pasted into the field
- * cannot sit in the settings for ever being ellipsised down to three characters.
+ * Longest title kept, in characters. Not a display limit — both controls degrade a long title on
+ * their own — but a limit on what is *stored*.
  */
 export const MAX_TITLE_LENGTH = 32;
 
-/**
- * Most stages one preset may hold.
- *
- * The bound the repeat count used to carry, for the same reason it carried it: nothing here should
- * still be going tomorrow. Twenty rather than ten because a stage list is where a sequence typed out
- * by hand now lives — four rounds of `25m, 5m` is eight stages, and that is an ordinary thing to
- * want rather than an abuse of the field.
- */
+/** Most stages one preset may hold. Four rounds of `25m, 5m` is eight, so twenty is room enough. */
 export const MAX_STAGES = 20;
 
 export const DEFAULTS: DialCountdownSettings = {
@@ -186,12 +128,10 @@ export function normaliseSettings(raw: unknown): DialCountdownSettings {
 }
 
 /**
- * Presets are lists of stage durations in seconds. Three shapes have been stored here and all three
- * are read: a list of stages is what this build writes, a bare number is what every build before it
- * wrote, and `{ label, seconds }` is older still.
+ * Presets are lists of stage durations in seconds. Three shapes have been stored and all three are
+ * read: a list of stages, a bare number, and `{ label, seconds }`.
  *
- * @param repeats How many times each preset used to run — see {@link repeatFactor}. One, for
- * anything this build wrote.
+ * @param repeats How many times each preset used to run — see {@link repeatFactor}.
  */
 export function normalisePresets(raw: unknown, repeats = 1): Preset[] {
 	if (!Array.isArray(raw)) {
@@ -231,12 +171,7 @@ function normalisePreset(raw: unknown, repeats: number): Preset | null {
 
 /**
  * How many times each preset used to run, for settings written before stages existed.
- *
- * `repeat: true, repeatCount: 3` on a 20 minute preset meant twenty minutes, three times over — so
- * the preset becomes three stages of twenty minutes, which is that instruction said in the
- * vocabulary that survives. The panel then shows it as `20m, 20m, 20m`, which is both what it does
- * and one edit away from being something else. Nothing is inferred: an install that never switched
- * repeat on gets a factor of one and is untouched.
+ * `repeat: true, repeatCount: 3` on a 20 minute preset becomes three stages of twenty minutes.
  */
 function repeatFactor(input: Record<string, unknown>): number {
 	if (input.repeat !== true) {
@@ -254,13 +189,8 @@ function defaults(): Preset[] {
 }
 
 /**
- * The chosen sound, honouring a switch that no longer exists.
- *
- * Builds before this one carried a separate `soundEnabled` flag. Settings outlive the build that
- * wrote them, so an install upgrading with the sound switched off would otherwise come back with it
- * switched on — the flag is gone, and nothing else in the stored settings says the user wanted
- * silence. `soundEnabled: false` therefore becomes `soundId: "none"`, which is the same instruction
- * in the vocabulary that survives.
+ * The chosen sound, honouring the `soundEnabled` flag that builds before 3.4.0 carried:
+ * `soundEnabled: false` becomes `soundId: "none"`, so an install that wanted silence keeps it.
  */
 function soundIdFrom(input: Record<string, unknown>): string {
 	if (input.soundEnabled === false) {
@@ -269,12 +199,7 @@ function soundIdFrom(input: Record<string, unknown>): string {
 	return typeof input.soundId === "string" && input.soundId.length > 0 ? input.soundId : DEFAULTS.soundId;
 }
 
-/**
- * A title, trimmed and capped. Anything that is not a string is no title at all.
- *
- * Trimmed because a title that is only spaces would count as set — it would win the label line and
- * then draw nothing, leaving the stage length gone with no way to see why.
- */
+/** A title, trimmed and capped. Trimmed so a title of only spaces does not win the label line. */
 function title(value: unknown): string {
 	if (typeof value !== "string") {
 		return DEFAULTS.title;

@@ -1,16 +1,9 @@
 /**
- * Sound resolution and the question of whether a sound was wanted at all.
+ * Sound resolution, and the question of whether a sound was wanted at all.
  *
- * This file exists because `src/sound.ts` had no tests, and the bug that found that out was in the
- * gap between two of its ideas: a path can resolve to the `none` sentinel, and a sentinel is not a
- * failure to play — but the alert in `actions/countdown-action.ts` only knew about the *other* way
- * of asking for silence, a volume of zero. Every timer set to *No sound* raised Stream Deck's error
- * triangle on finishing.
- *
- * Nothing here spawns a player. {@link playSound} is deliberately left alone: it launches a detached
- * OS process, and a test that made noise on the machine running it would be a worse thing than the
- * coverage is worth. What is tested is every decision taken *before* that point, which is where the
- * bug was.
+ * Nothing here spawns a player. {@link playSound} is left alone — it launches a detached OS process
+ * — and what is tested is every decision taken before that point, plus {@link sequence}, whose
+ * launcher is injected so the ordering can be driven without an audio device.
  */
 
 import assert from "node:assert/strict";

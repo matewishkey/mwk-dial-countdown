@@ -2,14 +2,9 @@
  * The line under the clock, on both controls.
  *
  * A dial and a key say nearly the same thing there — what this timer is, and how far through the
- * job it is — but they had said it in two places, in two functions that had already drifted apart
- * once over how a finished multi-stage timer reads. The title made that worse: "a name if there is
- * one, the stage's length if there is not" is a rule neither control gets to have its own version
- * of, or a name typed on a dial would mean something different from the same name typed on a key.
- *
- * So the rule lives here, once, and each control takes the part of it that fits the room it has.
- * Nothing here imports the SDK, which is what lets it be tested at all: both actions carry an
- * `@action` decorator that Node's type stripping cannot transform, so no test can import them.
+ * job it is — so the rule lives here once and each control takes the part that fits the room it
+ * has. Nothing here imports the SDK, which is what lets it be tested: both actions carry an
+ * `@action` decorator that Node's type stripping cannot transform.
  */
 
 import type { Countdown } from "./countdown";
@@ -52,14 +47,9 @@ export function dialLabel(countdown: Countdown, status: string): string {
 }
 
 /**
- * The key's caption: one short line, and four claimants for it.
- *
- * In order of urgency — that it is finished, then which stage it is on, then what it is called. The
- * drift note is the one thing the dial says that a key cannot: it needs both halves, and there is
- * only room for one.
- *
- * A finished multi-stage timer says `done ×3/3` — the fact first, the tally after it. Saying only
- * `×3/3`, as it used to, left a finished job looking exactly like one still on its final stage.
+ * The key's caption: one short line, and four claimants for it, in order of urgency — that it is
+ * finished, which stage it is on, then what it is called. A finished multi-stage timer says
+ * `done ×3/3`, since `×3/3` alone reads the same as one still on its final stage.
  */
 export function keyCaption(countdown: Countdown, status: string): string {
 	if (status === "elapsed") {
@@ -77,18 +67,12 @@ export function keyCaption(countdown: Countdown, status: string): string {
 }
 
 /**
- * A preset with stages counts them; a finished one says so — **and a finished multi-stage timer says
- * both.**
+ * A preset with stages counts them; a finished one says so — and a finished multi-stage timer says
+ * both, since `×3/3` alone cannot be told from that stage still counting down.
  *
- * That last case is the one that was missing. The stage count used to win outright whenever there
- * was more than one, so a timer that had run its last stage and stopped for good showed `×3/3`,
- * which is character-for-character what it showed while that last stage was still counting down.
- * There was no way to tell a job that was finished from one that had a stage left to go.
- *
- * The tally is shown on an idle clock too — `40m · ×1/3` before it is started. It is the only thing
- * on screen that says this preset has stages at all, and the dial's label has room to append it
- * without displacing the name. The key's one-line caption does not, so it waits until the timer is
- * running; see {@link keyCaption}.
+ * The tally shows on an idle clock too (`40m · ×1/3`): it is the only thing on screen saying the
+ * preset has stages at all, and the dial's label has room. The key's one line does not — see
+ * {@link keyCaption}.
  */
 function suffixFor(countdown: Countdown, status: string): string {
 	const done = status === "elapsed" ? " · done" : "";

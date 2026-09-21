@@ -1,12 +1,11 @@
 /**
  * The visible acknowledgement of a gesture.
  *
- * There is no haptic feedback to be had: `@elgato/streamdeck` exposes no such command, and the
- * hardware has no motor to drive if it did. So a gesture is confirmed by sight instead, in two ways
- * that do different jobs. A word on the bottom line says exactly what happened — `+10s`, `pause`,
- * `next · 20m` — for anyone who looks. A brief pulse of the ring says only that *something*
- * happened, which is the part that registers without being read, and is what a dial being wound
- * needs: you cannot read a word per tick, but you can see the ring answer every one of them.
+ * There is no haptic feedback to be had — the SDK exposes no such command and the hardware has no
+ * motor — so a gesture is confirmed by sight, in two ways that do different jobs. A word on the
+ * bottom line says exactly what happened, for anyone who looks; a brief pulse of the ring says only
+ * that *something* did, which is the half that registers without being read. You cannot read a word
+ * per tick, but you can see the ring answer every one of them.
  */
 
 import { formatPresetLabel } from "./timer";
@@ -15,8 +14,8 @@ import { formatPresetLabel } from "./timer";
 export const TOAST_MS = 900;
 
 /**
- * How long the ring pulses. Deliberately shorter than the 250 ms render interval, so a pulse is
- * cleared by the very next frame and rapid gestures read as separate flashes rather than one glow.
+ * How long the ring pulses. Shorter than the render interval, so a pulse is cleared by the next
+ * frame and rapid gestures read as separate flashes rather than one glow.
  */
 export const FLASH_MS = 200;
 
@@ -27,10 +26,8 @@ export function formatDelta(seconds: number): string {
 }
 
 /**
- * A word, and when it was said.
- *
- * Held as a timestamp rather than a countdown so it expires on its own: the render loop compares it
- * against the clock it already has, and nothing has to be ticked down or cleaned up.
+ * A word, and when it was said. Held as a timestamp so it expires on its own: the render loop
+ * compares it against the clock it already has, and nothing has to be ticked down.
  */
 export type Acknowledgement = {
 	text: string;

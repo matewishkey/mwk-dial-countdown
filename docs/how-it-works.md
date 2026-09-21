@@ -1,276 +1,157 @@
 # How the dial, the gestures and the presets work
 
-A few things in this plugin are worth explaining properly, because each does more than it looks like it does: **turning the dial**, **the three press gestures**, **what the middle of the ring is saying**, **the key**, **why the screen redraws when nothing has changed**, and **presets**.
+What the plugin does today. History lives in [CHANGELOG.md](../CHANGELOG.md) and in git.
 
 ## The dial's step is your finger
 
-A dial reports *ticks* — one click of rotation. The obvious thing to do is map one tick to a fixed amount of time, and that is exactly what makes most timer plugins annoying: pick a step small enough to trim thirty seconds off a countdown and setting a two-hour one takes a minute of winding. Pick a step big enough for two hours and you can no longer nudge.
+A free turn is **a second a click**. A turn made with the dial **pushed in** is **a minute a click**.
 
-| Gesture | Step |
-| --- | --- |
-| **Turn** | **1 second** a click |
-| **Push the dial in and turn** | **1 minute** a click |
+`pressed` arrives on the rotation event itself, so the plugin holds no mode, expires no mode, and has nothing to put on screen reminding you which one you left it in. The step lasts exactly as long as your finger does.
 
-That is the whole of it. Nothing is held between turns, so there is no mode to set, no mode to expire, and no label on screen reminding you which mode you left it in. Let go and the next click is a second again.
+**There is no hour step.** Nothing dialled by hand is four hours long — that is a preset, typed in the property inspector where it takes three keystrokes rather than 240 clicks.
 
-### Four designs that tried to hold it instead
+### What a rotation changes
 
-This is the fifth, and the four before it are worth recording because they failed in two distinct ways and the pattern only shows up across all of them.
+**The clock in front of you, never the preset behind it.** Turning is the same whether the timer is running or stopped: it moves the clock, and the configuration is untouched. While the two disagree the label says so — `from 20m` — and holding closes the gap.
 
-The first three tried to **infer** the step from how the dial was being turned. **Momentum** counted ticks in any direction, escalating as you turned and dropping back after a third of a second of stillness — so winding *back and forth over* a value counted towards escalating exactly as much as winding *away* from it, and there was no way to click out thirty seconds one second at a time. **Velocity** changed up when the wrist moved briskly, which reads better on paper than it works in the hand: the same gesture did different things depending on how quickly you happened to make it. **Distance travelled** — you step in the largest unit you have already moved — was predictable in principle and genuinely better, but it still changed the step underneath the hand that was using it.
+A rotation carrying `ticks: 0` is ignored and, importantly, does not consume the press it sits between.
 
-The fourth stopped guessing, and that was the right move. **Press the dial to swap between seconds and minutes, hold it for hours.** Predictable at last, and every turn did the same thing every time. But it bought that with a mode, and the mode had to be paid for three times over: it never expired, so the screen needed a permanent `step · 1m` on the bottom line to stop you forgetting it; three values on a two-way toggle meant a press from hours had to skip minutes and land on seconds, which needed explaining; and it spent the dial's press — the most natural control on the device — on a setting rather than on the timer.
+## The gestures
 
-Pushing the dial in **while** you turn costs none of that. It is unambiguous, it cannot be left switched on by accident, it needs no label because your own hand is the label, and it hands the press back to the job a press on a countdown obviously ought to do.
+| Gesture | Touchscreen | Key | Dial |
+| --- | --- | --- | --- |
+| **Press / tap** | pause or resume | pause or resume | pause or resume |
+| **Twice** | reset to full, stopped | reset to full, stopped | — |
+| **Hold** | put the clock right, else next preset | same | same |
+| **Turn** | — | — | adjust the clock |
 
-### There is no hour step
+Neither the reset nor the hold **starts** anything. Putting a clock back to the top and setting it running are two decisions, and a gesture making both takes the second one away from you.
 
-Deliberately. Nothing you dial by hand is four hours long — that is a preset, typed in the property inspector where it takes three keystrokes rather than 240 clicks. The dial is for nudging what a preset loaded, and it is sized for that.
+### A single tap waits; a hold does not
 
-### Pressing the dial starts and pauses the clock
+The hardware reports taps but never reports that two were a pair, so the first is held back for as long as a second could still arrive. A single tap therefore acts **250 ms** after your finger lifts. Acting immediately and undoing it would flash a state you did not ask for on a screen redrawn four times a second.
 
-The most-used control on a countdown ought to be the one under the hand that is already on the dial. It used to be a tap on the touchscreen — reachable, but a different surface and a quarter of a second slower, because a tap has to wait to find out whether a second one is coming. A press of the dial acts on release, immediately, because there is nothing else it could turn out to be.
+A hold is unambiguous and acts at once, and cancels any tap still pending.
 
-A press that *did* turn the dial is a different matter: that was a minute-step adjustment, and its release ends the turn and means nothing on its own. Otherwise every pushed nudge would start the timer as you let go of it.
+**The key waits 500 ms, and has to.** A key has travel, and the hardware reports only the release, so the gap being measured is release-to-release with the second press's own travel inside it. At 250 ms an ordinary double press landing 320 ms apart arrives as two toggles — which start the clock and immediately pause it, so the key looks dead, and pressing again cannot recover because an even number of toggles lands back where it started. `DOUBLE_PRESS_MS` in `src/gestures.ts`; `CountdownAction.tapWindowMs` is how a control claims its own.
 
-**Holding the knob puts the clock right** — the same gesture the touchscreen hold makes: back to the top of the preset, and only once there is nothing left to put right, on to the next one. It is also how a dial silences a ringing alarm *and* resets it in one go, since the hold is the one gesture a ring does not swallow.
-
-The dial had no hold at all for most of this plugin's life, and the reason it did not is the thing the current one is built around. **The threshold is measured on release, never by a timer running while your finger is down.** Pushing the dial in is how you ask for minutes, so a timer firing mid-press would go off in the pause between pushing in and starting to turn, and a wind that began a beat late would silently load a preset before it. Deciding on release cannot do that: a press that turned the dial has already been discarded as the end of a wind, so what reaches the threshold can only be a finger that went in, stayed, and came back up with the clock untouched. Holding it in to wind still means exactly nothing, however long the wind takes.
-
-The trade is real and worth knowing: a slow, deliberate press meant as a pause reads as a hold. The cost of getting one you did not want is one more hold to get back.
-
-### What a rotation actually changes
-
-**The clock in front of you. Never the preset behind it.**
-
-Turning a stopped countdown used to write the new length straight back into the preset list, on the reasoning that the dial is the preset editor. In practice that made the presets unusable: winding a 20 minute timer up to 23 for one call silently redefined "20 minutes" as 23, and cycling away saved it there. A preset is a setting, and settings are changed where settings are changed — in the property inspector.
-
-So turning is now the same thing whether the timer is running or stopped: it moves the clock, and the configuration is untouched. While the two disagree, the label says so — `from 20m` — and holding the screen closes the gap.
-
-## The three gestures
-
-Tapping the touchscreen, or pressing a key, does one of three things depending on how you do it.
-
-| Gesture | Does | Why that one |
-| --- | --- | --- |
-| **One tap** | Pause / resume | The thing you do most, so it gets the plainest gesture. |
-| **Two taps** | Reset the clock to full, stopped | Getting back to the top is common enough to deserve a gesture of its own. |
-| **Hold** | Put the clock right if it is not, otherwise load the next preset | Choosing what to time is not the same as beginning it. |
-
-### Why neither the reset nor the hold starts anything
-
-This one was got wrong first time round. The double tap originally reset *and* started, on the reasoning that "a reset that then waits to be started is two gestures pretending to be one".
-
-That reasoning is backwards. Putting a clock back to the top and setting it running are two separate decisions, and a gesture that makes both takes the second one away from you: there is then no way to reset without immediately committing to a fresh run. Starting is what the single tap is for, and it is right there.
-
-### Why a single tap waits a moment
-
-The hardware reports taps. It never reports that two taps were a pair — that has to be worked out, and the only way to work it out is to hold the first one back for as long as a second could still arrive. So a single tap acts **250 ms** after your finger lifts.
-
-The alternative is to pause immediately and undo it when the second tap lands. That is worse: the screen is redrawn four times a second, so every double tap would visibly flash a state you did not ask for.
-
-A **hold** does not wait, because there is nothing ambiguous about it — and a hold arriving while a tap is still pending cancels that tap, since a tap followed by a hold is two gestures rather than a double tap.
-
-#### The key waits twice as long, and has to
-
-250 ms is the touchscreen's figure and was for a long time the key's as well, which was a mistake. A key is not glass: it has travel, a click, and a finger that has to come all the way back up before it can go down again — and the hardware reports only the release, so the gap being measured is release-to-release, with the second press's own travel inside it.
-
-Driven against the built plugin, two presses **320 ms** apart — an ordinary, deliberate double-press — fell outside the window and arrived as two separate toggles: start, then pause. What makes that worth a window of its own rather than a wider shared one is *how* it fails. The clock does not move, so the key looks dead rather than misread; and pressing it again cannot recover, because an even number of toggles always lands back where it started. The obvious response to a button that seems not to have worked is the one response that guarantees it stays that way.
-
-So the key waits **500 ms**, and a single press costs the extra quarter of a second. `DOUBLE_PRESS_MS` in `src/gestures.ts` is the value; `CountdownAction.tapWindowMs` is how a control claims its own.
+**The dial's hold is timed on release**, not by a timer running while the finger is down — pushing the dial in is how minutes are asked for, so anything firing mid-press would go off in the pause before the wind started. A press that turned the dial is discarded as the end of a wind before the threshold is considered. The trade: a slow, deliberate press meant as a pause reads as a hold. `dialPress` in `src/gestures.ts`.
 
 ### Feedback, in place of haptics
 
-There is none to be had: `@elgato/streamdeck` exposes no haptic command, and the hardware has no motor to drive if it did. Two things stand in for it, and they are doing different jobs.
+There is none to be had — the SDK exposes no haptic command and the hardware has no motor. Two things stand in, doing different jobs.
 
-- **The ring pulses** — a hairline that appears just outside the arc for 200 ms, on every gesture and every tick of the dial. It carries no information beyond "that registered", which is exactly what makes it work in peripheral vision. You cannot read a word per tick while winding a dial; you can see the ring answer each one.
+- **The ring pulses** — a hairline just outside the arc for 200 ms, on every gesture and every tick of the dial. It carries no information beyond "that registered", which is what makes it work in peripheral vision. On the progress-bar display the same hairline circles the state glyph, drawn by the same code.
+- **A line names the action** — `+10s`, `start`, `pause`, `resume`, `reset`, `silenced`, `preset · 20m`, `next · 20m` — for 900 ms.
 
-  **On the progress-bar display the same hairline circles the state glyph**, drawn by the same code at the same proportions. It did not, for a while, and the omission was invisible from the inside: the bar layout has no ring, so nothing looked missing — a dial wound on that display simply said nothing back, and the only acknowledgement left was the word, which is the half you have to stop and read.
-- **A line names the action** — `+10s`, `start`, `pause`, `resume`, `reset`, `preset · 20m`, `next · 20m` — for 900 ms. It is drawn where the finish time normally sits on a dial, and under the clock on a key.
-
-The pulse is drawn as its own hairline rather than by brightening the arc, for two reasons: an event should not look like a change of state, and it has to remain visible during the end-of-timer fade, which is the one moment feedback matters most and the arc is already being dimmed.
+The pulse is its own hairline rather than a brightening of the arc, so an event does not look like a change of state and stays visible during the end-of-timer fade.
 
 ## The key
 
-The key action is the same countdown with the turning taken away — press, press twice, hold. Presets are edited in the property inspector, since there is nothing on a key to wind them with.
+The same countdown with the turning taken away. Presets are edited in the property inspector.
 
-It draws its **whole face as one SVG**, digits included, rather than using `setTitle`. Stream Deck stops honouring a plugin's title the moment the user types one of their own, and a clock that silently stops being a clock because somebody labelled the button is not a clock. `UserTitleEnabled` is false in the manifest for exactly that reason, and the title you can type lives in the property inspector instead — see [Naming a timer](#naming-a-timer).
+It draws its **whole face as one SVG**, digits included, rather than using `setTitle`: Stream Deck stops honouring a plugin's title the moment the user types one of their own, and a clock that stops being a clock because somebody labelled the button is not a clock. `UserTitleEnabled` is false in the manifest for that reason.
 
-That image is sent as a **data URI**, never as raw markup — `asDataUri`, the same wrapper the touchscreen ring uses.
+That image is sent as a **data URI**, never as raw markup — `asDataUri`, the same wrapper the touchscreen ring uses. Raw `<svg>` markup is the form known to have failed on hardware; the data URI is the form known to work. Elgato's own docs disagree on whether raw markup was ever valid.
 
-This is worth stating carefully, because the obvious explanation is not proven. The key action originally sent bare `<svg>` markup and did nothing at all on hardware: no ring, no clock, and every gesture invisible because nothing it drew ever reached the screen. Sending a data URI fixed it. But Elgato's own documentation disagrees with itself on whether raw markup was ever valid — the WebSocket reference lists only a file path or "a base64 encoded string with the mime type declared", while the SDK's JSDoc for `setImage` explicitly allows "an SVG `string`". So the data URI is the form known to work, and the raw string is the form known to have failed; which of the two facts explains the other is not settled.
-
-With no room for a glyph behind the digits, the line under the clock carries the state instead: the gesture you just made, then `paused` if it is paused, then the stage tally, then what the timer is called.
+With no room for a glyph behind the digits, the line under the clock carries the state: the gesture just made, then `paused`, then the stage tally, then what the timer is called.
 
 ## Naming a timer
 
-A preset carries no name of its own, so the line under the clock has always been the preset's length — `20m`. A **title** replaces it: type `Tea` and that is what the line says, on the dial and on the key alike. Leave it empty and the length comes back.
+A preset carries no name, so the line under the clock is its length — `20m`. A **title** replaces it: type `Tea` and that is what the line says on both controls. Leave it empty and the length comes back.
 
-**It is the plugin's field, not Stream Deck's.** The native Title box is switched off on both actions, and neither control could have used it. On a key, Stream Deck composites the user's title over whatever the plugin drew, so a native title would land on top of the clock — the very thing drawing the whole face as one image exists to prevent. On a dial there is no `title` item in either layout, both of which are the plugin's own files with every text box already spoken for, so a native title would have nowhere to land at all. Owning the field is what lets one name appear in one place on both.
+**It is the plugin's field, not Stream Deck's.** On a key, Stream Deck composites the user's title over whatever the plugin drew, so a native title would land on top of the clock. On a dial there is no `title` item in either layout. Owning the field is what puts one name in one place on both.
 
-The rule lives in `src/label.ts` rather than in the two actions, which is where it used to live in two copies that had already drifted apart once over how a finished multi-stage timer reads. Each control takes the part of it that fits the room it has:
+The rule lives in `src/label.ts`, once, and each control takes the part that fits:
 
 | | Dial | Key |
 | --- | --- | --- |
 | Unnamed | `20m` | `20m` |
 | Named | `Tea` | `Tea` |
 | Dialled off the preset | `Tea · from 20m` | `Tea` |
-| Several steps | `Tea · ×2/3` | `×2/3`, once it is running |
+| Several steps | `Tea · ×2/3` | `×2/3`, once running |
 | Finished | `Tea · ×3/3 · done` | `done ×3/3` |
 
-The drift note is the one thing the key cannot say: `from 20m` needs both halves, and a key has one line. The clock above it is the whole of what a key says about its duration.
+The drift note is the one thing a key cannot say: `from 20m` needs both halves and a key has one line.
 
-**A long title is clipped on a key**, at about sixteen characters, with an ellipsis to say so. The caption's font shrinks to fit and has a floor — below about 11px a caption on a key is not read, only noticed — so past that length there is nothing left to give and the text would run out through the ring's stroke. It never came up before, because every caption the plugin composed was a handful of characters. The dial's label ellipsises in the layout itself and needs no help. Thirty-two characters is what is *stored*, so nothing longer sits in the settings for ever being ellipsised down.
+**A long title is clipped on a key** at about sixteen characters. The caption shrinks to fit and has a floor of about 11px, below which a caption is not read. Thirty-two characters is what is *stored*. The dial's label ellipsises in the layout itself.
 
-The switch that hides the line is called **Show the label**. It was called *Show the title* and never named a title — it switched this line — so it was renamed when the title became a real thing you can type. `normaliseSettings` carries the old key across, since an install that had the line switched off must not come back with it switched on.
+The switch that hides the line is **Show the label**; `normaliseSettings` reads the older `showTitle` key.
 
 ## The alarm
 
-The timer hands a sound file to the operating system's own player when a step runs out — `afplay` on
-macOS, PowerShell's WPF `MediaPlayer` on Windows. **Play it *n* times** repeats it, up to sixty.
+The timer hands a sound file to the operating system's own player when a step runs out — `afplay` on macOS, PowerShell's WPF `MediaPlayer` on Windows. **Play it *n* times** repeats it, up to sixty.
 
-### Repeats used to play on top of each other
-
-They were scheduled all at once, each one `i × 900 ms` after the first was launched, with a comment
-saying 900 ms was "long enough that two plays do not run into one another". Nothing had ever checked
-that against the files the plugin ships. `chime.wav`, the default, is **2.00 s** long; `alarm.wav` is
-1.95 s.
-
-So the second play started while the first was still sounding, and the third while both were. Set to
-three, what you heard was one chime, then two at once, then three — and never more than three,
-because by the fourth play the 2.7 s offset had finally cleared the 2.00 s file. That is exactly how
-it was reported: *"it is starting to play 2 times, 3 times… never goes over but it is stacking up."*
-
-The gap cannot be got right from a constant, because it depends on a file the user chose. So it is
-not got from a constant. **A play now begins when the previous one has *ended*** — both platforms'
-players run for as long as the sound does, so the process exiting is the signal, and the plugin never
-has to parse a WAV header, an MP3 or an AIFF. `REPEAT_GAP_MS` is now what it always claimed to be: the
-silence *between* two plays, at 500 ms.
-
-The other half of the same fix is that a run of plays is now **one object you can stop**, rather than
-a fan of timers nothing held. Nothing could previously call a sound off — not a second step running
-out on top of the first, not a press, not the inspector's *Test* button clicked twice. Everything
-below depends on that handle existing.
+**A play begins when the previous one has ended.** Both platforms' players run for as long as the sound does, so process exit is the signal and nothing has to parse a WAV, MP3 or AIFF header. A fixed offset cannot work: the gap depends on a file the user chose, and `chime.wav` alone is 2.00 s. `REPEAT_GAP_MS` is the silence *between* plays.
 
 ### A press silences whatever is playing
 
-Set the count high for the alert you must not miss — up to sixty. **A press of the control stops the
-sound and does nothing else.** It will not start, pause or reset the clock, so you cannot quieten an
-alert into changing what the timer was doing. Press again for the gesture you actually wanted.
+**A press of the control stops the sound and does nothing else.** It will not start, pause or reset the clock, so you cannot quieten an alert into changing what the timer was doing. Press again for the gesture you actually wanted.
 
-**A hold is the exception.** Press and hold — the knob, the touchscreen or a key — and it silences
-the alert *and* does its job, putting the clock back to the top of its preset. It is the gesture that
-means *put this right*, so making it cost two presses would put the silencing in the way of the
-repair. Turning the dial is likewise not swallowed: it silences and still adjusts, because winding a
-finished timer is how you set up the next one, and losing a click of a rotation would read as the
-dial skipping.
+**A hold is the exception** — the knob, the touchscreen or a key. It silences the alert *and* puts the clock back to the top of its preset, because it is the gesture that means *put this right*. Turning the dial is likewise not swallowed: it silences and still adjusts.
 
-**Every step of a multi-step preset gets its own alert, and every one of them can be silenced.** This
-is the part that was wrong for a release. There was briefly a *Keep ringing until pressed* switch,
-and the rule behind it reserved the silenceable alert for the end of the **whole job** — on the
-reasoning that a running clock should cancel one, and an intermediate step starts the next one
-immediately, so an alert there would be called off in the same breath.
+**Every step of a multi-step preset gets its own alert, and every one can be silenced.** On `40m, 10m, 10m, 10m` the end of the forty is the moment you must not miss, and the ten after it is already counting by the time you hear it.
 
-Both halves of that were wrong, and on the timer the feature exists for. On `40m, 10m, 10m, 10m` the
-end of the forty is exactly the moment you must not miss, and the ten after it is already counting by
-the time you hear it — so the press made to quieten the alert went straight through to the clock and
-**paused the step that had just started**. The switch was a second idea of the repeat count wearing a
-different vocabulary, and the rule reconciling them got the reconciliation backwards.
+An alert **outlives the moment it announces**. What ends one is the plays running out, a press, a newer alert taking its place, or the control leaving the screen — never the clock merely running, which is true one frame after every step boundary.
 
-So: no switch, one count, and a press always silences. An alert now **outlives the moment it
-announces** on purpose. What ends one is the plays running out, a press, a newer alert taking its
-place, or the control leaving the screen — never the clock merely running.
-
-The cost, stated plainly: with the default single chime, a press made inside those two seconds is
-spent on silencing and the clock does not move. Press again. That is the trade for never having a
-press change the timer when you only meant to stop a noise.
+The trade: with the default single chime, a press inside those two seconds is spent on silencing and the clock does not move. Press again.
 
 ### Quieter after the third play
 
-One checkbox. The first three plays sound at the volume you set and everything after them at half of
-it — a step, not a curve, and half of *your* volume rather than a fixed level, so a quiet alarm does
-not get louder as it goes on. `FADE_AFTER_PLAYS` and `FADED_VOLUME` in `src/sound.ts` are the two
-figures, should either want moving.
+One checkbox. The first three plays sound at the volume you set, everything after at half of it — half of *your* volume, not a fixed level, so a quiet alarm does not get louder as it goes on. `FADE_AFTER_PLAYS` and `FADED_VOLUME` in `src/sound.ts`.
 
 ### Test is a toggle
 
-Clicking *Test* while a preview is still going stops it. It used to start a second run underneath the
-first, which was a curiosity at three plays and is most of a minute of chime at sixty. The button's
-word comes from the plugin rather than being flipped by the panel, because a run also ends on its own
-and only the plugin knows when.
+Clicking *Test* while a preview is playing stops it, and closing the property inspector stops it too — a preview is reachable only through the panel, so one left running would have nothing to stop it. The button's word comes from the plugin, because a run also ends on its own and only the plugin knows when.
 
 ## Clearing itself when it is finished
 
-A finished timer sits reading `done` until somebody presses it. That is right for a timer you are watching and wrong for one on a page you left: you come back to a used clock and have to clear it before it is a timer again.
+A finished timer sits reading `done` until somebody presses it. **Clear itself when finished** waits a set time and then puts the countdown back where it started — full clock, stopped, first step. Exactly the double tap, by construction.
 
-**Clear itself when finished** waits a set time after the end of the job and then puts the countdown back where it started — full clock, stopped, back on the first step. It is exactly the double tap, deliberately: the same state, arrived at two ways, rather than a second idea of what "the start" means.
+- **It waits for the whole job**, every step of it. Clearing between steps would end a job still running.
+- **It is silent.** The words under the clock name a gesture, and nobody made this one.
+- **It is called off the moment anybody touches the timer** — anything moving the countdown off `elapsed` drops the pending reset.
+- **It waits while an alert is still sounding**, or the auto-reset would silence the alarm and wipe the screen clean of it. The delay starts once the sound stops.
 
-Three things about the timing.
-
-**It waits for the whole job, every step of it.** The earlier steps of a preset load the next one and never reach this; only the elapse that ends the last step starts the clock on it. Clearing between steps would end a job that was still running.
-
-**It is silent.** The words under the clock name the gesture you just made, and nobody made this one.
-
-**It is called off the moment anybody touches the timer.** A press, a turn, a reset, a preset load — anything that moves the countdown off `elapsed` drops the pending reset, so it cannot reach into the run that follows.
-
-**It waits while an alert is still sounding.** The two are otherwise in direct opposition: a long
-alert is for the finish you must not miss, the auto-reset is for tidying a finish nobody came back
-to, and the second would clear the clock out from under the first — sound stopped, screen back to a
-full timer, no trace it ever fired. So the delay starts counting once the sound stops, either
-because you pressed it or because the last play finished.
-
-The delay is measured from the finish, with one exception: a timer that ran out while its page was elsewhere is dated from **the moment the page came back**. Nothing was running to notice the real moment, and dating it back would clear the clock on the first frame you see — the one frame where `done` is the whole point.
+The delay is measured from the finish, except for a timer that ran out while its page was elsewhere: that is dated from **the moment the page came back**, since dating it back would clear the clock on the one frame where `done` is the point.
 
 ## Flipping to another page does not lose the timer
 
-It used to. The reasoning was that a countdown nobody can see has nothing to count for — true of a control that is *gone*, and not true at all of one you looked away from for eleven seconds to press something on another page. Flipping pages is a thing Stream Deck users do constantly, and losing the count because of it is the single worst thing a timer can do.
+`Timer` works from an **absolute deadline** rather than accumulating ticks, so a countdown keeps good time with nothing running. Only the drawing stops. The countdown is set aside when the control leaves the screen and handed back when it returns, still counting; a **paused** one comes back paused with exactly the time it had.
 
-Nothing clever is needed to fix it, because the clock never depended on being watched: `Timer` works from an **absolute deadline** rather than accumulating ticks, so a countdown keeps perfectly good time with nothing running at all. Only the drawing stops. The countdown is set aside when the control leaves the screen and handed back when it returns, still counting, and a **paused** one comes back paused with exactly the time it had.
+Two things it deliberately does not do:
 
-Two things it deliberately does not do.
+- **It is held in memory, so it does not survive the plugin restarting.** Writing it to disk would mean deciding what a timer that "finished" while Stream Deck was closed should do.
+- **A timer that ran out while you were away comes back silent**, because the moment it would announce has been and gone. The screen still says `done`. For the same reason a multi-step timer does not pick up steps it never ran.
 
-**It is held in memory, so it does not survive the plugin restarting.** Writing it to disk would mean deciding what a timer that "finished" while Stream Deck was closed ought to do, and there is no good answer — page and profile switches are the case worth solving, and they are the case this solves.
-
-**A timer that ran out while you were away comes back silent.** The alert exists to say *the moment has arrived*; by the time you are looking at it again the moment has been and gone, and sounding an alarm for it then is old news at full volume, possibly hours of it. The screen still says `done`, in the elapsed colour, because that part is still true. For the same reason a multi-step timer does not pick up steps it never ran — quietly fast-forwarding a tally nobody watched would be inventing history.
-
-Settings edited in the property inspector while the control was away are picked up on the way back, by the same rule that applies at any other time: the clock reloads only if the **selected preset's length** changed. Nudge the volume while a timer is running on another page and it is still running when you return.
+Settings edited while the control was away are picked up on the way back, by the usual rule: the clock reloads only if the **selected preset's length** changed.
 
 ## Why the screen redraws when nothing has changed
 
-The render loop runs at 4 Hz and drops any frame identical to the last, which is what keeps an idle timer free. That optimisation quietly assumes every frame it *does* send arrives — and there is no way to ask a Stream Deck what it is currently showing.
+The render loop runs at 4 Hz and drops any frame identical to the last, which is what keeps an idle timer free. That assumes every frame sent arrives, and there is no way to ask a Stream Deck what it is showing — so on a countdown that is static for long stretches, one lost frame would stay lost until the user touched something.
 
-A countdown is static for long stretches: idle, paused, finished. So a single frame lost on the way would stay on screen until the user touched something.
-
-That is exactly what happened. Stream Deck discards feedback sent alongside a layout switch, and `layouts/ring.json` gave its `ring` pixmap no default value — so the slot fell through to the action's `Encoder.Icon`, a red Mate Wish Key mark, and an idle dial sat there showing a red logo instead of a themed ring until it was turned.
-
-Two changes, because either alone leaves a hole:
-
-- The pixmap now defaults to a transparent pixel, so the action icon is never what shows through.
-- Awaiting `setFeedbackLayout` before drawing was tried and **reverted** — it is the obvious-looking fix and it does nothing. The SDK's `send` resolves once the command is written to the socket, not once Stream Deck has applied it, so it guarantees nothing that ordering on a single socket did not already give.
-- The current frame is re-asserted every **2 seconds** regardless, which bounds any dropped frame to 2 seconds at a cost of one message per control — comfortably inside Elgato's 10-per-second guideline.
+- The current frame is **re-asserted every 2 seconds**, which bounds a dropped frame to 2 seconds at one message per control, comfortably inside Elgato's 10-per-second guideline.
+- Stream Deck discards feedback sent alongside a layout switch, so both layouts default their pixmap to a transparent pixel rather than falling through to the action's icon.
+- Awaiting `setFeedbackLayout` before drawing does **nothing**: the SDK's `send` resolves once the command is written to the socket, not once Stream Deck has applied it.
 
 ## Presets
 
-A preset is **a list of durations** — most of them a list of one. There is no name, because a countdown's length is its own label: the screen shows `20m`, or `20m 30s` once it has been nudged off a round number.
+A preset is **a list of durations** — most of them a list of one. There is no name: the screen shows `20m`, or `20m 30s` once nudged off a round number.
 
 Out of the box: **5, 20, 30 and 40 minutes**, one step each.
 
 - **Edit them in the property inspector**, as text — `20m`, or `40, 10, 10`. Add as many as you like; remove any but the last.
-- **Load any of them from the property inspector too**, by clicking the dot beside it. The hold only ever moves forward one at a time, so the fourth of four used to be three holds away with no way back; the panel already drew which one was active, and now it can be told.
-- **Hold the screen**, the key, or the dial itself for the next one. A short press of the dial starts and pauses the clock instead; see above.
-- Anything from **one second to twenty-four hours**, and up to **twenty steps** in one preset.
+- **Load one from the panel** by clicking the dot beside it. The hold only moves forward, so the fourth of four would otherwise be three holds away.
+- **Hold the screen, the key or the dial** for the next one.
+- Anything from **one second to twenty-four hours**, up to **twenty steps** in one preset.
 
-Each dial and each key keeps its own preset list and its own running countdown, so they never interfere.
+Each dial and each key keeps its own preset list and its own countdown.
 
 ### A preset with several steps
 
-`40, 10, 10` is forty minutes, then ten, then ten. Each step runs for its own length and the next one starts the moment the last ends, with no gap — the alert has already sounded, and a gap between steps is exactly what an interval timer must not have. The line under the clock counts them off as `×2/3`, and says `done` when the list runs out.
+`40, 10, 10` is forty minutes, then ten, then ten. Each step runs its own length and the next starts the moment the last ends, with no gap. The line under the clock counts them off as `×2/3` and says `done` when the list runs out.
 
-**This replaced the repeat switch**, which was a second idea of how long a timer runs for, standing beside the preset and speaking a different language: a duration over here, a number of times over there, and a stopping rule that had to reconcile the two. That reconciliation got it wrong twice — a count of three ran four times, because the count was compared against repeats *made* rather than runs *finished*; and raising the count mid-run reset the tally underneath it, so a count of four produced six runs labelled `×1/4`.
-
-A list says everything the switch said and more. Six minutes, six times over is six steps; 40/10/10 was not sayable at all. The stopping rule is the end of the list, which cannot be off by one against itself.
-
-Settings written while the switch still existed are translated on the way in: `repeat: true, repeatCount: 3` on a 20 minute preset becomes three steps of twenty minutes, in every preset, since the switch applied to whichever one was loaded. The panel then shows it as `20m, 20m, 20m` — both what it does and one edit away from being something else. `src/settings.ts` holds that rule, and the plugin writes the result straight back on `willAppear`, so nothing downstream ever sees the old shape.
+A step list is the only vocabulary for repetition: `6m` six times is six steps. Settings written when a `repeat` switch existed are translated on the way in — `repeat: true, repeatCount: 3` on a 20 minute preset becomes three steps of twenty minutes — and written straight back, so nothing downstream sees the old shape.
 
 ### Typing a preset
 
@@ -283,93 +164,32 @@ One text field per preset, with a grey line under it saying what was read.
 | `90s` | 1m 30s |
 | `1h30m` | 1h 30m |
 | `10m x3` | 10m · 10m · 10m |
-| `40m, 10m x3` | 40m · 10m · 10m · 10m |
 
-**A bare number is minutes.** That is the only guess the parser makes, and it is made because that is what the field is for — `40, 10, 10` is what you would write on paper. Anything else names its unit.
-
-The echo is what makes a text field safe here. A guess that went the wrong way is visible while you are still on the row, rather than discovered by a timer that ran for forty seconds. A row that does not parse saves nothing at all and keeps both the text and the reason; half of a row saved is a preset nobody typed, arrived at silently.
-
-The multiplier is a typing convenience and deliberately not a canonical form: `10m x3` is stored and shown back as `10m, 10m, 10m`. A row that came back shorter than it was typed would be the panel arguing about how it was said.
-
-### The dial does not edit them
-
-It used to, and that is covered above under *What a rotation actually changes*. The short version: a preset that the dial rewrites is not a preset, it is a last-used value. Turning moves the clock; the list stays as configured.
+A bare number is minutes. A row that does not parse saves nothing at all and keeps both the text and the reason — half a row saved would be a preset nobody typed. Rows commit on `change`, not per keystroke, since `4` on its way to `40` is a valid preset.
 
 ### A reset goes to the preset, not to the clock
 
-**The double tap restores the length the property inspector says, not the one the dial last left.** A 5 minute preset wound up to 8 resets to 5.
+The double tap restores the **configured** length, not wherever the dial left it. A preset a reset cannot return you to is not a preset. The dialled duration is deliberately not recoverable — the clock is the scratch value and the preset is the record.
 
-It did not always. Reset used to restore the *working* duration, which meant a timer nudged once was nudged for good: 8m became the value every later reset returned to, the configured 5m was reachable only by holding the screen, and a number typed into the inspector had quietly lost an argument with a number nudged on the hardware. That is a last-used value wearing a preset's clothes — and the whole point of the dial no longer writing back to the preset list is that those two are different things.
+### The hold puts it back before it moves on
 
-So the rule is one sentence: **the clock is the scratch value, the preset is the record.** Every gesture that means *put it back* has exactly one place to put it back to, and `Countdown#toStage(0)` is the one method all three of them call — the double tap, a hold that finds something to put right, and the auto-reset falling due. They used to agree by coincidence and did not quite: reset restored the working duration while the other two restored the preset, so which gesture you reached for decided what "the top of the clock" meant.
+If the clock is not sitting stopped and full on the first step of its preset, the hold puts it there; only a hold with nothing left to put right moves on. Hold once, hold again. Running, paused, finished, part-way through the steps and dialled-off all count as something to put right, and the word says which it did: `preset · 20m` against `next · 30m`.
 
-The dialled length is not recoverable afterwards, and that is the trade. It is the right way round — getting it back is one turn of the dial, while the configured length was otherwise two gestures deep — but it is a real loss and worth saying out loud rather than discovering.
+### The label shows the preset, not the clock
 
-### Why the hold puts it back before it moves on
-
-Because the dial no longer writes back, a countdown wound from 20 minutes to 23 has nothing that returns it to 20 — the property inspector still says 20, the clock says 23, and there is no gesture that closes the gap. That gap is the direct cost of the change above, so the change has to pay for it.
-
-Holding the screen pays for it. **If the clock is not sitting stopped and full on its preset, the first hold puts it there. Only a hold with nothing left to put right moves on.**
-
-| The clock is… | Hold the screen | Hold it again |
-| --- | --- | --- |
-| Stopped and full on its preset | Next preset | The one after that |
-| Running | Stopped, back to the preset | Next preset |
-| Paused, or finished | Stopped, back to the preset | Next preset |
-| Dialled off its preset | Back to the preset, stopped | Next preset |
-
-The restore comes first because it is wanted far more often: putting the clock back where it belongs is a thing you do constantly, and moving to a different preset is a thing you do occasionally. Nothing is lost either way — the press that would have advanced still advances, one press later — and the word on screen says which of the two it just did, `preset · 20m` against `next · 30m`.
-
-**This rule was too narrow at first**, and the correction is worth recording. It originally fired only on the last row of that table: the dial had wound the clock off its preset, and nothing else counted. The reasoning was that a *running* timer already has a reset of its own, the double tap, so spending the gesture on one would be redundant.
-
-That reasoning is *more* true now than when it was rejected — the double tap and the hold land in exactly the same place — and the correction still stands. Redundancy is not the problem it looked like: the two gestures live on different controls, and reaching for the dial mid-run and being thrown onto the next preset is precisely the surprise the restore exists to prevent.
-
-This is the touchscreen's job, on both controls: the screen above a dial, and the key itself. The dial's own press starts and pauses the clock instead — see above.
-
-It also gives the **one-preset** case something to do. It used to be the documented dead end — "with only one preset configured, the gesture lands back on the same one" — and now it is a reset.
-
-### Why the label shows the preset, not the clock
-
-The label tracks the *preset's* length rather than the live duration, so you can always see where this timer started: begin a 20-minute countdown, add five minutes to it mid-flight, and the label still reads `20m`.
-
-Once the two genuinely disagree it says so, reading `from 20m`. That matters more than it used to, because the disagreement is now permanent until you close it — an idle clock showing `23:00` under a label reading `20m`, with the settings agreeing with the label and not the clock, would otherwise just look broken.
-
-It says so for that reason and no other. A timer that is merely *running* has not been dialled anywhere, so it gets no marker, even though holding the screen would still put it back to the preset. Those are two different questions — "has this been moved?" and "is there anything to put right?" — and only the first belongs on the label.
+`from 20m` appears while the working duration and the configuration disagree, and only about the duration — a timer merely running has not been dialled anywhere.
 
 ## What the middle of the ring is saying
 
-The ring has one slot in the middle of it, and it used to hold two different things on a rota nobody had been told about: the Mate Wish Key mark normally, silently swapped for a pause glyph while the timer was paused. From outside that reads as a logo which comes and goes at random — and it left the other three states with no glyph at all, so a running clock and a finished one differed by a colour you had to have learnt.
+One glyph per state: the brand mark when idle, then play, pause, or done. The mark appears only when there is nothing else to report.
 
-The rule now is one sentence. **An idle clock shows the mark; every other state shows itself.**
+**The ring empties and the bar fills**, and they are named for it: a countdown ring shows what is left, a progress bar shows how far through you are. Switching display inverts what the indicator means; everything else is identical between them.
 
-| State | Middle of the ring |
-| --- | --- |
-| Idle — full, stopped, nothing to report | The brand mark, if you have left it switched on |
-| Running | A play triangle |
-| Paused | Two bars |
-| Finished | A filled square |
-
-Idle is the empty state: nothing running, nothing to resume, nothing finished. It is the one moment there is genuinely nothing to say, and therefore the only moment the mark is not in the way of something more useful.
-
-A square rather than a tick for *finished*, because the ring behind it is already full and already in the elapsed colour — the glyph only has to say "stopped", which is what the same shape says on every transport control ever made. A tick would claim the timer had *succeeded*, and a countdown is in no position to judge that.
-
-**The progress-bar layout shows exactly the same glyph**, drawn from the same function with the ring left off. That is not a coincidence to be maintained by hand: `renderGlyph` and the ring's own middle are one code path, so the two views cannot come to disagree about what a paused timer looks like.
-
-### The ring empties and the bar fills
-
-Deliberately, and they are named for it. A **countdown ring** shows what is left, so a full ring means a full timer and it drains as the clock runs — which is the way round people expect a countdown to look. A **progress bar** shows how far through you are, so it fills. Reversing either one to match the other would leave a control doing the opposite of what its own name says.
-
-The consequence worth knowing: switching display does not just restyle the indicator, it inverts what it means. Everything else — the clock, the glyph, the two lines of text, the colours — is identical between them.
-
-### Why the bar was never coloured
-
-The progress-bar view used to be Stream Deck's own built-in `$B1` layout. A built-in layout's item keys are published nowhere, so the plugin was sending `bar_fill_c` hopefully to a slot it *believed* was called `indicator` — and when a feedback key does not match, nothing happens and nothing is reported. The bar stayed grey whichever theme you picked.
-
-Both layouts are the plugin's own files now (`layouts/ring.json`, `layouts/bar.json`), so every key the plugin sends is a key it defined, and the colour lands where it is aimed.
+Both layouts are the plugin's own files (`layouts/ring.json`, `layouts/bar.json`), so every feedback key the plugin sends is one it defined — a built-in layout's keys are published nowhere, and a key that does not match fails silently.
 
 ## Try it without hardware
 
-`npm run mock` drives the whole thing from the keyboard with no Stream Deck attached, and `npm run demo` plays a scripted pass of 34 checks across 45 steps. It prints a labelled ASCII frame per step; the dial's step shows up across three of them:
+`npm run mock` drives the whole thing from the keyboard with no Stream Deck attached, and `npm run demo` plays a scripted pass of 35 checks. It prints a labelled ASCII frame per step; the dial's step shows up across three of them:
 
 | Step | What it shows |
 | --- | --- |

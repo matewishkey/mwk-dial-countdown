@@ -31,29 +31,16 @@ type Dial = DialAction<DialCountdownSettings>;
 /** The dial's own state, on top of what every countdown carries. */
 type DialInstance = Instance<Dial> & {
 	/**
-	 * Set when the dial is turned while held down, so the release that follows is not *also* read as a
-	 * press. Holding the dial in is how you ask for minutes; letting go afterwards is the end of that
-	 * turn, not a separate instruction to start the clock.
+	 * Set when the dial is turned while held down, so the release is not also read as a press.
+	 * Holding the dial in asks for minutes; letting go ends that turn.
 	 */
 	turnedWhileDown: boolean;
 	/**
-	 * Whether the button is down, as this plugin saw it — `dialDown` in, `dialUp` out.
-	 *
-	 * Used for exactly one thing: refusing to act on a release this instance never saw the press for,
-	 * which is what a page flip mid-press produces. See {@link DialCountdown.onDialUp}.
-	 *
-	 * It once also overrode the `pressed` flag on a rotation, on the theory that the flag might lag
-	 * the button. That was borrowed from another plugin rather than measured, no evidence for it ever
-	 * appeared, and a reviewer pointed out it turns a self-correcting reading into a latch that stays
-	 * wrong until the next complete press. The rotation's own flag is the authority again.
+	 * Whether the button is down, as this plugin saw it. Used to refuse a release this instance
+	 * never saw the press for, which is what a page flip mid-press produces.
 	 */
 	down: boolean;
-	/**
-	 * When the button went in, so the release can tell a press from a hold.
-	 *
-	 * `null` while nothing is pressed. Held as a timestamp rather than run as a timer, and that is
-	 * the whole design of the dial's hold — see {@link DialCountdown.onDialUp}.
-	 */
+	/** When the button went in, so the release can tell a press from a hold. `null` when up. */
 	pressedAt: number | null;
 	lastLayout: string | null;
 };
@@ -75,18 +62,11 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 	}
 
 	/**
-	 * Turning adjusts time — **a second a click, or a minute a click while the dial is pushed in.**
+	 * Turning adjusts time: a second a click, or a minute a click while the dial is pushed in.
+	 * `pressed` arrives on the event, so the plugin holds no mode.
 	 *
-	 * That is the whole of the step model. `pressed` arrives on the event itself, so the plugin holds
-	 * no mode, expires no mode, and has nothing to put on screen reminding you which mode you left it
-	 * in: your own finger is the state.
-	 *
-	 * Every click is acknowledged by a pulse of the ring. There is no haptic feedback to be had on this
-	 * hardware, so the ring answering each click is what tells you the dial is being heard — and the
-	 * word on the bottom line (`+1s`, `+1m`) is what tells you which step it was heard at.
-	 *
-	 * Nothing is saved, because nothing worth saving changed: turning moves the clock, never the preset
-	 * behind it.
+	 * Every click pulses the ring. There is no haptic feedback on this hardware, so the ring
+	 * answering each click is what says the dial is being heard.
 	 */
 	override onDialRotate(ev: DialRotateEvent<DialCountdownSettings>): void {
 		const instance = this.instanceFor(ev.action.id);
@@ -94,12 +74,9 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 			return;
 		}
 
-		// **A rotation of no detents is not a rotation, and must not cost you the press.** It is the
-		// one variant of this that is completely invisible: a rotate carrying `ticks: 0` between the
-		// press and its release sets the guard below, so the release does nothing — no clock moved, no
-		// word on the screen, no pulse of the ring. The dial simply appears not to be wired up, which
-		// is the report that started this. Elgato documents `ticks` as "positive or negative" and says
-		// nothing about ordering, coalescing, or a floor, so nothing here is entitled to assume.
+		// A rotation of no detents must not cost the press: a `ticks: 0` event between a press and its
+		// release would set the guard below and the release would do nothing at all, which looks
+		// exactly like a dial that is not wired up.
 		if (ev.payload.ticks === 0) {
 			return;
 		}
@@ -108,10 +85,8 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 			instance.turnedWhileDown = true;
 		}
 
-		// **Turning silences a ringing alarm, but is not swallowed by it.** Winding the dial on a
-		// finished timer is how you set up the next one, so the alert is announcing something you have
-		// plainly dealt with. The swallow is only for presses — losing one click of a rotation would
-		// read as the dial skipping, and a rotation is not the reflex grab for quiet that a press is.
+		// Turning silences an alert but is not swallowed by it: winding a finished timer is how the
+		// next one is set up, and losing a click of a rotation would read as the dial skipping.
 		this.silence(instance);
 
 		instance.countdown.adjust(ev.payload.ticks, ev.payload.pressed);
@@ -119,28 +94,11 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 	}
 
 	/**
-	 * Bookkeeping, and one decision: **touching the dial settles anything the glass was still waiting
-	 * on.**
+	 * Records the press, and settles anything the glass was still waiting on.
 	 *
-	 * A push is only ever half a gesture until it is known whether the dial turned before it came back
-	 * up, which is what `turnedWhileDown` records, and how long it was down for, which is what
-	 * `pressedAt` records. **There is still deliberately no long-press timer here**, even though the
-	 * dial now has a hold: nothing may fire while the finger is down, or holding it in to wind in
-	 * minutes would trip it. The threshold is applied on release instead — see
-	 * {@link DialCountdown.onDialUp} and `dialPress` in `../gestures`.
-	 *
-	 * The cancel is the part that matters. A tap on the touchscreen is held back for
-	 * `DOUBLE_TAP_MS` in case a second one is coming, and the screen sits directly above the
-	 * dials — so a tap and a press are one reach of the hand often enough to matter. Both resolve to
-	 * `toggle`, so the pair used to arrive as **start, then pause**: the plugin said so itself, one
-	 * word after the other, and the clock landed back exactly where it began. On a finished timer that
-	 * is the whole complaint — you press it to get going again, it sits there full and stopped, and
-	 * pressing again cannot recover because an even number of toggles always lands back where it
-	 * started.
-	 *
-	 * A press on the dial is unambiguous and acts at once, so it is the gesture that wins: whatever the
-	 * glass was still deciding is stale the moment a finger arrives here. The same rule as the key's
-	 * long press, which settles a pending tap for the same reason — see `../gestures`.
+	 * The screen sits directly above the dials, so a tap and a press are often one reach of the
+	 * hand. Both resolve to `toggle`, so without the cancel the pair arrives as start-then-pause and
+	 * the clock lands back where it began. A press on the dial is unambiguous, so it wins.
 	 */
 	override onDialDown(ev: DialDownEvent<DialCountdownSettings>): void {
 		const instance = this.instanceFor(ev.action.id);
@@ -155,15 +113,10 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 	}
 
 	/**
-	 * A press that did not turn the dial **starts or pauses the clock**.
+	 * A press that did not turn the dial starts or pauses the clock; a held one puts it right.
 	 *
-	 * The most-used control on a countdown ought to be the one under the hand that is already on the
-	 * dial. It used to be a tap on the touchscreen — reachable, but a different surface and a
-	 * quarter-second slower, because a tap has to wait to find out whether a second one is coming.
-	 * This one acts on release, immediately, because there is nothing it could turn out to be instead.
-	 *
-	 * A push that *did* turn was a minute-step rotation. Its release ends the turn and means nothing
-	 * on its own — otherwise every pushed adjustment would start the timer as you let go of it.
+	 * This acts on release rather than on a timer — see `dialPress` in `../gestures` for why that is
+	 * what makes a hold safe here at all.
 	 */
 	override onDialUp(ev: DialUpEvent<DialCountdownSettings>): void {
 		const instance = this.instanceFor(ev.action.id);
@@ -181,48 +134,23 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 			return;
 		}
 
-		// **Only a release this instance saw the press for counts.** An action is torn down and rebuilt
-		// whenever the user flips page or profile, and the rebuilt one starts with both latches clear —
-		// so a flip made while the dial was held in came back with no memory of the push, and the
-		// release of a minute-stepped turn read as a plain press and started the clock. The clock
-		// itself survives the flip (it is parked and revived), which is what made the stray toggle land
-		// on a real countdown rather than a fresh one.
-		//
-		// The trade is deliberate: a *dropped* `dialDown` now swallows a genuine press. That fails as
-		// "nothing happened, press it again", which recovers on the next press — against a clock
-		// starting or stopping when nobody asked, which announces itself to nobody and does not.
+		// Only a release this instance saw the press for counts. A page flip mid-press rebuilds the
+		// action with its latches clear, so the release of a minute-stepped turn would otherwise read
+		// as a plain press and start the clock. The trade: a dropped `dialDown` swallows a genuine
+		// press, which fails as "press it again" rather than as a clock moving unasked.
 		if (!sawThePress) {
 			return;
 		}
 
-		// **A hold on the knob is measured on release, never by a timer**, and that is what makes it
-		// safe to have one at all.
+		// Measured on release, never by a timer: pushing the dial in asks for minutes, so a threshold
+		// firing mid-press would go off in the pause before the wind started. A press that turned has
+		// already returned above, so what reaches here can only be a hold.
 		//
-		// The dial had no hold for a good reason: pushing it in is how you ask for minutes, so a
-		// threshold that fired *while the finger was down* would go off in the pause between pushing
-		// in and starting to turn — and a wind that began a beat late would silently load a preset
-		// first. That is the trap, and it is why `LONG_PRESS_MS` on the key fires early and this one
-		// cannot copy it.
-		//
-		// Deciding on release removes it completely. A press that turned the dial has already
-		// returned above, so a hold can only ever be a hold: the finger went in, stayed, and came
-		// back up with the clock untouched. Nothing runs while you lean on it, so holding it in to
-		// wind still means exactly nothing, however long the wind takes.
-		//
-		// The trade, which is real: a slow, deliberate press meant as a pause reads as a hold. It is
-		// the same gesture the touchscreen already has, doing the same thing — put the clock right,
-		// then move on — so the cost of getting it is one more hold to get back.
+		// The trade: a slow, deliberate press meant as a pause reads as a hold, undone by one more.
 		this.perform(instance, dialPress(heldFrom === null ? 0 : Date.now() - heldFrom));
 	}
 
-	/**
-	 * Every gesture the screen has: one tap pauses or resumes, two reset the clock to full, and a held
-	 * tap puts the clock right or loads the next preset.
-	 *
-	 * The hardware reports a tap and whether it was held, but never that two taps were a pair — that
-	 * is worked out by the resolver, which is why a single tap acts a quarter of a second after the
-	 * finger lifts rather than the instant it does.
-	 */
+	/** Every gesture the screen has: tap to pause or resume, twice to reset, hold to put right. */
 	override onTouchTap(ev: TouchTapEvent<DialCountdownSettings>): void {
 		const instance = this.instanceFor(ev.action.id);
 		if (instance === undefined) {
@@ -235,16 +163,9 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 	/**
 	 * Switches the touchscreen between the two layouts, when the choice changes.
 	 *
-	 * **Both layouts are the plugin's own files.** The progress-bar view used to be Stream Deck's
-	 * built-in `$B1`, and that is why its bar never took the theme: a built-in layout's item keys are
-	 * not published anywhere, so `bar_fill_c` was being sent hopefully to a key that may or may not
-	 * have been called `indicator`, and there is no error when it is not. A layout we ship is a layout
-	 * we can name every key of, so the colour now lands where it is aimed.
-	 *
-	 * A layout switch wipes the screen back to the layout's own defaults and discards feedback still
-	 * in flight alongside it, so the frame that follows this may well not land. That is survivable
-	 * because the render loop re-asserts the current frame every couple of seconds — and because both
-	 * layouts default their pixmap to nothing rather than falling through to the action icon.
+	 * Both layouts are the plugin's own files: a built-in layout's item keys are not published, so
+	 * the theme colour could not be aimed at them. A layout switch wipes the screen and discards
+	 * feedback in flight, which the periodic re-assert covers.
 	 */
 	#applyLayout(instance: DialInstance): void {
 		const layout = instance.countdown.settings.layout === "bar" ? "layouts/bar.json" : "layouts/ring.json";
@@ -257,10 +178,7 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 		instance.action.setFeedbackLayout(layout).catch((err) => streamDeck.logger.error("Failed to set layout", err));
 	}
 
-	/**
-	 * Pushes the current state to the touchscreen. Identical frames are dropped so an idle timer
-	 * costs nothing, which is what keeps the 4 Hz render loop comfortably inside Elgato's limit.
-	 */
+	/** Pushes the current state to the touchscreen, dropping identical frames. */
 	protected draw(instance: DialInstance, force: boolean): void {
 		const { countdown } = instance;
 		const { settings, timer } = countdown;
@@ -322,13 +240,8 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 }
 
 /**
- * The wall-clock time this timer will finish at. Only shown while running — on a stopped timer it
- * would be a prediction that quietly goes stale, which is worse than showing nothing.
- *
- * **The end of the whole job, stages included, not the end of the clock on screen.** Those were the
- * same thing until a preset could hold more than one stage, and the old sum quietly stopped being
- * true for anything that repeated: a 20m timer set to run three times said `ends` twenty minutes
- * from now, and then went on for another forty. What the line is asked is when you can come back.
+ * The wall-clock time this timer will finish at — the end of the whole job, stages included. Only
+ * shown while running; on a stopped timer it would be a prediction that goes stale.
  */
 function finishText(countdown: Countdown, remainingMs: number, status: string): string {
 	if (!countdown.settings.showFinishTime || status !== "running") {

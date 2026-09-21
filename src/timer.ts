@@ -122,27 +122,17 @@ export class Timer {
 	/**
 	 * Adds or removes time.
 	 *
-	 * **A clock that has been started is nudged; a clock that has not is re-scaled.** On a timer that
-	 * is running or paused the turn moves only the time left, leaving the duration — and the pause —
-	 * exactly where they were. On one that is idle or elapsed there is no time left to nudge, so the
-	 * turn edits the duration itself and the clock follows it.
+	 * **A clock with time left on it is nudged; one without is re-scaled.** Running and paused move
+	 * only the remaining time, leaving the duration — and the pause — where they were. Idle and
+	 * elapsed have nothing to nudge, so the turn edits the duration itself.
 	 *
-	 * **`paused` used to fall through to the second case**, which is the one branch of this that could
-	 * lose a count. A timer paused at 4:56 of 5:00 answered one click of the dial by rewriting the
-	 * duration to 5:01 and putting the whole clock back to full — the four seconds gone, the pause
-	 * gone with them, and the preset quietly redefined. Measured against the built plugin: `4:56
-	 * paused` → one `+1s` → `5:01`, sitting idle. A pause is a clock with time left on it, so it
-	 * belongs with `running`, not with the empty ones.
+	 * `paused` belongs with `running`: falling through to the second case rewrote the duration and
+	 * put the clock back to full, losing both the count and the pause.
 	 *
-	 * **A started clock's duration is now left entirely alone, and that is what makes a turn
-	 * reversible.** It used to be ratcheted up to whatever the clock was wound to, so that
-	 * {@link Timer.progress} could not go negative — but the ratchet was one-way, so a turn up
-	 * followed by an equal turn down put the clock back exactly and left the duration somewhere it
-	 * had never been. Measured, on a 2m preset 20s in: `+3m` then `-3m` returned the clock to 1:40
-	 * and left the duration at 4:40. The ring jumped from 17% to 64% with no time passing, the label
-	 * read `from 2m` for ever, and — worst — the next repeat lap ran the ratcheted 4:40 rather than
-	 * the 2m the preset says, because {@link Timer.reset} restores the duration. `progress` clamps
-	 * instead, which costs a pinned ring in one uncommon case and buys a duration that stays true.
+	 * **A started clock's duration is left entirely alone, which is what makes a turn reversible.**
+	 * Ratcheting it up to whatever the clock was wound to was one-way, so an equal turn down
+	 * restored the clock but left the duration somewhere it had never been — and the next stage ran
+	 * that length rather than the preset's. {@link Timer.progress} clamps instead.
 	 */
 	adjust(deltaMs: number): void {
 		this.#settle();

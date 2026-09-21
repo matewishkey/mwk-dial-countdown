@@ -1,14 +1,12 @@
 /**
  * The same countdown, on an ordinary key.
  *
- * A key has one button and no dial, so the gesture vocabulary is the screen's, minus the turning:
- * press to pause or resume, press twice to reset, hold for the next preset. Presets themselves
- * are edited in the property inspector, since there is nothing here to wind them with.
+ * One button and no dial, so the vocabulary is the screen's minus the turning: press to pause or
+ * resume, twice to reset, hold for the next preset.
  *
- * The one thing the key must do for itself is decide what counts as a hold. The touchscreen reports
- * that on the event; `keyUp` does not, so the threshold is timed here and fires while the finger is
- * still down — waiting for the release to say "you have held this long enough" would be feedback
- * that arrives after the fact.
+ * The key must decide what counts as a hold for itself — `keyUp` does not report it — so the
+ * threshold is timed here and fires while the finger is still down, rather than waiting for a
+ * release that would make the feedback arrive after the fact.
  */
 
 import streamDeck, {

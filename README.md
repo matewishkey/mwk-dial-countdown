@@ -178,47 +178,35 @@ The version lives in three places in three formats — `1.1.0`, `1.1.0.0`, `v1.1
 | `eslint.config.mjs` | Type-aware lint rules. Formatting is left entirely to Prettier, so the two cannot disagree. |
 | `assets/mwk-mark.svg` | The brand's own mark, as supplied. The one source the artwork is generated from. |
 
-A few decisions worth knowing before changing things:
+Constraints that are not obvious from the code, and that a tidy-up would otherwise undo.
 
-**Settings are never trusted.** Stream Deck keeps an action's settings across an uninstall, so every build is handed settings written by an older one. `normaliseSettings` rebuilds a known-good object from whatever arrived — unrecognised keys discarded, numbers clamped, a broken preset index repaired, legacy shapes unwrapped — and the result is written back on first appearance.
+**Settings are never trusted.** Stream Deck keeps an action's settings across an uninstall, so every build is handed settings written by an older one. `normaliseSettings` rebuilds a known-good object from whatever arrived and the result is written back on first appearance.
 
-**The ring is SVG, not canvas.** Plugins run under `--no-addons` and cannot load native modules, so no canvas library is available. A `pixmap` layout item accepts a raw SVG string, which is the way through. Text is left to real `text` layout items so it uses Stream Deck's own font rendering.
+**The ring is SVG, not canvas.** Plugins run under `--no-addons` and cannot load native modules. A `pixmap` layout item accepts a raw SVG string; text is left to real `text` items so it uses Stream Deck's own font rendering.
 
-**The countdown works from a deadline**, not by accumulating ticks, so a slow or skipped render frame cannot make it drift.
+**The countdown works from a deadline**, not by accumulating ticks, so a slow or skipped frame cannot make it drift.
 
-**There is no audio API in the SDK.** `src/sound.ts` hands a file to `afplay` on macOS, or PowerShell's WPF `MediaPlayer` on Windows — chosen over `SoundPlayer`, which cannot set volume. Nothing is hard-coded: bundled sounds come from the plugin's own folder and system sounds are enumerated from disk, so a sound that is not installed is simply absent from the list.
+**`setImage` takes a data URI, not raw SVG markup.** The key action shipped raw markup and drew nothing on hardware. Elgato's two sources disagree on whether raw markup is valid, so the data URI is the form known to work — do not "simplify" it back.
 
-**A finished timer fills the ring** rather than emptying it. Drawn literally, the moment that most needs to be seen would be blank.
+**`UserTitleEnabled` is false, and the title is the plugin's own field.** Stream Deck stops honouring `setTitle` once the user types a title, and would composite theirs over the key face. Neither dial layout has a `title` item.
 
-**The key draws its own text, and so the title is the plugin's own field.** `setTitle` is the only text facility a key has, and Stream Deck stops honouring it the moment the user types a title of their own — a clock that silently stops being a clock because someone labelled the button is not a clock. So the key face is one SVG, digits included, and `UserTitleEnabled` is false in the manifest.
+**Frames are re-asserted every two seconds.** Dropping unchanged frames assumes every frame sent arrives, and nothing can ask the hardware what it is showing. Awaiting `setFeedbackLayout` does not help: `send` resolves when the command reaches the socket, not when Stream Deck applies it.
 
-That leaves the title to the property inspector, which turns out to be the better place for it anyway. The dial could not have used the native field either: neither touchscreen layout has a `title` item, so a title typed into Stream Deck had nowhere to land on a dial and could only land *on top of* the clock on a key. Owning the field is what lets the same name appear in the same place on both, and it is why the switch that used to be called *Show the title* is now *Show the label* — it never named a title, it switched the line the title now goes on. `normaliseSettings` carries the old key across.
+**A finished timer fills the ring** rather than emptying it, so the moment that most needs to be seen is not blank.
 
-**Send `setImage` a data URI, not raw SVG markup** — and be careful what you conclude from that. Elgato's two sources disagree: the WebSocket reference says the field takes a file path or "a base64 encoded string with the mime type declared", while the SDK's own JSDoc for `setImage` says a path, base64, "or an SVG `string`". The key action shipped raw markup and did nothing on hardware; it works sending the same SVG through `asDataUri`, which is the form the touchscreen ring has always used. What is *not* established is that raw markup was the cause — only that the data URI works. Do not "simplify" it back.
+**No audio API exists in the SDK.** `src/sound.ts` hands a file to `afplay` or PowerShell's WPF `MediaPlayer` — chosen over `SoundPlayer`, which cannot set volume. It finds bundled sounds relative to `process.cwd()`, which is the `.sdPlugin` directory at runtime; `test/sound.test.ts` must therefore `chdir` there *before* importing it, hence its dynamic import.
 
-**Frames are re-asserted every couple of seconds**, even when nothing has changed. Dropping unchanged frames assumes every frame sent arrives, and there is no way to ask the hardware what it is actually showing — so on a display that is static for long stretches, one lost frame would stay lost. This is not hypothetical: Stream Deck discards feedback sent alongside a layout switch, which left the ring showing the layout's fallback for an undrawn pixmap — the action's own red icon — until the dial was touched. The pixmap now defaults to a transparent pixel rather than to that icon, and the re-assert bounds any dropped frame to two seconds.
+**The mark is read, not transcribed.** `tools/make-icons.mjs` parses `assets/mwk-mark.svg`. `src/render.ts` holds the one unavoidable literal — it is bundled and has no filesystem — and `test/mark.test.ts` asserts the two match path-for-path.
 
-**Awaiting `setFeedbackLayout` fixes nothing.** It is the obvious-looking cure for feedback lost to a layout switch, and it was tried and reverted. The SDK's `send` resolves once the command is written to the socket, not once Stream Deck has applied it, so awaiting it guarantees nothing that ordering on a single socket did not already give. The re-assert above is what actually bounds the problem.
+**Icons shown inside the Stream Deck application must be white** — monochromatic `#FFFFFF`, transparent background. A Marketplace submission was rejected on this. A key's `States[].Image` is the button face and keeps the brand red.
 
-**The mark is read, not transcribed.** `assets/mwk-mark.svg` is the brand's own artwork file. `tools/make-icons.mjs` parses its paths, viewBox and stroke weight rather than carrying a copy, so the icons cannot drift from it. `src/render.ts` is the one place that still needs a literal — it is bundled into the plugin and has no filesystem to read at runtime — so `test/mark.test.ts` asserts that the mark it actually draws is path-for-path the artwork file. A comment promising two files match is a promise nothing checks; that test is the check.
+**The property inspector cannot import from `src/`.** It is a plain page, not part of the bundle, so it carries its own copy of the clamps and constants. `test/inspector.test.ts` asserts the copies agree; if you add a helper it needs, either it goes inline or something in `src/` must actually call it.
 
-**Icons shown inside the Stream Deck application must be white.** The category icon and both action list icons are a monochromatic `#FFFFFF` stroke on a transparent background, with no colour and no solid backing — Elgato's guidelines require it, and a Marketplace submission was rejected on exactly this. `Encoder.Icon` is white too, which is a judgement call rather than a quoted rule — the guidelines word the colour requirement as "action list icons" and this is not one, but the manifest reference calls it the image "displayed in the Stream Deck application in the circular canvas that represents the dial". White cannot fail that reading; red might. A key's `States[].Image` is the face of the button on the deck itself and keeps the brand red. `tools/make-icons.mjs` is what draws both, so the rule lives in one place rather than in six hand-edited files.
+**A test cannot import either action subclass.** `@action` decorators survive Node's type stripping, so importing them is a `SyntaxError`. `test/actions.test.ts` drives the abstract `CountdownAction` through its own minimal subclass, which is why `npm run demo` matters — the subclasses' event handlers are only exercised there.
 
-**The property inspector cannot import from `src/`.** It is a plain HTML page loaded by Stream Deck, not part of the rollup bundle, so anything it needs it carries as inline JavaScript — the preset clamps, `MAX_PRESET_SECONDS`, and its own `toParts`. That duplication is forced, and the trap is subtle: `src/settings.ts` once carried `toParts`/`fromParts` too, with tests over them, and *nothing in the plugin called either*. The tested copy was not the running copy, which reads like coverage and is worse than none. Those are gone. If you add a helper the inspector needs, either it goes inline and stays untested, or it goes in `src/` and something in `src/` had better call it.
+**A tool that a test imports must carry JSDoc types and be in `tsconfig.test.json`.** Without them every value crossing the import is `any`, which does not fail a typecheck — it *disables* the type-aware lint rules wherever it lands.
 
-**A tool that a test imports must carry JSDoc types, and be in `tsconfig.test.json`.** `tools/` is in
-that config's `include` and both released-notes modules are annotated, and neither is decoration.
-Without them every value crossing a tool import is `any` — and `any` does not fail a typecheck, it
-*disables* the type-aware lint rules wherever it lands. `test/release-notes.test.ts` was passing
-`any` through a dozen assertions with the linter silent about all of it, which is a more expensive
-version of the trap two paragraphs down: it does not merely lack checking, it reads as checked.
-`checkJs` stays false — the tools are inferred from, not checked.
-
-**The tests resolve imports through a hook.** `src/` is written for rollup, which fills in file extensions; Node's ESM resolver deliberately does not, so `test/ts-resolve.mjs` does that one job and nothing else.
-
-**A test cannot import either action subclass.** `DialCountdown` and `KeyCountdown` carry an `@action` decorator, and Node's type stripping does exactly what it says — it erases types and leaves decorators standing, so importing `src/actions/dial-countdown.ts` from a test is a `SyntaxError` rather than a test. `test/actions.test.ts` therefore drives `CountdownAction`, the abstract base, through a minimal subclass it declares itself. That reaches everything the two share — the instance map, teardown, the debounced save, suspend and revive, the alert — and reaches none of their own event handlers, which is a real gap and is why `npm run demo` matters. The SDK itself imports fine: `streamDeck.connect()` is a separate call the entry point makes, so nothing connects to anything just by importing it.
-
-**`src/sound.ts` finds its sounds relative to `process.cwd()`**, which is the `.sdPlugin` directory when Stream Deck launches the plugin — the same assumption the SDK makes for `manifest.json` and its log directory, not an extra one. The consequence is only felt in tests: `test/sound.test.ts` has to `chdir` there *before* the module is loaded, which is why it uses a dynamic import rather than a plain one that would be hoisted above the `chdir`.
+**Tests resolve imports through `test/ts-resolve.mjs`.** `src/` is written for rollup, which fills in file extensions; Node's ESM resolver does not.
 
 ## About Mate Wish Key
 

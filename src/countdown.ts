@@ -1,9 +1,8 @@
 /**
  * Everything a countdown is, minus the Stream Deck.
  *
- * A countdown on a dial and a countdown on a key differ in exactly two ways: how they are driven,
- * and how they are drawn. The clock, the presets, the alert, the stage sequence and the word that
- * acknowledges a gesture are identical, so they live here — once — rather than in each action.
+ * A countdown on a dial and one on a key differ only in how they are driven and how they are drawn,
+ * so the clock, presets, alert, stage sequence and acknowledgement live here once.
  *
  * Nothing in this file imports the SDK, which is what lets the whole state machine be driven from a
  * test with an injected clock.
@@ -27,23 +26,15 @@ export class Countdown {
 
 	#presetIndex: number;
 
-	/**
-	 * Which stage of the selected preset is on the clock, 0-based.
-	 *
-	 * This is what became of the count of completed repeat laps, and it is a better thing to hold:
-	 * the old counter was a *tally* that the stopping rule had to compare against a separate setting,
-	 * and reading it as "repeats so far" rather than "runs finished" is what once made a count of 3
-	 * run four times. A position in a list cannot be off by one against itself — the timer moves on
-	 * while there is a next stage, and stops when there is not.
-	 */
+	/** Which stage of the selected preset is on the clock, 0-based. */
 	#stageIndex = 0;
 
 	/**
 	 * The stage list the clock was last loaded from.
 	 *
 	 * Held rather than re-read so {@link Countdown.applySettings} can tell "the preset was edited"
-	 * from "the clock has been dialled off it" — comparing the settings against the live clock would
-	 * make every touch of the volume slider reload a countdown that had merely been nudged.
+	 * from "the clock has been dialled off it" — comparing against the live clock would reload on
+	 * every touch of the volume slider.
 	 */
 	#loadedStages: number[];
 
@@ -55,21 +46,14 @@ export class Countdown {
 	/**
 	 * When the whole job finished, or `null` when it has not.
 	 *
-	 * Only set on the elapse that ends the *last* stage — the earlier ones load the next stage and
-	 * never come through here. It is the clock the auto-reset delay is measured from, and it is
-	 * cleared the moment the timer is anything but elapsed, so a finished timer somebody restarted by
-	 * hand does not carry a pending reset into its next run.
+	 * Set only on the elapse that ends the *last* stage. It is what the auto-reset delay is measured
+	 * from, and is cleared the moment the timer is anything but elapsed.
 	 */
 	#finishedAt: number | null = null;
 
 	#ack: Acknowledgement | null = null;
 
-	/**
-	 * Whether the alert is still sounding, set from outside.
-	 *
-	 * The clock has no business knowing what a speaker is doing, and it does not — it knows one thing
-	 * about it, because one rule here depends on it. See {@link Countdown.ringing}.
-	 */
+	/** Whether an alert is still sounding. See {@link Countdown.ringing}. */
 	#ringing = false;
 
 	readonly #now: Clock;
@@ -106,11 +90,8 @@ export class Countdown {
 	}
 
 	/**
-	 * Which stage is on screen, 1-based.
-	 *
-	 * A finished timer keeps the number of its last stage rather than running one past it: `×3/3`
-	 * with `done` beside it, not `×4/3`. The two together are what tell a finished job from one still
-	 * on its final stage — a distinction the tally alone could not make, and did not, for a while.
+	 * Which stage is on screen, 1-based. A finished timer keeps its last stage's number rather than
+	 * running one past it: `×3/3` with `done` beside it, never `×4/3`.
 	 */
 	get stage(): number {
 		return this.#stageIndex + 1;
@@ -132,27 +113,19 @@ export class Countdown {
 	}
 
 	/**
-	 * How long the stages *after* this one add up to, in seconds.
-	 *
-	 * What the finish time needs, and the reason it was wrong before: `ends 3:40` was the end of the
-	 * clock on screen, which on anything that repeated was the end of that lap and not of the job.
+	 * How long the stages *after* this one add up to, in seconds. What the finish time needs: `ends`
+	 * is the end of the whole job, not of the stage on screen.
 	 */
 	get remainingStagesSeconds(): number {
 		return this.stages.slice(this.#stageIndex + 1).reduce((total, seconds) => total + seconds, 0);
 	}
 
 	/**
-	 * Whether the alert is still sounding — told to the clock by whoever is playing it.
+	 * Whether an alert is still sounding, told to the clock by whoever is playing it.
 	 *
-	 * **It exists to stop the auto-reset silencing the alarm.** The two are otherwise in direct
-	 * opposition: a long alert is for the finish you must not miss, the auto-reset is for tidying a
-	 * finish nobody came back to, and with both in play the second clears the clock out from under
-	 * the first — the sound stops, the screen goes back to a full timer, and there is no trace it
-	 * ever fired. So a timer that is still sounding is not tidied away: the delay starts counting
-	 * once the sound stops, which is either when you press it or when the last play finishes.
-	 *
-	 * Deliberately a plain flag rather than anything this file could work out for itself. How long a
-	 * sound lasts is a property of a file on disk, and nothing here is allowed to touch a disk.
+	 * It exists so the auto-reset does not tidy a finish away while it is still being announced: the
+	 * delay starts counting once the sound stops. A plain flag rather than anything this file works
+	 * out for itself, because how long a sound lasts is a property of a file on disk.
 	 */
 	get ringing(): boolean {
 		return this.#ringing;
@@ -175,9 +148,8 @@ export class Countdown {
 	/**
 	 * True on the dim half of the end-of-timer blink.
 	 *
-	 * The window is capped at half the stage's own length: a five minute warning on a five minute
-	 * timer would blink from the moment it started, which is what once made adjusting the clock look
-	 * like it had triggered the warning.
+	 * The window is capped at half the stage's own length, so a five minute warning on a five minute
+	 * timer does not blink from the moment it starts.
 	 */
 	get dimmed(): boolean {
 		if (!this.#settings.warnEnabled || this.timer.status !== "running") {
@@ -193,28 +165,20 @@ export class Countdown {
 	}
 
 	/**
-	 * True when the clock has been dialled away from the stage it was loaded from.
-	 *
-	 * The dial deliberately no longer writes back to the preset list, so this is the state that needs
-	 * saying out loud: the working duration says one thing and the configuration says another. It is
-	 * what puts `from 20m` on the label, and it is deliberately *only* about the duration — a timer
-	 * merely running has not been dialled anywhere, and labelling it as though it had would be noise.
+	 * True when the clock has been dialled away from the stage it was loaded from. It is what puts
+	 * `from 20m` on the label, and is deliberately only about the duration — a timer merely running
+	 * has not been dialled anywhere.
 	 */
 	get drifted(): boolean {
 		return this.timer.durationMs !== this.stageSeconds * 1000;
 	}
 
 	/**
-	 * True when the clock is sitting stopped, full, on the first stage of the preset it is set to.
+	 * True when the clock is sitting stopped, full, on the first stage of its preset.
 	 *
-	 * This is the "nothing to put right" state, and it is what decides whether a hold of the screen
-	 * restores or advances — see {@link Countdown.cyclePreset}. It is deliberately wider than
-	 * {@link Countdown.drifted}: a countdown that is *running*, paused, finished or part-way through
-	 * its stages is not sitting on its preset either, even though its duration may still match.
-	 *
-	 * `idle` is enough to mean full: every path that reaches it — reset, loading a preset, adjusting a
-	 * stopped clock — puts the remaining time back to the whole duration. `test/countdown.test.ts`
-	 * holds that invariant, since this getter now leans on it.
+	 * This decides whether a hold restores or advances — see {@link Countdown.cyclePreset}. Wider
+	 * than {@link Countdown.drifted}: running, paused, finished or part-way through the stages all
+	 * count as not on the preset, even when the duration still matches.
 	 */
 	get onPreset(): boolean {
 		return !this.drifted && this.#stageIndex === 0 && this.timer.status === "idle";
@@ -228,14 +192,12 @@ export class Countdown {
 	/**
 	 * Takes an edit from the property inspector.
 	 *
-	 * @returns `true` when the selected preset actually changed, which is the only case that should
-	 * reload the clock — otherwise nudging the volume slider would reset a running timer.
+	 * @returns `true` when the selected preset actually changed, which is the only case that reloads
+	 * the clock — otherwise nudging the volume slider would reset a running timer.
 	 *
-	 * Compared against the stage list the clock was *loaded* from, never against the clock itself: a
-	 * countdown dialled off its stage must not be yanked back to it by an unrelated edit. Editing the
-	 * stages does put the timer back to the first of them, tally included, because the run it was
-	 * part-way through belonged to a preset that no longer exists — and a `×2/3` counted against a
-	 * list that now has five entries is a number about nothing.
+	 * Compared against the stage list the clock was *loaded* from, never against the clock itself.
+	 * Editing the stages does put the timer back to the first of them, because a `×2/3` counted
+	 * against a list that now has five entries is a number about nothing.
 	 */
 	applySettings(raw: unknown): boolean {
 		const settings = normaliseSettings(raw);
@@ -256,16 +218,9 @@ export class Countdown {
 	/**
 	 * Called when a countdown that was off screen comes back.
 	 *
-	 * One job: **a timer that ran out while nobody was looking has nothing left to announce.** The
-	 * alert exists to say that the moment has arrived, and by the time the control is on screen again
-	 * the moment has been and gone — sounding an alarm for it now would be reporting old news at full
-	 * volume, possibly hours late. The screen still says `done`, in the elapsed colour, because that
-	 * part is still true.
-	 *
-	 * The same reasoning stops a multi-stage timer from picking up where it left off. Its later
-	 * stages were not run, so it does not get to claim them, and quietly fast-forwarding a tally
-	 * nobody watched would be inventing history. It comes back where it stopped, and starting it
-	 * starts the sequence again from the top.
+	 * A timer that ran out while nobody was looking has nothing left to announce, so the alert is
+	 * marked as already given. The screen still says `done`. For the same reason a multi-stage timer
+	 * does not pick up stages it never ran.
 	 */
 	resume(): void {
 		if (this.timer.status === "elapsed") {
@@ -315,21 +270,12 @@ export class Countdown {
 	/**
 	 * Back to the first stage of the preset, stopped — the double tap.
 	 *
-	 * **To the preset, not to wherever the dial left the clock.** It used to restore the working
-	 * duration, so a 5m preset wound up to 8m reset to 8m for ever after: the number you configured
-	 * was reachable only by holding the screen, and the number you had nudged to once had quietly
-	 * become the timer's real length. That is a last-used value wearing a preset's clothes. A preset
-	 * that a reset cannot return you to is not a preset, so reset goes where the settings say.
+	 * **To the preset, not to wherever the dial left the clock.** The clock is the scratch value and
+	 * the preset is the record, so the gesture that means *put it back* has one place to put it
+	 * back to. The dialled duration is deliberately not recoverable.
 	 *
-	 * The dialled duration is therefore deliberately not recoverable. That is the trade, and it is the
-	 * right way round: the clock is the scratch value and the preset is the record, so the gesture
-	 * that means *put it back* has exactly one place to put it back to. Nudge it again if you want it
-	 * again — that is one turn of the dial, against a configured length that was otherwise two
-	 * gestures deep.
-	 *
-	 * Deliberately does not start it. Putting a timer back to the top and setting it running are two
-	 * decisions, and a gesture that makes both takes the second one away from you: there is then no
-	 * way to reset without immediately committing to a fresh run.
+	 * Deliberately does not start it: putting a timer back to the top and setting it running are two
+	 * decisions.
 	 */
 	reset(): void {
 		this.#toStage(0);
@@ -339,27 +285,11 @@ export class Countdown {
 	/**
 	 * Puts things right, or moves on — in that order.
 	 *
-	 * **If the clock is not sitting stopped and full on the first stage of its preset, the hold puts
-	 * it there.** Only a hold made when there is nothing left to put right moves to another preset.
-	 * Hold once, hold again: restore, then advance.
+	 * If the clock is not sitting stopped and full on the first stage of its preset, the hold puts it
+	 * there; only a hold with nothing left to put right moves to another preset. Running, paused,
+	 * finished, part-way through the stages and dialled-off all count as something to put right.
 	 *
-	 * The restore comes first because it is wanted far more often, and the rule was too narrow at
-	 * first. It originally fired only when the dial had wound the clock off its preset, on the
-	 * reasoning that a *running* timer has a reset of its own — the double tap. In the hand that was
-	 * wrong: reaching for the dial mid-run and being thrown onto the next preset is exactly the
-	 * surprise the restore exists to prevent, and the double tap lives on a different control. So
-	 * running, paused, finished, part-way through the stages and dialled-off all count as something
-	 * to put right.
-	 *
-	 * Nothing is lost by it. The press that would have advanced still advances, one press later, and
-	 * the word says which of the two it just did: `preset · 20m` against `next · 30m`.
-	 *
-	 * It only ever moves forwards. Stepping backwards lived on the dial's hold, and the dial has no
-	 * hold any more — a push is a push however long you lean on it. With the touchscreen as the only
-	 * way through the list, one direction and a wrap round the end is the whole of it.
-	 *
-	 * Loading a preset deliberately does not start it: this is how you choose what to time, and
-	 * choosing is not the same as beginning.
+	 * Forwards only, wrapping at the end. Loading a preset does not start it.
 	 */
 	cyclePreset(): void {
 		if (!this.onPreset) {
@@ -374,9 +304,8 @@ export class Countdown {
 	/**
 	 * Puts the clock on the first stage of the selected preset, stopped, and says so.
 	 *
-	 * A preset with stages is named by its first one with the count after it — `next · 40m ×3` — since
-	 * the word has a moment on screen to say what you have just loaded, and "forty minutes" alone
-	 * would be two thirds of a lie about a 40/10/10.
+	 * A preset with stages is named by its first one with the count after it — `next · 40m ×3` —
+	 * since "forty minutes" alone would be two thirds of a lie about a 40/10/10.
 	 */
 	#load(word: string): void {
 		this.#toStage(0);
@@ -389,14 +318,10 @@ export class Countdown {
 	/**
 	 * The start state for a given stage: that stage's length, full, stopped.
 	 *
-	 * Three gestures mean stage zero and they now all mean the same thing by construction — the
-	 * double tap, a hold that finds something to put right, and the auto-reset falling due. They used
-	 * to agree by coincidence and did not quite: the double tap restored the *working* duration while
-	 * the other two restored the preset, so `reset` and `hold` disagreed about where the top of the
-	 * clock was. One private method, one answer, and nothing left to drift.
+	 * The double tap, a hold that finds something to put right, and the auto-reset falling due all
+	 * mean stage zero, and all go through here so they cannot drift apart.
 	 *
-	 * Silent on purpose. What to say about it is the caller's business, and the auto-reset says
-	 * nothing at all.
+	 * Silent on purpose — what to say about it is the caller's business.
 	 */
 	#toStage(index: number): void {
 		this.#stageIndex = Math.min(Math.max(index, 0), this.stageCount - 1);
@@ -409,12 +334,10 @@ export class Countdown {
 	 * Turning adjusts the clock, and nothing else.
 	 *
 	 * @param pressed Whether the dial was pushed in for this turn — a minute a click rather than a
-	 * second. Passed in per rotation rather than held as state, because it *is* per rotation: the step
-	 * is your finger, and it lasts exactly as long as your finger does. See `./step`.
+	 * second. Passed per rotation because it *is* per rotation; see `./step`.
 	 *
-	 * It deliberately does not touch the preset behind the clock. Winding a 20 minute timer up to 23
-	 * for one call must not silently redefine "20 minutes" as 23 — a preset the dial rewrites is not a
-	 * preset but a last-used value.
+	 * It deliberately does not touch the preset behind the clock: a preset the dial rewrites is a
+	 * last-used value, not a preset.
 	 */
 	adjust(ticks: number, pressed = false): void {
 		const before = this.timer.status;
@@ -435,13 +358,11 @@ export class Countdown {
 	/**
 	 * Moves an elapsed timer on to its next stage, once per elapse.
 	 *
-	 * The next stage starts immediately rather than after a pause: the alert has already fired, and a
-	 * gap between stages is exactly what an interval timer must not have.
+	 * The next stage starts immediately rather than after a pause — a gap between stages is what an
+	 * interval timer must not have.
 	 *
-	 * @returns `true` on the one turn of the loop where a stage *has just* run out — once per elapse,
-	 * never twice. Whether that makes a noise is the caller's business, and deliberately so: it keeps
-	 * this file free of anything that touches the filesystem, and it keeps the question of which sound
-	 * to play in one place rather than half here and half there.
+	 * @returns `true` on the one turn of the loop where a stage has just run out. Whether that makes
+	 * a noise is the caller's business, which keeps this file free of the filesystem.
 	 */
 	settle(): boolean {
 		if (this.timer.status !== "elapsed") {
@@ -475,14 +396,9 @@ export class Countdown {
 	/**
 	 * Puts a long-finished timer back to the start, if it has been asked to.
 	 *
-	 * A countdown that has run out otherwise sits reading `done` until somebody presses it, which is
-	 * right for a timer you are watching and wrong for one on a page you left — you come back to a
-	 * used clock and have to clear it before it is a timer again. After the delay it clears itself:
-	 * full clock, stopped, back on the first stage. Exactly the double tap, and deliberately so — the
-	 * same state, arrived at two ways, rather than a second idea of what "the start" means.
-	 *
-	 * Silent, with no acknowledgement drawn. The words under the clock name the gesture you just
-	 * made, and nobody made this one.
+	 * Full clock, stopped, back on the first stage — exactly the double tap, by construction rather
+	 * than coincidence. Silent, with no acknowledgement drawn: the words under the clock name the
+	 * gesture you just made, and nobody made this one.
 	 */
 	#autoReset(): void {
 		if (!this.#settings.autoResetEnabled || this.#finishedAt === null) {
@@ -503,12 +419,9 @@ export class Countdown {
 	}
 
 	/**
-	 * Says a word for something that was not one of this clock's own gestures.
-	 *
-	 * Exactly one caller: the press that silences a ring and is then swallowed. That press changes
-	 * nothing about the countdown, so it has no gesture to announce itself with — and a control that
-	 * visibly does nothing when you press it is a control you press again. `silenced` is the word for
-	 * it. See `CountdownAction.perform`.
+	 * Says a word for something that was not one of this clock's own gestures. One caller: the press
+	 * that silences an alert and is then swallowed, which changes nothing about the countdown and so
+	 * has no gesture of its own to announce.
 	 */
 	note(text: string): void {
 		this.#say(text);
