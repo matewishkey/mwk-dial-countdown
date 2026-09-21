@@ -161,7 +161,7 @@ export function wantsSound(path: string | undefined, volumePercent: number): boo
  * **The handle that did not exist.** Repeats used to be a fan of `setTimeout`s that nothing held, so
  * there was no way to say "stop" — not when a second stage ran out on top of the first, not when the
  * user pressed the control, not when the inspector's *Test* button was clicked twice. Everything
- * that follows from the ring mode needs this one object.
+ * that follows from a press being able to silence an alert needs this one object.
  */
 export type Playback = {
 	/** True until the last play has finished, or {@link Playback.stop} was called. */

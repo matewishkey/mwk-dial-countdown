@@ -21,19 +21,23 @@ renamed, and rewriting it would make the history describe a repo that never exis
 
 ### Added
 
-- **Keep ringing until pressed.** For the alarm you must not miss. Switch it on, set a high count —
-  up to sixty now — and the alert keeps sounding until somebody presses the control. **That press
-  only stops the noise:** it does not start, pause or reset the clock, because a press made on
-  hearing an alarm is a reflex grab for quiet rather than an instruction, and silencing it into
-  starting the next run by accident is the one thing it must not do. Press and *hold* to silence it
-  and put the timer right in the one gesture. Turning the dial also silences it, and still adjusts.
+- **A press silences an alert that is playing, and does nothing else.** That is what makes a high
+  repeat count usable — up to sixty now — because an alarm meant to outlast you walking back to the
+  desk is no good if it cannot be called off. The press will not start, pause or reset the clock, so
+  you cannot quieten a sound into changing what the timer was doing; press again for the gesture you
+  meant, or press and *hold* to silence it and put the timer right in one go. Turning the dial
+  silences it too, and still adjusts.
 
-  It rings at the end of the whole job, never between steps — a step starts the next one
-  immediately, and a ring is called off the moment the clock is running again, so a ring between
-  steps would be cancelled in the same breath. Anything that leaves the clock no longer finished
-  stops it: started, reset, an edited preset, dialled somewhere new. A ringing timer will not clear
-  itself, either, since *Clear itself when finished* would otherwise silence the alarm and wipe the
-  screen clean of it — which is precisely the failure this was asked for to prevent.
+  **Every step of a multi-step preset gets its own silenceable alert.** There is no *keep ringing*
+  switch: it existed for one unreleased build and it was a second idea of the repeat count in a
+  different vocabulary, with a rule reconciling the two that got it backwards — only the end of the
+  *whole job* could be silenced. On `40m, 10m, 10m, 10m` that is the wrong way round: the end of the
+  forty is the moment you must not miss, the ten after it is already counting by the time you hear
+  it, and the press made to quieten the alert went through to the clock and paused that ten. One
+  count and one rule cannot disagree with themselves.
+
+  The trade, stated plainly: with the default single chime, a press made inside those two seconds is
+  spent on silencing and the clock does not move. Press again.
 
 - **Holding the dial's own knob puts the clock right**, the same as holding the touchscreen: back to
   the top of the preset, and on to the next one only when there was nothing to put right. It is also

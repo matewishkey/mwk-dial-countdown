@@ -111,7 +111,7 @@ class TestAction extends CountdownAction<Dial> {
 	/**
 	 * Stands in for the OS player.
 	 *
-	 * The seam exists for this: the ringing state is entirely about when a sound is stopped, and
+	 * The seam exists for this: the silencing is entirely about when a sound is stopped, and
 	 * there is no way to test that against a real one — the suite runs on Linux, where `playSound`
 	 * answers `null` on every call, and on a machine where it did not it would make a noise.
 	 *
@@ -720,17 +720,17 @@ describe("the window a control waits for a second press", () => {
 });
 
 /**
- * The ringing alarm, and the press that means "be quiet".
+ * The alert, and the press that means "be quiet".
  *
- * This is the half of the ring mode that could not live in `src/countdown.ts`: the clock knows it
- * has finished, but *whether a noise is still being made about it* is a property of a file on disk
- * and a process playing it, so the state lives on the instance and the rules live here.
+ * This is the half that could not live in `src/countdown.ts`: the clock knows it has finished, but
+ * *whether a noise is still being made about it* is a property of a file on disk and a process
+ * playing it, so the state lives on the instance and the rules live here.
  *
- * Every test runs a real one second countdown out rather than mocking a clock, because what is under
- * test is the order the action does things in — settle, sound, tend, draw — and a fake clock would
- * let that order be wrong without saying so.
+ * Every test runs a real one second countdown out rather than mocking a clock, because what is
+ * under test is the order the action does things in — settle, sound, tend, draw — and a fake clock
+ * would let that order be wrong without saying so.
  */
-describe("a ringing alarm", () => {
+describe("an alert that is still sounding", () => {
 	/**
 	 * A sound that really is on disk, since the stand-in player refuses one that is not — for the
 	 * same reason `playSound` does, and so that the error-triangle tests keep meaning something.
@@ -740,16 +740,9 @@ describe("a ringing alarm", () => {
 		"../com.matewishkey.dial-countdown-v2.sdPlugin/sounds/chime.wav"
 	);
 
-	/** Settings for a countdown that finishes in one second, with the alarm switched on. */
-	const ringing = (extra: Record<string, unknown> = {}): DialCountdownSettings =>
-		normaliseSettings({
-			presets: [[1], [600]],
-			presetIndex: 0,
-			keepRinging: true,
-			soundRepeat: 20,
-			soundId: CHIME,
-			...extra
-		});
+	/** Settings for a countdown that finishes in one second, with a long alert. */
+	const alerting = (extra: Record<string, unknown> = {}): DialCountdownSettings =>
+		normaliseSettings({ presets: [[1], [600]], presetIndex: 0, soundRepeat: 20, soundId: CHIME, ...extra });
 
 	/**
 	 * Appears a control and **registers its teardown before anything can fail**.
@@ -760,8 +753,6 @@ describe("a ringing alarm", () => {
 	 * which is exactly backwards, since what a test does when it fails is the whole of its value.
 	 * Proved the hard way: a mutation run flipped one guard, an assertion below failed, the call at
 	 * the end never ran, and the suite sat hung for thirteen minutes producing no output at all.
-	 *
-	 * `t.after` runs either way, so a broken guard reports a failure instead of a hang.
 	 */
 	function appear(dial: Driver, id: string, settings: DialCountdownSettings, t: TestContext): Calls {
 		const { action, calls } = fakeDial(id);
@@ -770,7 +761,7 @@ describe("a ringing alarm", () => {
 		return calls;
 	}
 
-	/** Appears a control, runs its timer out and settles it — leaving the alarm sounding. */
+	/** Appears a control, runs its timer out and settles it — leaving the alert sounding. */
 	async function finish(dial: Driver, id: string, settings: DialCountdownSettings, t: TestContext): Promise<Calls> {
 		const calls = appear(dial, id, settings, t);
 		dial.countdownFor(id).toggle();
@@ -779,168 +770,176 @@ describe("a ringing alarm", () => {
 		return calls;
 	}
 
-	it("plays the alert with the count and the fade it was configured with", async (t) => {
+	/**
+	 * **The bug the whole design was rebuilt around, stated as a test.**
+	 *
+	 * On `40m, 10m, 10m, 10m` the end of the forty is the moment you must not miss — and the ten
+	 * after it has already started counting by the time you hear it. Silencing used to be reserved
+	 * for the end of the *whole* job, so the press made to quieten a step's alert went straight
+	 * through to the clock and paused the step that had just begun. It was reported in those words:
+	 * the click cancels the timer instead of the sound.
+	 */
+	it("silences a step's alert with the press, and does not touch the step that just started", async (t) => {
 		const dial = driver();
-		await finish(dial, "ring-1", ringing({ volume: 70, soundRepeat: 12, fadeRepeats: true }), t);
+		appear(dial, "alert-1", normaliseSettings({ presets: [[1, 600]], soundRepeat: 20, soundId: CHIME }), t);
 
-		assert.deepEqual(dial.played.at(-1), { soundId: CHIME, volume: 70, repeat: 12, fade: true });
-	});
+		dial.countdownFor("alert-1").toggle();
+		await wait(1_100);
+		dial.tick("alert-1");
 
-	it("swallows the press that silences it, rather than starting the clock with it", async (t) => {
-		// The whole point of the mode. You set twenty plays because you expect to be absorbed in
-		// something else; the press you make on hearing it is a press for quiet, not an instruction.
-		const dial = driver();
-		await finish(dial, "ring-2", ringing(), t);
+		const countdown = dial.countdownFor("alert-1");
+		assert.equal(countdown.stage, 2, "precondition: the first step ran out and the second is under way");
+		assert.equal(countdown.timer.status, "running");
+		assert.equal(dial.sounding?.active, true, "and the first step's alert is still sounding");
 
-		const countdown = dial.countdownFor("ring-2");
-		assert.equal(countdown.ringing, true, "the alarm should be ringing");
-		assert.equal(countdown.finished, true);
-
-		dial.gesture("ring-2", "toggle");
+		dial.gesture("alert-1", "toggle");
 
 		assert.equal(dial.sounding?.stops, 1, "the press must stop the sound");
-		assert.equal(countdown.finished, true, "and must not have started the clock");
-		assert.equal(countdown.ringing, false, "the ringing state is over");
-		assert.equal(countdown.toast, "silenced", "a press that visibly does nothing is a press you repeat");
+		assert.equal(countdown.timer.status, "running", "and must NOT have paused the step that just started");
+		assert.equal(countdown.stage, 2, "nor moved off it");
+		assert.equal(countdown.toast, "silenced");
 	});
 
-	it("acts normally on the next press, once the ringing is over", async (t) => {
+	it("swallows the press at the end of the whole job too, rather than restarting the clock", async (t) => {
 		const dial = driver();
-		await finish(dial, "ring-3", ringing(), t);
+		await finish(dial, "alert-2", alerting(), t);
 
-		dial.gesture("ring-3", "toggle");
-		dial.gesture("ring-3", "toggle");
+		const countdown = dial.countdownFor("alert-2");
+		assert.equal(countdown.finished, true);
 
-		assert.equal(dial.countdownFor("ring-3").timer.status, "running", "the second press is an ordinary one");
+		dial.gesture("alert-2", "toggle");
+
+		assert.equal(dial.sounding?.stops, 1);
+		assert.equal(countdown.finished, true, "the clock must not be started by a press made for quiet");
+		assert.equal(countdown.toast, "silenced");
+	});
+
+	it("acts normally on the next press, once the sound has been silenced", async (t) => {
+		const dial = driver();
+		await finish(dial, "alert-3", alerting(), t);
+
+		dial.gesture("alert-3", "toggle");
+		dial.gesture("alert-3", "toggle");
+
+		assert.equal(dial.countdownFor("alert-3").timer.status, "running", "the second press is an ordinary one");
+	});
+
+	it("does not swallow a press when nothing is sounding", async (t) => {
+		// The positive control for every swallow above: without it they would all pass just as well
+		// if the press were swallowed unconditionally.
+		const dial = driver();
+		await finish(dial, "alert-4", alerting({ soundId: NO_SOUND }), t);
+
+		dial.gesture("alert-4", "toggle");
+
+		assert.equal(dial.countdownFor("alert-4").timer.status, "running", "silence means the press goes through");
 	});
 
 	it("lets a hold silence it and do its job in the one gesture", async (t) => {
 		// The exception, and the reason for it: the hold is the gesture that means *put this right*,
-		// so making it cost two presses would be the mode getting in the way of the repair.
+		// so making it cost two presses would put the silencing in the way of the repair.
 		const dial = driver();
-		await finish(dial, "ring-4", ringing(), t);
+		await finish(dial, "alert-5", alerting(), t);
 
-		dial.gesture("ring-4", "next");
+		dial.gesture("alert-5", "next");
 
 		assert.equal(dial.sounding?.stops, 1, "the hold silences it too");
-		const countdown = dial.countdownFor("ring-4");
-		assert.equal(countdown.ringing, false);
+		const countdown = dial.countdownFor("alert-5");
 		assert.equal(countdown.timer.status, "idle", "and still put the clock back to a full, stopped one");
 		assert.equal(countdown.toast.startsWith("preset"), true, `expected the restore, got ${countdown.toast}`);
 	});
 
-	it("does not ring between the steps of a preset, only at the end of the job", async (t) => {
-		// Forced by the rule that a running clock cancels a ring: the next step starts immediately, so
-		// a ring begun at a step boundary would be called off in the same breath.
+	it("keeps a step's alert sounding while the next step runs, rather than cutting it off", async (t) => {
+		// An alert outlives the moment it announces, on purpose. A rule that silenced one because the
+		// clock was running is what made a step boundary inaudible: the next step starts immediately,
+		// so that rule was true one frame after every step's alert began.
 		const dial = driver();
-		appear(dial, "ring-5", normaliseSettings({ presets: [[1, 600]], keepRinging: true, soundId: CHIME }), t);
+		appear(dial, "alert-6", normaliseSettings({ presets: [[1, 600]], soundRepeat: 20, soundId: CHIME }), t);
 
-		dial.countdownFor("ring-5").toggle();
+		dial.countdownFor("alert-6").toggle();
 		await wait(1_100);
-		dial.tick("ring-5");
+		dial.tick("alert-6");
+		dial.tick("alert-6");
+		dial.tick("alert-6");
 
-		assert.equal(dial.played.length, 1, "the step boundary still sounds the alert");
-		assert.equal(dial.countdownFor("ring-5").ringing, false, "but it is not a ring");
-
-		// **And the marker is not cut off by the step that just started**, which is the assertion that
-		// actually distinguishes this. Dropping `&& countdown.finished` from where the ring is decided
-		// leaves the per-frame net to catch it — a ring with the clock running is silenced at once — so
-		// `ringing` reads false either way and only the sound itself tells the two apart. A mutation run
-		// found that out: the guard could be deleted with every test still green.
-		assert.equal(dial.sounding?.stops, 0, "the step's own alert should still be playing");
-
-		// And the press that follows is an ordinary one — it pauses the step now running.
-		dial.gesture("ring-5", "toggle");
-		assert.equal(dial.countdownFor("ring-5").timer.status, "paused");
+		assert.equal(dial.sounding?.stops, 0, "three frames of a running clock must not have silenced it");
+		assert.equal(dial.sounding?.active, true);
 	});
 
-	it("stops ringing when the clock starts again by some other route", async (t) => {
-		// The net rather than the enumerated list. Anything that leaves the timer no longer finished
-		// means the finish has been dealt with, and the alarm is announcing a moment that has passed.
+	it("stops sounding when the plays run out on their own, so the next press is not swallowed", async (t) => {
 		const dial = driver();
-		await finish(dial, "ring-6", ringing(), t);
+		await finish(dial, "alert-7", alerting(), t);
 
-		// Straight at the countdown, deliberately: this is the path no gesture handler knows about.
-		dial.countdownFor("ring-6").toggle();
-		dial.tick("ring-6");
-
-		assert.equal(dial.sounding?.stops, 1, "a clock that is running again has nothing to ring about");
-		assert.equal(dial.countdownFor("ring-6").ringing, false);
-	});
-
-	it("stops ringing when the plays run out on their own, so the next press is not swallowed", async (t) => {
-		const dial = driver();
-		await finish(dial, "ring-7", ringing(), t);
-
-		// Sixty plays and nobody came. The state has to end with them, or the press that follows would
-		// be eaten by a ring that is over.
 		dial.sounding?.stop();
-		dial.tick("ring-7");
+		dial.tick("alert-7");
 
-		assert.equal(dial.countdownFor("ring-7").ringing, false);
+		assert.equal(dial.countdownFor("alert-7").ringing, false);
 
-		dial.gesture("ring-7", "toggle");
-		assert.equal(dial.countdownFor("ring-7").timer.status, "running", "an ordinary press again");
+		dial.gesture("alert-7", "toggle");
+		assert.equal(dial.countdownFor("alert-7").timer.status, "running", "an ordinary press again");
+	});
+
+	it("does not swallow a press with an alert whose plays have already finished", async (t) => {
+		// The narrow window this turns on: the run ends on its own, and the press arrives in the
+		// quarter-second before the render loop notices and clears it. The alert object is still
+		// there, so the check has to be on whether it was *actually sounding* rather than on whether
+		// one exists — a mutation run found this was the only claim in the file nothing tested.
+		const dial = driver();
+		await finish(dial, "alert-11", alerting(), t);
+
+		// Ended of its own accord, and deliberately no `tick` — this is the gap before the loop runs.
+		dial.sounding?.stop();
+
+		dial.gesture("alert-11", "toggle");
+
+		assert.equal(
+			dial.countdownFor("alert-11").timer.status,
+			"running",
+			"an alert that had already stopped must not eat the press"
+		);
 	});
 
 	it("stops the previous alert before starting the next, rather than layering them", async (t) => {
-		// The other half of the stacking report. Even with each run's own plays now properly spaced,
-		// a second step running out on top of the first would start a second run underneath it — and
-		// two runs playing at once sound exactly like the overlap bug this release fixes.
+		// Two runs playing at once sound exactly like the overlap bug this release fixes.
 		const dial = driver();
-		appear(dial, "ring-8", normaliseSettings({ presets: [[1, 1]], keepRinging: true, soundId: CHIME }), t);
+		appear(dial, "alert-8", normaliseSettings({ presets: [[1, 1]], soundRepeat: 20, soundId: CHIME }), t);
 
-		dial.countdownFor("ring-8").toggle();
+		dial.countdownFor("alert-8").toggle();
 		await wait(1_100);
-		dial.tick("ring-8");
+		dial.tick("alert-8");
 		const first = dial.sounding;
 
 		await wait(1_100);
-		dial.tick("ring-8");
+		dial.tick("alert-8");
 
 		assert.equal(dial.playbacks.length, 2, "both steps sounded");
 		assert.equal(first?.stops, 1, "the first step's run must have been called off by the second");
 		assert.notEqual(dial.sounding, first, "and the second is the one now sounding");
-
-		// **And the last step is the one that rings**, which is the whole point of the mode on a
-		// multi-step preset: the steps in between are markers, the end of the list is the alarm.
-		const countdown = dial.countdownFor("ring-8");
-		assert.equal(countdown.finished, true, "the list has run out");
-		assert.equal(countdown.ringing, true, "so this one is a ring, unlike the step boundary before it");
-
-		dial.gesture("ring-8", "toggle");
-		assert.equal(dial.sounding?.stops, 1, "and the press silences it");
-		assert.equal(countdown.finished, true, "without starting the clock");
 	});
 
-	it("takes the alarm with it when the control leaves the screen", async () => {
-		// Not because a page flip means you heard it, but because the handle that stops a ring lives on
-		// the instance being thrown away. An alert left running here is one nothing can ever silence.
+	it("takes the alert with it when the control leaves the screen", async () => {
+		// Not because a page flip means you heard it, but because the handle that stops a run lives on
+		// the instance being thrown away. One left running is one nothing can ever silence.
 		//
 		// The one test that tears down by hand, because the teardown *is* what is under test.
 		const dial = driver();
-		const { action } = fakeDial("ring-9");
-		dial.onWillAppear({ action, payload: { settings: ringing() } });
-		dial.countdownFor("ring-9").toggle();
+		const { action } = fakeDial("alert-9");
+		dial.onWillAppear({ action, payload: { settings: alerting() } });
+		dial.countdownFor("alert-9").toggle();
 		await wait(1_100);
-		dial.tick("ring-9");
+		dial.tick("alert-9");
 
 		dial.onWillDisappear({ action });
 
 		assert.equal(dial.sounding?.stops, 1);
 	});
 
-	it("does not ring when the mode is switched off, and the press does what it says", async (t) => {
+	it("raises Stream Deck's alert when a sound was asked for and no player could be found", async (t) => {
 		const dial = driver();
-		await finish(dial, "ring-10", ringing({ keepRinging: false }), t);
+		const calls = await finish(dial, "alert-10", alerting({ soundId: "/nowhere/at/all/gone.wav" }), t);
 
-		assert.equal(dial.played.length, 1, "the alert still plays");
-		assert.equal(dial.countdownFor("ring-10").ringing, false);
-
-		dial.gesture("ring-10", "toggle");
-
-		assert.equal(dial.sounding?.stops, 1, "a press still silences it — that part is not the mode");
-		assert.equal(dial.countdownFor("ring-10").timer.status, "running", "but it is not swallowed");
+		assert.ok(calls.showAlert > 0, "a timer that finishes in silence when asked to make a noise must say so");
+		assert.equal(dial.countdownFor("alert-10").ringing, false, "and nothing sounds, so no press is swallowed");
 	});
 
 	/**
@@ -986,13 +985,5 @@ describe("a ringing alarm", () => {
 
 			assert.deepEqual(dial.played.at(-1), { soundId: CHIME, volume: 40, repeat: 7, fade: true });
 		});
-	});
-
-	it("raises Stream Deck's alert when a sound was asked for and no player could be found", async (t) => {
-		const dial = driver();
-		const calls = await finish(dial, "ring-11", ringing({ soundId: "/nowhere/at/all/gone.wav" }), t);
-
-		assert.ok(calls.showAlert > 0, "a timer that finishes in silence when asked to make a noise must say so");
-		assert.equal(dial.countdownFor("ring-11").ringing, false, "and nothing is ringing, so no press is swallowed");
 	});
 });

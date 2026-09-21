@@ -144,13 +144,12 @@ export class Countdown {
 	/**
 	 * Whether the alert is still sounding — told to the clock by whoever is playing it.
 	 *
-	 * **It exists to stop the auto-reset silencing the alarm.** The two features are otherwise in
-	 * direct opposition: the ring mode is for the finish you must not miss, the auto-reset is for
-	 * tidying a finish nobody came back to, and with both switched on the second one clears the clock
-	 * out from under the first — the ring stops, the screen goes back to a full timer, and the whole
-	 * point of the mode is gone with no trace that it ever fired. So a ringing timer is not tidied
-	 * away: the delay starts counting once the ringing stops, which is either when you press it or
-	 * when the last play finishes.
+	 * **It exists to stop the auto-reset silencing the alarm.** The two are otherwise in direct
+	 * opposition: a long alert is for the finish you must not miss, the auto-reset is for tidying a
+	 * finish nobody came back to, and with both in play the second clears the clock out from under
+	 * the first — the sound stops, the screen goes back to a full timer, and there is no trace it
+	 * ever fired. So a timer that is still sounding is not tidied away: the delay starts counting
+	 * once the sound stops, which is either when you press it or when the last play finishes.
 	 *
 	 * Deliberately a plain flag rather than anything this file could work out for itself. How long a
 	 * sound lasts is a property of a file on disk, and nothing here is allowed to touch a disk.

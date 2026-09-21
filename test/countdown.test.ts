@@ -927,10 +927,10 @@ describe("the auto-reset", () => {
 	/**
 	 * The two features are in direct opposition, and without this the wrong one wins.
 	 *
-	 * The ring mode is for the finish you must not miss; the auto-reset is for tidying a finish
+	 * A long alert is for the finish you must not miss; the auto-reset is for tidying a finish
 	 * nobody came back to. With both on, the second clears the clock out from under the first — the
 	 * alarm stops, the screen goes back to a full timer, and there is no trace it ever fired. Which
-	 * is precisely the failure the ring mode was asked for to prevent.
+	 * is precisely the failure a long alert was asked for to prevent.
 	 */
 	it("does not tidy away a timer that is still ringing", () => {
 		const state = clearing();

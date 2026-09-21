@@ -77,25 +77,16 @@ export type DialCountdownSettings = {
 	 *
 	 * Plays, not overlapping copies. They used to overlap — see `REPEAT_GAP_MS` in `./sound` for why
 	 * a count of three was heard as three chimes sounding at once.
+	 *
+	 * **Set it high for the alert you must not miss.** There is no separate "keep ringing" switch,
+	 * and there was one for exactly one release. It was a second idea of the same thing: a count over
+	 * here, a mode over there, and a rule reconciling them that got the reconciliation wrong — a ring
+	 * was allowed only at the end of the whole job, so the end of a *step* sounded an alert that a
+	 * press could not call off, and the press paused the step that had just started instead. One
+	 * number, and a press that always silences, says everything the pair said and cannot disagree
+	 * with itself.
 	 */
 	soundRepeat: number;
-	/**
-	 * Whether the alert keeps sounding until somebody presses the control.
-	 *
-	 * The switch exists for the alarms you must not miss. Without it the alert is a fixed number of
-	 * plays that finish whether or not anyone heard them, which is fine for a tea timer and useless
-	 * for the thing you set precisely because you know you will be absorbed in something else.
-	 *
-	 * Switching it on does two things, and only these two: {@link MAX_SOUND_REPEAT} plays become
-	 * worth setting, and the control gets a **ringing state** in which the first press silences the
-	 * alarm instead of doing what it normally does. That swallowed press is the reason this is a
-	 * setting rather than always-on behaviour — on a one-play chime, having the press that restarts
-	 * the timer quietly do nothing would be a bug, not a feature.
-	 *
-	 * Deliberately not called `ringEnabled`: the dial already draws something called a ring, and
-	 * `render.ts` is full of it.
-	 */
-	keepRinging: boolean;
 	/**
 	 * Whether the later plays drop to half volume.
 	 *
@@ -119,11 +110,10 @@ export const MAX_PRESET_SECONDS = 24 * 60 * 60;
 /**
  * Most times one alert may play.
  *
- * **Raised from 10 when the ring mode arrived**, which is what a large number is for: an alarm you
- * have to be pressed to stop wants to outlast you walking back to the desk, and twenty plays of a
- * two second chime is under a minute of ringing. It is safe to raise because a press now silences
- * the alert whatever the mode — see `CountdownAction.silence` — so no setting here can produce a
- * noise there is no way to stop.
+ * **Raised from 10 once a press could silence an alert**, which is what makes a large number usable:
+ * an alarm meant to outlast you walking back to the desk is no good if it cannot be called off, and
+ * twenty plays of a two second chime is under a minute. `CountdownAction.silence` is what makes it
+ * safe — no value here can produce a noise there is no way to stop.
  */
 export const MAX_SOUND_REPEAT = 60;
 
@@ -163,7 +153,6 @@ export const DEFAULTS: DialCountdownSettings = {
 	customSoundPath: "",
 	volume: 100,
 	soundRepeat: 1,
-	keepRinging: false,
 	fadeRepeats: false
 };
 
@@ -192,7 +181,6 @@ export function normaliseSettings(raw: unknown): DialCountdownSettings {
 		customSoundPath: typeof input.customSoundPath === "string" ? input.customSoundPath : "",
 		volume: int(input.volume, DEFAULTS.volume, 0, 100),
 		soundRepeat: int(input.soundRepeat, DEFAULTS.soundRepeat, 1, MAX_SOUND_REPEAT),
-		keepRinging: bool(input.keepRinging, DEFAULTS.keepRinging),
 		fadeRepeats: bool(input.fadeRepeats, DEFAULTS.fadeRepeats)
 	};
 }

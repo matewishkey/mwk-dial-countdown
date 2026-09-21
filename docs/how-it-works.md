@@ -152,44 +152,38 @@ a fan of timers nothing held. Nothing could previously call a sound off — not 
 out on top of the first, not a press, not the inspector's *Test* button clicked twice. Everything
 below depends on that handle existing.
 
-### Keep ringing until pressed
+### A press silences whatever is playing
 
-For the finish you must not miss. Set a high count, switch this on, and the alarm keeps going until
-somebody presses the control.
+Set the count high for the alert you must not miss — up to sixty. **A press of the control stops the
+sound and does nothing else.** It will not start, pause or reset the clock, so you cannot quieten an
+alert into changing what the timer was doing. Press again for the gesture you actually wanted.
 
-**The press that silences it does nothing else.** That swallowed press is the whole of what the
-switch adds, and it is why it is a switch rather than always-on behaviour: you set twenty plays
-precisely because you expect to be absorbed in something else, so the press you make on hearing it is
-a reflex grab for quiet, not a considered instruction to the clock. Letting it also toggle would mean
-reaching to stop a noise and finding you had started the next run by accident. On a one-play chime,
-though, having the press that restarts the timer quietly do nothing would be a bug — so the default
-is off.
+**A hold is the exception.** Press and hold — the knob, the touchscreen or a key — and it silences
+the alert *and* does its job, putting the clock back to the top of its preset. It is the gesture that
+means *put this right*, so making it cost two presses would put the silencing in the way of the
+repair. Turning the dial is likewise not swallowed: it silences and still adjusts, because winding a
+finished timer is how you set up the next one, and losing a click of a rotation would read as the
+dial skipping.
 
-**A hold is the exception.** Press and hold — the knob, the touchscreen or a key — and it silences the
-alarm *and* does its job, putting the clock back to the top of its preset. It is the gesture that
-means *put this right*, so making it cost two presses would be the mode getting in the way of the
-repair. Turning the dial is likewise not swallowed: it silences the alarm and adjusts the clock,
-because winding a finished timer is how you set up the next one, and losing a click of a rotation
-would read as the dial skipping.
+**Every step of a multi-step preset gets its own alert, and every one of them can be silenced.** This
+is the part that was wrong for a release. There was briefly a *Keep ringing until pressed* switch,
+and the rule behind it reserved the silenceable alert for the end of the **whole job** — on the
+reasoning that a running clock should cancel one, and an intermediate step starts the next one
+immediately, so an alert there would be called off in the same breath.
 
-**It rings at the end of the whole job, never between steps.** That is forced rather than chosen: a
-ring is called off the moment the clock is running again, and an intermediate step starts the next
-one immediately, so a ring begun at a step boundary would be cancelled in the same breath. A step
-boundary gets the ordinary alert, which is what it is — a marker, not an alarm.
+Both halves of that were wrong, and on the timer the feature exists for. On `40m, 10m, 10m, 10m` the
+end of the forty is exactly the moment you must not miss, and the ten after it is already counting by
+the time you hear it — so the press made to quieten the alert went straight through to the clock and
+**paused the step that had just started**. The switch was a second idea of the repeat count wearing a
+different vocabulary, and the rule reconciling them got the reconciliation backwards.
 
-**Anything that leaves the clock no longer finished stops the ring.** Started again, reset, handed an
-edited preset, dialled somewhere new — whoever dealt with the finish, the alarm is now announcing a
-moment that has passed. The plugin checks that *state* once a frame rather than enumerating the
-gestures, so it cannot be got wrong by a path nobody thought of. The press is still handled
-explicitly on top of that, because a quarter of a second of extra ringing is a long time with your
-finger on the button.
+So: no switch, one count, and a press always silences. An alert now **outlives the moment it
+announces** on purpose. What ends one is the plays running out, a press, a newer alert taking its
+place, or the control leaving the screen — never the clock merely running.
 
-**A ringing timer will not clear itself.** See below: the two features are otherwise in direct
-opposition, and the auto-reset would win.
-
-**A control that leaves the screen takes its alarm with it.** Not because flipping the page means you
-heard it, but because the handle that stops a ring lives on the instance being thrown away — an alert
-left running there is one nothing can ever silence, which is worse than a missed one.
+The cost, stated plainly: with the default single chime, a press made inside those two seconds is
+spent on silencing and the clock does not move. Press again. That is the trade for never having a
+press change the timer when you only meant to stop a noise.
 
 ### Quieter after the third play
 
@@ -219,11 +213,10 @@ Three things about the timing.
 
 **It is called off the moment anybody touches the timer.** A press, a turn, a reset, a preset load — anything that moves the countdown off `elapsed` drops the pending reset, so it cannot reach into the run that follows.
 
-**It waits while the alarm is still ringing.** With *Keep ringing until pressed* switched on, the two
-features are in direct opposition: the ring mode is for the finish you must not miss, the auto-reset
-is for tidying a finish nobody came back to, and the second would clear the clock out from under the
-first — alarm stopped, screen back to a full timer, no trace it ever fired. Which is precisely the
-failure the ring mode exists to prevent. So the delay starts counting once the ringing stops, either
+**It waits while an alert is still sounding.** The two are otherwise in direct opposition: a long
+alert is for the finish you must not miss, the auto-reset is for tidying a finish nobody came back
+to, and the second would clear the clock out from under the first — sound stopped, screen back to a
+full timer, no trace it ever fired. So the delay starts counting once the sound stops, either
 because you pressed it or because the last play finished.
 
 The delay is measured from the finish, with one exception: a timer that ran out while its page was elsewhere is dated from **the moment the page came back**. Nothing was running to notice the real moment, and dating it back would clear the clock on the first frame you see — the one frame where `done` is the whole point.

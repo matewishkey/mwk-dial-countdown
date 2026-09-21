@@ -466,15 +466,12 @@
 			<input type="number" id="soundRepeat" min="1" max="60" step="1" />
 			<span class="muted">times</span>
 		</div>
-		<div class="row">
-			<label for="keepRinging">Keep ringing until pressed</label>
-			<input type="checkbox" id="keepRinging" />
-		</div>
 		<p class="hint">
-			For the finish you must not miss. Set a high count and the alarm keeps going until you press the control —
-			<em>that</em> press only stops the noise, it does not start or reset the clock, so you cannot silence it into
-			doing something you did not mean. Press and <em>hold</em> — the dial, the screen or a key — to silence it and put
-			the timer right in one go. It rings at the end of the whole job, not between steps, and a timer that is ringing
+			Set the count high for the alert you must not miss — up to sixty.
+			<strong>A press of the control silences whatever is playing, and does nothing else:</strong> it will not start,
+			pause or reset the clock, so you cannot quieten an alert into changing what the timer was doing. Press again for
+			the gesture you actually wanted, or press and <em>hold</em> — the dial, the screen or a key — to silence it and
+			put the timer right in one go. Every step of a multi-step preset gets its own alert, and a timer still sounding
 			will not clear itself.
 		</p>
 		<div class="row">
@@ -540,7 +537,6 @@
 				customSoundPath: "",
 				volume: 100,
 				soundRepeat: 1,
-				keepRinging: false,
 				fadeRepeats: false
 			};
 
@@ -870,7 +866,6 @@
 				el("autoResetSec").value = String(state.autoResetSeconds % 60);
 				el("autoResetTotal").textContent = `after · ${label(state.autoResetSeconds)}`;
 				el("soundRepeat").value = String(state.soundRepeat);
-				el("keepRinging").checked = state.keepRinging;
 				el("fadeRepeats").checked = state.fadeRepeats;
 				el("volume").value = String(state.volume);
 				el("soundId").value = state.soundId;
@@ -911,7 +906,6 @@
 				["warnEnabled", "warnEnabled", (i) => i.checked],
 				["autoResetEnabled", "autoResetEnabled", (i) => i.checked],
 				["soundRepeat", "soundRepeat", (i) => clamp(Math.round(Number(i.value) || 1), 1, MAX_SOUND_REPEAT)],
-				["keepRinging", "keepRinging", (i) => i.checked],
 				["fadeRepeats", "fadeRepeats", (i) => i.checked],
 				["volume", "volume", (i) => clamp(Number(i.value) || 0, 0, 100)]
 			]) {

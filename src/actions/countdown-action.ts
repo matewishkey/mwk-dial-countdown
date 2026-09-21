@@ -61,15 +61,6 @@ const SUSPEND_TTL_MS = 24 * 60 * 60 * 1_000;
 /** A countdown waiting for its control to come back, and when it stopped being watched. */
 type Suspended = { countdown: Countdown; at: number };
 
-/**
- * The alert currently sounding for one control, and whether it is a *ring*.
- *
- * One object rather than two fields, so the two cannot come to disagree. `ringing` is the plugin's
- * policy — it is not something the player knows or should — and it is fixed when the run starts:
- * whether this particular alert is the kind a press silences instead of obeying.
- */
-type Alert = { playback: Playback; ringing: boolean };
-
 /** How often a running preview is checked, so the inspector's button can go back to saying Test. */
 const PREVIEW_POLL_MS = 250;
 
@@ -86,8 +77,8 @@ export type Instance<A> = {
 	last: string;
 	/** Turns of the render loop, counted only so the frame can be re-asserted periodically. */
 	ticks: number;
-	/** The alert sounding for this control, or `null` when nothing is. */
-	alert: Alert | null;
+	/** The run of plays sounding for this control, or `null` when nothing is. */
+	alert: Playback | null;
 };
 
 export abstract class CountdownAction<
@@ -369,15 +360,15 @@ export abstract class CountdownAction<
 		if (payload?.event === "preview") {
 			// **Test is a toggle.** A second click while it is still going stops it rather than starting
 			// a second run underneath the first, which is what it used to do — bearable at three plays,
-			// and not at the sixty the ring mode makes settable.
+			// and not at the sixty the repeat count now reaches.
 			if (this.#preview !== null && this.#preview.active) {
 				this.#stopPreview();
 				return;
 			}
 
 			// The preview plays the full count, with the fade, so what you hear is what the timer will
-			// do. It does not ring: the ringing state is a property of a control you can press, and
-			// there is nothing in the panel to press it with except the button that started it.
+			// do. Nothing swallows a press here: the swallow belongs to a control you can press, and
+			// there is nothing in the panel to press except the button that started this.
 			const path = resolveSound(payload);
 
 			// Through the same seam the timer's own alert uses. One place in this class reaches the
@@ -408,22 +399,24 @@ export abstract class CountdownAction<
 	 * and book a second redraw for the moment the pulse expires.
 	 */
 	protected perform(instance: I, gesture: Gesture): void {
-		// **A press silences the alert before it does anything else, always.** That alone is new
-		// behaviour worth having: until now nothing at all could call off a sound that was already
-		// playing, so an alert you had heard went on announcing itself while you pressed the control
-		// to deal with it.
-		const wasRinging = this.silence(instance);
-
-		// **And on a ring, silencing it is the whole of what the press does.** This is the state the
-		// ring mode exists to create: you set twenty plays precisely because you expect to be absorbed
-		// in something else, and the press you make on hearing it is a press to stop the noise — not a
-		// considered instruction to the clock. Letting it also toggle would mean reaching for quiet and
-		// finding you had started the next run by reflex.
+		// **A press silences the alert before it does anything else, and then stops.** That is the
+		// whole of the rule, and it replaced a mode. The press you make on hearing an alert is a
+		// reflex grab for quiet, not a considered instruction — so letting it also reach the clock
+		// means reaching to stop a noise and finding you have changed what the timer was doing.
+		//
+		// **The case that proved it was a step boundary, not the end of a job.** On
+		// `40m, 10m, 10m, 10m` the forty running out is exactly the moment you must not miss; the
+		// ten after it has already started counting; and the press you make to quieten the alert used
+		// to go through and pause that ten. Silencing had been reserved for the end of the *whole*
+		// job, which is the one place this is least needed.
 		//
 		// The hold is the one exception, because it is the gesture that means *put this right*: it
-		// clears the ringing and does its job, so one long press gets you back to a settled timer
-		// rather than two presses where the first is spent.
-		if (wasRinging && gesture !== "next") {
+		// silences and does its job, so one long press gets you back to a settled timer rather than
+		// two presses where the first is spent. Turning the dial is likewise not swallowed — see
+		// `dial-countdown.ts`.
+		const wasSounding = this.silence(instance);
+
+		if (wasSounding && gesture !== "next") {
 			instance.countdown.note("silenced");
 			this.acknowledge(instance);
 			return;
@@ -483,16 +476,16 @@ export abstract class CountdownAction<
 
 		const path = resolveSound(settings);
 
-		// **Only the end of the whole job rings, never the end of a stage.** It is forced by the rule
-		// below it: a ring is called off the moment the clock is running again, and an intermediate
-		// stage starts the next one immediately — so a ring begun here would be cancelled in the same
-		// breath. A stage boundary gets the ordinary alert, which is what it is: a marker, not an alarm.
-		const ringing = settings.keepRinging && countdown.finished;
+		// **Every alert is the same kind of thing, whether it ends a step or the whole job.** There
+		// was briefly a distinction — only the end of the job sounded an alert a press would silence
+		// — and it was wrong in the case that matters most. On `40m, 10m, 10m, 10m` the end of the
+		// forty is precisely the moment you must not miss, and the press made on hearing it went
+		// straight through to the clock and paused the ten that had just started.
 		const playback = this.play(path, settings.volume, settings.soundRepeat, settings.fadeRepeats);
 
 		if (playback !== null) {
-			instance.alert = { playback, ringing };
-			countdown.ringing = ringing;
+			instance.alert = playback;
+			countdown.ringing = true;
 		}
 
 		// The alert sound is the only thing here that can fail outside the plugin's control: a
@@ -512,45 +505,31 @@ export abstract class CountdownAction<
 	}
 
 	/**
-	 * Keeps the ringing state honest, once per frame.
+	 * Notices an alert that ran out of plays on its own, once per frame.
 	 *
-	 * Two things end a ring that no press ended. It can simply run out of plays — nobody came, and
-	 * sixty chimes is where it stops — after which the control is an ordinary finished timer again and
-	 * the next press must do what it says rather than being swallowed by a state that is over.
+	 * Nobody came, sixty chimes is where it stops, and the control is an ordinary one again — the
+	 * next press has to do what it says rather than be swallowed by a state that is over.
 	 *
-	 * Or **the clock can stop being finished underneath it**, which is the case worth spelling out.
-	 * A ring outlives the instant it announces: it is still going when the timer is started again,
-	 * reset, handed an edited preset, or dialled somewhere new. Any of those means the finish has been
-	 * dealt with, whoever dealt with it, so the alarm is announcing a moment that has passed. Checking
-	 * the *state* rather than enumerating the gestures is the point — this cannot be got wrong by a
-	 * path nobody thought of, which is how the last few bugs in this file got in.
-	 *
-	 * The press is still handled explicitly in {@link CountdownAction.perform}, because a quarter of a
-	 * second of extra ringing is a long time when your finger is on the button. This is the net.
+	 * **There is deliberately no rule here that silences an alert because the clock is running.**
+	 * There was, and it is what made a step boundary useless: the next step begins the instant the
+	 * last one ends, so "the clock is running again" is true one frame after every step's alert
+	 * starts, and the alert was called off before it could be heard. An alert outlives the moment it
+	 * announces, on purpose. What ends one is the plays running out, a press, a newer alert taking
+	 * its place, or the control leaving the screen.
 	 */
 	#tendAlert(instance: I): void {
-		const alert = instance.alert;
-		if (alert === null) {
-			return;
-		}
-
-		if (!alert.playback.active) {
+		if (instance.alert !== null && !instance.alert.active) {
 			this.#forgetAlert(instance);
-			return;
-		}
-
-		if (alert.ringing && !instance.countdown.finished) {
-			this.silence(instance);
 		}
 	}
 
 	/**
 	 * Stops whatever is sounding for this control.
 	 *
-	 * @returns `true` if what it stopped was a *ring* — the state in which a press means "be quiet"
-	 * and nothing else. A run that had already finished its plays answers `false`, so a press arriving
-	 * in the quarter-second before {@link CountdownAction.#tendAlert} notices is not swallowed by a
-	 * ring that is already over.
+	 * @returns `true` if a sound was **actually still playing**, which is what tells a caller that
+	 * its press has already been spent on silencing. A run that had finished its plays answers
+	 * `false`, so a press arriving in the quarter-second before {@link CountdownAction.#tendAlert}
+	 * notices is not swallowed by an alert that is already over.
 	 */
 	protected silence(instance: I): boolean {
 		const alert = instance.alert;
@@ -558,10 +537,10 @@ export abstract class CountdownAction<
 			return false;
 		}
 
-		const wasRinging = alert.ringing && alert.playback.active;
-		alert.playback.stop();
+		const wasSounding = alert.active;
+		alert.stop();
 		this.#forgetAlert(instance);
-		return wasRinging;
+		return wasSounding;
 	}
 
 	#forgetAlert(instance: I): void {
@@ -572,7 +551,7 @@ export abstract class CountdownAction<
 	/**
 	 * The operating system's player, behind a seam.
 	 *
-	 * Overridable for one reason: a test of the ringing state must be able to hear what was asked for
+	 * Overridable for one reason: a test of the silencing must be able to hear what was asked for
 	 * without making a noise on the machine running it. It is not a pretend boundary — `playSound` is
 	 * the only thing in this class that spawns a process, and on Linux, which is where this plugin is
 	 * written, it answers `null` on every call.
