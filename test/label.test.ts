@@ -1,9 +1,9 @@
 /**
  * The line under the clock — the rule both controls share, and the two ways they narrow it.
  *
- * It is worth testing here rather than through the actions because the actions cannot be imported
- * at all: both carry an `@action` decorator, which Node's type stripping leaves standing. That is
- * why this rule was moved out of them in the first place.
+ * Tested here rather than through the actions because it is a pure function of a countdown, so it
+ * needs no control, no clock and no event loop. That it *had* to live here — the actions were
+ * unimportable until the test loader started compiling properly — is now only history.
  */
 
 import assert from "node:assert/strict";

@@ -202,7 +202,7 @@ Constraints that are not obvious from the code, and that a tidy-up would otherwi
 
 **The property inspector cannot import from `src/`.** It is a plain page, not part of the bundle, so it carries its own copy of the clamps and constants. `test/inspector.test.ts` asserts the copies agree; if you add a helper it needs, either it goes inline or something in `src/` must actually call it.
 
-**A test cannot import either action subclass.** `@action` decorators survive Node's type stripping, so importing them is a `SyntaxError`. `test/actions.test.ts` drives the abstract `CountdownAction` through its own minimal subclass, which is why `npm run demo` matters — the subclasses' event handlers are only exercised there.
+**The tests compile with `tsc`, not with Node's type stripping.** Stripping leaves `@action` decorators standing, so importing either action subclass used to be a `SyntaxError` and their event handlers were exercised nowhere but `npm run demo`. `test/ts-resolve.mjs` now transpiles through TypeScript itself — the compiler rollup already uses — and `test/actions-live.test.ts` drives the real `DialCountdown` and `KeyCountdown` through their own events. The demo still matters: it is the only thing that runs the built bundle over a real socket.
 
 **A tool that a test imports must carry JSDoc types and be in `tsconfig.test.json`.** Without them every value crossing the import is `any`, which does not fail a typecheck — it *disables* the type-aware lint rules wherever it lands.
 

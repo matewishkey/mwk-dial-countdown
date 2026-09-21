@@ -23,6 +23,21 @@ anybody only in 4.1.0.
 
 ### Internal
 
+- **A test can import the action subclasses now, and does.** The blocker was never the Stream Deck
+  SDK — it imports in under a tenth of a second and needs no connection. It was that the tests ran
+  on Node's type stripping, which erases types and leaves `@action` decorators standing, so
+  importing either subclass was a `SyntaxError`. `test/ts-resolve.mjs` transpiles through
+  TypeScript's own compiler instead — the one rollup already uses for the shipped bundle — and
+  `test/actions-live.test.ts` drives the real `DialCountdown` and `KeyCountdown` through their own
+  events: rotation, the press that did not turn, the release with no press, the hold on the knob,
+  the tap on the glass, the key's double-press window, and a step running out and being silenced
+  while the next one keeps counting. Closes the gap [#12](https://github.com/matewishkey/mwk-dial-countdown/issues/12)
+  was opened on.
+
+  Reintroducing the 4.1.0 bug — the ringing flag set and nothing rendering it — now fails two of
+  those tests as well as four in `test/frame.test.ts`. The packaged plugin is untouched: same
+  content id, `2ca616ec…`.
+
 - **What each control puts on screen is now a value, in `src/frame.ts`, and is tested directly.**
   Both `draw` methods built their payload inline, inside classes no test can import — the `@action`
   decorator survives type stripping — so nothing about what the user actually *sees* was reachable.

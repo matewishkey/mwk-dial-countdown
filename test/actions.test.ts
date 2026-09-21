@@ -6,8 +6,8 @@
  * was asked of it. Events are cast loosely on the way in.
  *
  * **The subject is {@link CountdownAction}, not either subclass.** They carry an `@action`
- * decorator, which Node's type stripping leaves standing, so importing them here is a syntax error.
- * A minimal subclass below reaches the same code.
+ * decorator; they are driven directly in `test/actions-live.test.ts`, and what is under test here
+ * is the shared base rather than either one of them. A minimal subclass below reaches it.
  *
  * **Every test must tear its instance down, via `t.after` rather than at the end of the body.** The
  * render loop is a `setInterval`, and one left running holds the event loop open and hangs the

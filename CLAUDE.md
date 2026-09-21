@@ -42,8 +42,10 @@ under *How it fits together*; the short version:
 - `setImage` takes a **data URI**, never raw SVG markup.
 - Settings arriving from any build go through `normaliseSettings`; nothing else reads them raw.
 - Frames are re-asserted every 2 s. Awaiting `setFeedbackLayout` does not help.
-- A test **cannot import** `dial-countdown.ts` or `key-countdown.ts` — `@action` decorators survive
-  type stripping. Test the base class, or put the logic in a pure module.
+- The test loader compiles with **TypeScript's own compiler**, not Node's type stripping, because
+  stripping leaves `@action` decorators standing and made both action subclasses unimportable. They
+  are importable now (`test/actions-live.test.ts` drives them); keep it that way. The Stream Deck
+  SDK was never the obstacle — it imports in under 100 ms and needs no connection.
 - **Nothing on this box can make a sound.** `playSound` finds no player on Linux and returns `null`,
   so no alert ever rings — not in the suite and not in `npm run demo`. Everything downstream of a
   ringing alert is therefore reachable only through `src/frame.ts` and `src/label.ts`. Say this out

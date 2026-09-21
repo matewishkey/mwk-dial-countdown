@@ -2,9 +2,11 @@
  * What each control puts on its screen, as a value rather than as a side effect.
  *
  * **This exists so the visible half of the plugin can be tested at all.** Both actions carry an
- * `@action` decorator, which Node's type stripping leaves standing, so a test cannot import either
- * of them — and for a long time everything about what the user actually *sees* lived inside their
- * `draw` methods, where nothing could reach it. The scripted demo covers some of it, but only what
+ * `@action` decorator, and for a long time Node's type stripping made both of them unimportable —
+ * so everything about what the user actually *sees* lived inside their `draw` methods, where
+ * nothing could reach it. The loader compiles properly now and they can be driven directly
+ * (`test/actions-live.test.ts`), but the split is worth keeping: a frame is a value, and comparing
+ * values beats driving an event loop to find out what got drawn. The scripted demo covers some of it, but only what
  * a Linux box can provoke, and a Linux box cannot make a sound: `playSound` finds no player, so no
  * alert ever rings and nothing downstream of one is exercised. A bell that never reached the screen
  * shipped through a green suite and a green demo because of exactly that gap.

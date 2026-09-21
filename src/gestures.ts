@@ -56,7 +56,8 @@ export const LONG_PRESS_MS = 600;
  * started. A press that turned the dial never reaches here — the action returns first.
  *
  * It lives here rather than in the action because `dial-countdown.ts` carries an `@action`
- * decorator, which Node's type stripping leaves standing, so no test can import that file.
+ * decorator, and keeping the rule out here means it is one pure function rather than a branch
+ * buried in an event handler.
  */
 export function dialPress(heldMs: number): Gesture {
 	return heldMs >= LONG_PRESS_MS ? "next" : "toggle";

@@ -3,8 +3,8 @@
  *
  * A dial and a key say nearly the same thing there — what this timer is, and how far through the
  * job it is — so the rule lives here once and each control takes the part that fits the room it
- * has. Nothing here imports the SDK, which is what lets it be tested: both actions carry an
- * `@action` decorator that Node's type stripping cannot transform.
+ * has. Nothing here imports the SDK, which keeps the rule one short pure function that both
+ * controls share and a test can read straight off.
  */
 
 import type { Countdown } from "./countdown";

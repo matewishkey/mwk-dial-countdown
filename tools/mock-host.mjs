@@ -1216,7 +1216,8 @@ async function runDemo() {
 		// reached from keyUp, so a pending press starts at the PREVIOUS release while the hold starts
 		// at the NEXT press — the pending one always expired first, and the cancel in the hold's own
 		// callback was dead code. Only the built bundle can show this: KeyCountdown's handlers carry
-		// an @action decorator and cannot be imported into a unit test.
+		// an @action decorator, and driving the built bundle over a socket is a different claim from
+		// driving the classes in-process, which `test/actions-live.test.ts` now also does.
 		[
 			"key: a press, then a press-and-hold → the hold wins, and only the hold",
 			async () => {
