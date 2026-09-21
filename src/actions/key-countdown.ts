@@ -112,16 +112,12 @@ export class KeyCountdown extends CountdownAction<Key, KeyInstance> {
 		const flash = countdown.flashing;
 		const toast = countdown.toast;
 
-		// One line, three jobs, in order of urgency: what you just did, then the fact that it is
-		// paused, then — when there is nothing to report — what this timer is.
-		const caption = toast || (status === "paused" ? "paused" : keyCaption(countdown, status));
-		const accent = toast !== "" || status === "paused";
-
-		const signature = `${value}|${caption}|${accent}|${status}|${dimmed}|${flash}|${settings.theme}`;
-		if (!force && signature === instance.last) {
-			return;
-		}
-		instance.last = signature;
+		// One line, four jobs, in order of urgency: what you just did, that something is sounding,
+		// the fact that it is paused, then — when there is nothing to report — what this timer is.
+		// The sounding alert outranks the pause for the same reason the dial's bell outranks its
+		// state glyph: it is the thing a press is about to act on.
+		const caption = toast || (status === "paused" && !countdown.ringing ? "paused" : keyCaption(countdown, status));
+		const accent = toast !== "" || status === "paused" || countdown.ringing;
 
 		const svg = renderKey({
 			remainingFraction: remainingMs / Math.max(1, timer.durationMs),
@@ -133,6 +129,14 @@ export class KeyCountdown extends CountdownAction<Key, KeyInstance> {
 			caption,
 			accent
 		});
+
+		// **The frame is its own signature** — see the same comment in `dial-countdown.ts`. A list of
+		// the fields a frame depends on has to be extended every time a new one is added, and
+		// nothing fails when it is not: the picture just stops changing.
+		if (!force && svg === instance.last) {
+			return;
+		}
+		instance.last = svg;
 
 		// A data URI, not the bare markup. setImage documents a file path or "a base64 encoded string
 		// with the mime type declared" — a raw <svg> string is not one of them, and is dropped, which

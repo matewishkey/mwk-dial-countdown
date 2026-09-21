@@ -292,6 +292,8 @@ describe("the centre of the ring", () => {
 	/** Two bars is a pause; one square is done; a triangle is running. */
 	const rects = (svg: string): number => svg.match(/<rect /g)?.length ?? 0;
 	const triangles = (svg: string): number => svg.match(/<path d="M [\d.]+ [\d.]+ L .* Z"/g)?.length ?? 0;
+	/** The bell's own opening curve, which no other glyph has. */
+	const bells = (svg: string): number => svg.match(/<path d="M12 3\.4 C8\.8 /g)?.length ?? 0;
 
 	it("shows the mark on an idle clock, which is the one state with nothing to report", () => {
 		assert.ok(renderRing({ ...middle, status: "idle" }).includes(MARK));
@@ -325,11 +327,40 @@ describe("the centre of the ring", () => {
 		}
 	});
 
+	it("shows a bell while an alert is sounding, whatever the clock itself is doing", () => {
+		// The report this closes: on `40m, 10m, 10m` the forty runs out, the alarm starts and the
+		// first ten starts counting in the same breath — so the status is `running` and the middle
+		// showed a play triangle while the room was full of noise.
+		for (const status of ["idle", "running", "paused", "elapsed"] as const) {
+			const svg = renderRing({ ...middle, status, ringing: true });
+			assert.ok(bells(svg) === 1, `a ${status} clock lost its bell`);
+			assert.equal(rects(svg) + triangles(svg), 0, `a ${status} clock drew its state glyph as well`);
+			assert.ok(!svg.includes(MARK), `a ${status} clock drew the mark as well`);
+		}
+	});
+
+	it("goes back to the clock's own state the moment the sound stops", () => {
+		// The positive control for the test above: without this, a bell that was never cleared would
+		// pass it just as well.
+		assert.equal(bells(renderRing({ ...middle, status: "running", ringing: false })), 0);
+		assert.equal(triangles(renderRing({ ...middle, status: "running", ringing: false })), 1);
+	});
+
+	it("draws a bell that answers to none of the other states' shape counts", () => {
+		// The demo and these tests both name a glyph by counting shapes. A clapper drawn as a circle
+		// or a rect would be counted as `done`, and the wrong name would be reported confidently.
+		const svg = renderRing({ ...middle, status: "running", ringing: true });
+		assert.equal(rects(svg), 0, "a rect would be read as done");
+		assert.equal(triangles(svg), 0, "a M x y L … Z path would be read as running");
+	});
+
 	it("keeps the key's middle clear, since its clock is drawn there", () => {
 		for (const status of ["idle", "running", "paused", "elapsed"] as const) {
-			const svg = renderRing({ ...middle, status, hollow: true });
-			assert.equal(rects(svg) + triangles(svg), 0, `${status} drew a glyph behind the key's digits`);
-			assert.ok(!svg.includes(MARK));
+			for (const ringing of [false, true]) {
+				const svg = renderRing({ ...middle, status, hollow: true, ringing });
+				assert.equal(rects(svg) + triangles(svg) + bells(svg), 0, `${status} drew a glyph behind the key's digits`);
+				assert.ok(!svg.includes(MARK));
+			}
 		}
 	});
 });

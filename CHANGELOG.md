@@ -21,6 +21,31 @@ anybody only in 4.1.0.
 
 ## [Unreleased]
 
+## [4.2.0] — 2026-09-21
+
+### Added
+
+- **You can now see that it is ringing.** The dial draws a bell in the middle of its ring, and a key
+  says `ringing` on its one line — a key cannot have the bell, because the middle of a key is where
+  its clock is drawn. It is there for as long as the sound is, and gone the moment the sound is,
+  whether you silenced it or it ran out on its own.
+
+  **The bell outranks whatever the clock itself is doing, and that is the whole point of it.** On
+  `40m, 10m, 10m` the forty runs out, its alarm starts, and the first ten starts counting in the
+  same breath — so the timer is *running*, and until now the screen showed you a running timer and
+  nothing else. It was true and it was no use: the thing to know is that there is a noise and that a
+  press will take it away.
+
+### Fixed
+
+- **A frame is now compared against what is actually being drawn, rather than against a hand-written
+  list of the things a frame was thought to depend on.** Nothing failed when that list fell behind:
+  the screen simply stopped being able to change for whichever field had been left out. The bell
+  above would have been the next one caught by it — a sounding alert changes nothing else about a
+  frame, so at a step boundary the clock behind it reads the same second and the frame is judged
+  identical and dropped. The list is gone rather than extended, because a list can go stale and the
+  picture cannot.
+
 ### Internal
 
 - **Publishing no longer waits to be asked.** `npm run release` with no flag is the procedure, and
@@ -1235,7 +1260,8 @@ First stable release.
 - The manifest version had sat at `0.1.0.0` since the first release, so the Stream Deck application
   reported the same version whichever build was installed. It now tracks the release tag.
 
-[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v4.1.0...HEAD
+[Unreleased]: https://github.com/matewishkey/mwk-dial-countdown/compare/v4.2.0...HEAD
+[4.2.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v4.2.0
 [4.1.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v4.1.0
 [3.11.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.11.0
 [3.10.0]: https://github.com/matewishkey/mwk-dial-countdown/releases/tag/v3.10.0

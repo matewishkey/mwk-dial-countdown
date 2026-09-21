@@ -54,7 +54,7 @@ It draws its **whole face as one SVG**, digits included, rather than using `setT
 
 That image is sent as a **data URI**, never as raw markup — `asDataUri`, the same wrapper the touchscreen ring uses. Raw `<svg>` markup is the form known to have failed on hardware; the data URI is the form known to work. Elgato's own docs disagree on whether raw markup was ever valid.
 
-With no room for a glyph behind the digits, the line under the clock carries the state: the gesture just made, then `paused`, then the stage tally, then what the timer is called.
+With no room for a glyph behind the digits, the line under the clock carries the state: the gesture just made, then `ringing` while an alert is sounding, then `paused`, then the stage tally, then what the timer is called.
 
 ## Naming a timer
 
@@ -71,6 +71,7 @@ The rule lives in `src/label.ts`, once, and each control takes the part that fit
 | Dialled off the preset | `Tea · from 20m` | `Tea` |
 | Several steps | `Tea · ×2/3` | `×2/3`, once running |
 | Finished | `Tea · ×3/3 · done` | `done ×3/3` |
+| Alert sounding | a bell in the middle of the ring | `ringing` |
 
 The drift note is the one thing a key cannot say: `from 20m` needs both halves and a key has one line.
 
@@ -182,6 +183,8 @@ If the clock is not sitting stopped and full on the first step of its preset, th
 ## What the middle of the ring is saying
 
 One glyph per state: the brand mark when idle, then play, pause, or done. The mark appears only when there is nothing else to report.
+
+**A sounding alert takes the middle from all of them, and shows a bell.** It is the one glyph that overrides the clock's own state, because at a step boundary the two disagree: on `40m, 10m, 10m` the forty runs out, its alarm starts, and the first ten begins counting in the same breath — so the state is *running*, which is true and no use. The bell lasts exactly as long as the sound does. A key has no room for it and says `ringing` on its one line instead.
 
 **The ring empties and the bar fills**, and they are named for it: a countdown ring shows what is left, a progress bar shows how far through you are. Switching display inverts what the indicator means; everything else is identical between them.
 

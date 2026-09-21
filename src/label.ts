@@ -47,11 +47,20 @@ export function dialLabel(countdown: Countdown, status: string): string {
 }
 
 /**
- * The key's caption: one short line, and four claimants for it, in order of urgency — that it is
- * finished, which stage it is on, then what it is called. A finished multi-stage timer says
- * `done ×3/3`, since `×3/3` alone reads the same as one still on its final stage.
+ * The key's caption: one short line, and several claimants for it, in order of urgency — that
+ * something is sounding, that it is finished, which stage it is on, then what it is called. A
+ * finished multi-stage timer says `done ×3/3`, since `×3/3` alone reads the same as one still on
+ * its final stage.
+ *
+ * **A sounding alert comes first, and it is a word here rather than the bell the dial draws.** The
+ * middle of a key is where its clock lives, so there is nowhere to put a glyph that would not sit
+ * behind the digits. The two controls agree on when to say it and differ only on how.
  */
 export function keyCaption(countdown: Countdown, status: string): string {
+	if (countdown.ringing) {
+		return "ringing";
+	}
+
 	if (status === "elapsed") {
 		return countdown.stageCount > 1 ? `done ×${countdown.stage}/${countdown.stageCount}` : "done";
 	}

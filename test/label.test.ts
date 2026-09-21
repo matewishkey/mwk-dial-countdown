@@ -110,6 +110,27 @@ describe("the key's caption", () => {
 		assert.equal(keyCaption(countdown, "idle"), "Tea", "one line, and the clock above already shows the length");
 	});
 
+	it("says a sounding alert before anything else, on the step it finished as well as the last", () => {
+		// The key cannot show the dial's bell — its clock is drawn where the glyph would go — so the
+		// one line says the word instead. `40m, 10m, 10m`: the forty ends, the first ten is already
+		// running, and `×2/3` is true but is not what the press in your hand is about to do.
+		const { countdown } = fixture({ title: "Tea", presets: [[1200, 600, 600]] });
+		countdown.ringing = true;
+
+		assert.equal(keyCaption(countdown, "running"), "ringing", "mid-job, over the stage tally");
+		assert.equal(keyCaption(countdown, "elapsed"), "ringing", "and at the end, over done");
+	});
+
+	it("gives the line straight back when the sound stops", () => {
+		// The positive control: a caption stuck on `ringing` would pass the test above just as well.
+		const { countdown } = fixture({ title: "Tea", presets: [[1200, 600, 600]] });
+		countdown.ringing = true;
+		countdown.ringing = false;
+
+		assert.equal(keyCaption(countdown, "running"), "×1/3");
+		assert.equal(keyCaption(countdown, "elapsed"), "done ×1/3");
+	});
+
 	it("gives the stage tally the line once the timer is under way", () => {
 		const { countdown } = fixture({ title: "Tea", presets: [[1200, 600, 600]] });
 

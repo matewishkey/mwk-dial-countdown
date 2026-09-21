@@ -189,6 +189,7 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 		const dimmed = countdown.dimmed;
 		const flash = countdown.flashing;
 		const toast = countdown.toast;
+		const ringing = countdown.ringing;
 		const label = dialLabel(countdown, status);
 
 		// One spare line, two claimants. What you just did wins for a second; after that, the finish
@@ -196,12 +197,6 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 		// too, back when it was a mode that could be left switched on — it is your finger now, so there
 		// is nothing left to remind you of.
 		const footer = toast || finishText(countdown, remainingMs, status);
-
-		const signature = `${instance.lastLayout}|${label}|${value}|${status}|${dimmed}|${flash}|${footer}|${settings.showLogo}|${settings.theme}`;
-		if (!force && signature === instance.last) {
-			return;
-		}
-		instance.last = signature;
 
 		const palette = themeFor(settings.theme);
 		const remainingFraction = remainingMs / Math.max(1, timer.durationMs);
@@ -211,7 +206,7 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 		// text — laid out differently. Keeping them one expression apart is what stops the two views
 		// drifting into disagreeing about what the timer is doing.
 		const glyph = asDataUri(
-			renderGlyph({ remainingFraction, status, dimmed, palette, logo: settings.showLogo, size: 52 })
+			renderGlyph({ remainingFraction, status, dimmed, ringing, palette, logo: settings.showLogo, size: 52 })
 		);
 
 		const feedback: FeedbackPayload =
@@ -228,12 +223,26 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 						finish: footer
 					}
 				: {
-						ring: asDataUri(renderRing({ remainingFraction, status, dimmed, flash, palette, logo: settings.showLogo })),
+						ring: asDataUri(
+							renderRing({ remainingFraction, status, dimmed, flash, ringing, palette, logo: settings.showLogo })
+						),
 						// The clock is sent as a full item definition so its size can shrink for `1:10:10`.
 						value: { value, font: { size: valueFontSize(value) } },
 						label,
 						finish: footer
 					};
+
+		// **The frame is its own signature.** This used to be a hand-written list of the things a
+		// frame depends on, and the trouble with such a list is that it goes stale silently: the
+		// draw keeps working, the omitted field simply stops being able to change the picture. That
+		// is how a sounding alert could set its bell without the bell ever reaching the screen — the
+		// clock behind it read the same second, so the frame was judged identical and dropped.
+		// Comparing what is actually being sent cannot forget a field, because there is no list.
+		const frame = JSON.stringify(feedback);
+		if (!force && frame === instance.last) {
+			return;
+		}
+		instance.last = frame;
 
 		instance.action.setFeedback(feedback).catch((err) => streamDeck.logger.error("Failed to set feedback", err));
 	}

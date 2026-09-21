@@ -295,6 +295,11 @@ function glyphIn(svg) {
 	if (svg.includes("M0 100")) {
 		return "logo";
 	}
+	// The bell is one path and no rects, so none of the counts below would name it — they would
+	// quietly report "nothing in the middle", which is the answer a broken renderer gives too.
+	if (svg.includes('d="M12 3.4 C8.8 ')) {
+		return "bell";
+	}
 	const rects = svg.match(/<rect /g)?.length ?? 0;
 	if (rects === 2) {
 		return "pause";

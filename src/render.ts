@@ -150,6 +150,12 @@ export type RingState = {
 	 * clock there and cannot have a glyph sitting behind the digits.
 	 */
 	hollow?: boolean;
+	/**
+	 * An alert is sounding for this control right now. It takes the middle from whatever the clock
+	 * is doing — see {@link centre} — because at a step boundary the two disagree and the noise is
+	 * the more urgent of the two.
+	 */
+	ringing?: boolean;
 };
 
 /** Opacity of the ring on the dim half of a blink. */
@@ -291,6 +297,15 @@ function centre(geometry: Geometry, state: RingState, colour: string, opacity: n
 		return "";
 	}
 
+	// **A sounding alert outranks the clock's own state, and this is the only glyph that overrides.**
+	// On `40m, 10m, 10m` the forty runs out, its alarm starts, and the first ten starts counting in
+	// the same breath — so the status is `running` and the play triangle is perfectly true and no
+	// use at all. What you need to know is that there is a noise and that a press will take it
+	// away. The bell is gone the moment the sound is, whether it was silenced or simply ran out.
+	if (state.ringing === true) {
+		return bellGlyph(geometry, colour, opacity);
+	}
+
 	switch (state.status) {
 		case "running":
 			return playGlyph(geometry, colour, opacity);
@@ -363,6 +378,40 @@ function doneGlyph({ size, centre: c }: Geometry, colour: string, opacity: numbe
 	const at = round(c - side / 2);
 
 	return `<rect x="${at}" y="${at}" width="${side}" height="${side}" rx="${round(GLYPH_RADIUS * 1.6 * scale)}" fill="${colour}" opacity="${opacity}"/>`;
+}
+
+/**
+ * A bell: something is sounding, and a press will stop it.
+ *
+ * Drawn in the ring's own colour like every other glyph, rather than in a colour of its own. A
+ * second colour here would have to mean something, and it would be meaning the same thing the
+ * shape already says.
+ */
+const BELL_BOX = 24;
+
+/**
+ * Body and clapper as **one** path, on purpose.
+ *
+ * Every other glyph is counted by shape — two `<rect>` is a pause, one is done, a `M x y L … Z`
+ * path is the play triangle — by the tests and by the scripted demo alike. A clapper drawn as a
+ * `<circle>` or a `<rect>` would answer to one of those counts and be read as a different state,
+ * so the bell is one path that matches none of them.
+ */
+const BELL_PATH =
+	"M12 3.4 C8.8 3.4 6.2 6 6.2 9.2 V13 L4 16.4 H20 L17.8 13 V9.2 C17.8 6 15.2 3.4 12 3.4 Z " +
+	"M12 17.4 C10.8 17.4 9.9 18.3 9.9 19.5 C9.9 20.7 10.8 21.6 12 21.6 " +
+	"C13.2 21.6 14.1 20.7 14.1 19.5 C14.1 18.3 13.2 17.4 12 17.4 Z";
+
+function bellGlyph({ size, centre: c }: Geometry, colour: string, opacity: number): string {
+	// Sized from the same box as the other three, so the middle of the ring holds the same amount of
+	// ink whichever state it is reporting.
+	const scale = round((GLYPH_HEIGHT * (size / RING_SIZE)) / BELL_BOX);
+	const at = round(c - (BELL_BOX * scale) / 2);
+
+	return (
+		`<path d="${BELL_PATH}" transform="translate(${at} ${at}) scale(${scale})" ` +
+		`fill="${colour}" opacity="${opacity}"/>`
+	);
 }
 
 /** The brand mark, centred in the ring and tinted to match it so the two read as one object. */
