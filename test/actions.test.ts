@@ -9,9 +9,17 @@
  * decorator; they are driven directly in `test/actions-live.test.ts`, and what is under test here
  * is the shared base rather than either one of them. A minimal subclass below reaches it.
  *
- * **Every test must tear its instance down, via `t.after` rather than at the end of the body.** The
- * render loop is a `setInterval`, and one left running holds the event loop open and hangs the
- * suite — which a failing assertion would otherwise cause, since the call at the end never runs.
+ * **Teardown is not a thing a test has to remember any more.** It was, and the rule was written here
+ * and in `CLAUDE.md` and followed by two tests out of thirty-seven; the other thirty-five called
+ * `onWillDisappear` at the end of the body, where a failing assertion never reaches it. The render
+ * loop is a 4 Hz `setInterval` that nothing unrefs, so one left running holds the event loop open
+ * and the whole *file* hangs — and `--test-timeout` does not catch it, because the test itself
+ * finished. On 2026-09-21 that turned one failed assertion into fourteen minutes of silence, a CI
+ * job killed at its 15-minute ceiling, and no record of what had failed.
+ *
+ * So {@link driver} takes the test's context and registers the teardown itself. Take a `t`, call
+ * `driver(t)`, and the render loops stop however the test ends. Calling `onWillDisappear` inside a
+ * test is still fine where leaving the screen *is* the scenario — it is idempotent.
  */
 
 import assert from "node:assert/strict";
@@ -20,7 +28,7 @@ import { dirname, resolve } from "node:path";
 import { describe, it, type TestContext } from "node:test";
 import { fileURLToPath } from "node:url";
 
-import type { DialAction, KeyAction } from "@elgato/streamdeck";
+import type { DialAction, KeyAction, WillAppearEvent, WillDisappearEvent } from "@elgato/streamdeck";
 
 import { CountdownAction, type Instance } from "../src/actions/countdown-action.ts";
 import type { Playback } from "../src/sound.ts";
@@ -170,6 +178,33 @@ class TestAction extends CountdownAction<Dial> {
 		this.refresh(this.#live(id));
 	}
 
+	/**
+	 * Every control this action has appeared, so {@link TestAction.dispose} can find them all.
+	 *
+	 * Keyed by id and holding the stand-in itself, because `onWillDisappear` is given the control
+	 * rather than its name.
+	 */
+	readonly #appeared = new Map<string, Record<string, unknown>>();
+
+	override onWillAppear(ev: WillAppearEvent<DialCountdownSettings>): void {
+		this.#appeared.set(ev.action.id, ev.action as unknown as Record<string, unknown>);
+		super.onWillAppear(ev);
+	}
+
+	/**
+	 * Stops every render loop this action started, whatever the test did or did not get to.
+	 *
+	 * Registered once by {@link driver}, so no test can forget it and no test has to remember. It is
+	 * safe on a control the test already took away: `onWillDisappear` returns early for an id it does
+	 * not hold.
+	 */
+	dispose(): void {
+		for (const action of this.#appeared.values()) {
+			this.onWillDisappear({ action } as unknown as WillDisappearEvent<DialCountdownSettings>);
+		}
+		this.#appeared.clear();
+	}
+
 	#live(id: string): Instance<Dial> {
 		const instance = this.instanceFor(id);
 		if (instance === undefined) {
@@ -190,25 +225,42 @@ type Driver = {
 	tick(id: string): void;
 	onSendToPlugin(ev: unknown): void;
 	onPropertyInspectorDidDisappear(): void;
+	dispose(): void;
 	readonly played: PlayCall[];
 	readonly playbacks: FakePlayback[];
 	readonly sounding: FakePlayback | undefined;
 };
 
-function driver(): Driver {
+/**
+ * The action under test, with its render loops guaranteed to stop.
+ *
+ * **The `t.after` is the whole point of taking a context.** The render loop is a 4 Hz `setInterval`
+ * and nothing unrefs it, so one left running holds the event loop open and the *file* never
+ * finishes — `--test-timeout` does not help, because the test itself completed. Tearing down at the
+ * end of the body cannot do this job: a failing assertion throws before that line is reached, so
+ * exactly when a test has something to report is when it hangs instead, and the failure is lost with
+ * the summary that never prints. That is not hypothetical — it cost a 15-minute CI run and the
+ * assertion behind it.
+ *
+ * Registering it here rather than in each test means the next test added is covered by having been
+ * written at all.
+ */
+function driver(t: TestContext): Driver {
 	// No cast needed: methods are compared bivariantly, so a handler declared for a real SDK event
 	// satisfies one declared for `unknown`.
-	return new TestAction();
+	const action = new TestAction();
+	t.after(() => action.dispose());
+	return action;
 }
 
 describe("an action's lifecycle", () => {
-	it("flushes a pending settings write when the control goes away", async () => {
+	it("flushes a pending settings write when the control goes away", async (t) => {
 		// The bug this is here for. Holding the screen loads the next preset and schedules the write
 		// 400 ms out, so that spinning the dial does not go to disk on every tick. Teardown used to
 		// *clear* that timer rather than run it, so a preset chosen in the last four hundred
 		// milliseconds before flipping page was silently lost — the gesture had happened, the
 		// acknowledgement had been drawn, and the write went in the bin on the way out.
-		const dial = driver();
+		const dial = driver(t);
 		const { action, calls } = fakeDial("flush-1");
 		const settings = normaliseSettings({ presets: [300, 1200, 1800], presetIndex: 0 });
 
@@ -227,10 +279,10 @@ describe("an action's lifecycle", () => {
 		assert.equal(calls.setSettings.length, 1, "the flush and the debounce both wrote");
 	});
 
-	it("writes nothing on teardown when nothing was pending", async () => {
+	it("writes nothing on teardown when nothing was pending", async (t) => {
 		// The positive control for the test above. If teardown wrote unconditionally, that test would
 		// pass for the wrong reason and every page flip would touch the disk.
-		const dial = driver();
+		const dial = driver(t);
 		const { action, calls } = fakeDial("flush-2");
 		const settings = normaliseSettings({ presets: [300, 1200] });
 
@@ -241,12 +293,12 @@ describe("an action's lifecycle", () => {
 		assert.equal(calls.setSettings.length, 0, "a teardown with no pending edit should write nothing");
 	});
 
-	it("rewrites settings left by an older build, dropping the keys it no longer has", () => {
+	it("rewrites settings left by an older build, dropping the keys it no longer has", (t) => {
 		// The upgrade path, which had no test: every other case here hands in an already-normalised
 		// object, so `deepEqual` holds and this branch never runs. Without it, a key from a build two
 		// designs ago sits in the user's profile for ever — the dial's old mode-based step model left
 		// three, and the plugin has no other way to be rid of them.
-		const dial = driver();
+		const dial = driver(t);
 		const { action, calls } = fakeDial("upgrade-1");
 
 		dial.onWillAppear({
@@ -278,10 +330,10 @@ describe("an action's lifecycle", () => {
 		assert.equal(written.volume, 42, "and so does their volume");
 	});
 
-	it("leaves settings alone when they are already in the current shape", () => {
+	it("leaves settings alone when they are already in the current shape", (t) => {
 		// The positive control: without this, the test above would pass on an action that wrote its
 		// settings back on every single appearance, which is a disk write per page flip.
-		const dial = driver();
+		const dial = driver(t);
 		const { action, calls } = fakeDial("upgrade-2");
 
 		dial.onWillAppear({ action, payload: { settings: normaliseSettings({ presets: [300, 1200] }) } });
@@ -290,12 +342,12 @@ describe("an action's lifecycle", () => {
 		assert.equal(calls.setSettings.length, 0, "nothing to migrate, so nothing to write");
 	});
 
-	it("does not let the inspector's stale preset undo a gesture it cannot have seen", async () => {
+	it("does not let the inspector's stale preset undo a gesture it cannot have seen", async (t) => {
 		// The window: a gesture that changes the preset is written to disk 400ms later, and Stream Deck
 		// forwards that write to the inspector, which is how the inspector catches up. Inside those
 		// 400ms it is authoritative and out of date at once — so its `presetIndex` came back over the
 		// top of the gesture, and the debounced write then put the old index on disk as well.
-		const dial = driver();
+		const dial = driver(t);
 		const id = "pi-race-1";
 		const { action, calls } = fakeDial(id);
 		const settings = normaliseSettings({ presets: [300, 1200], presetIndex: 0 });
@@ -324,10 +376,10 @@ describe("an action's lifecycle", () => {
 		}
 	});
 
-	it("takes the inspector's preset when there is no gesture outstanding", async () => {
+	it("takes the inspector's preset when there is no gesture outstanding", async (t) => {
 		// The positive control. Without it the guard above could simply be ignoring `presetIndex` for
 		// ever, which would make the inspector's own preset picker dead.
-		const dial = driver();
+		const dial = driver(t);
 		const id = "pi-race-2";
 		const { action } = fakeDial(id);
 		const settings = normaliseSettings({ presets: [300, 1200], presetIndex: 0 });
@@ -343,8 +395,8 @@ describe("an action's lifecycle", () => {
 		}
 	});
 
-	it("stops drawing once the control has gone", async () => {
-		const dial = driver();
+	it("stops drawing once the control has gone", async (t) => {
+		const dial = driver(t);
 		const { action, calls } = fakeDial("stop-1");
 
 		dial.onWillAppear({ action, payload: { settings: normaliseSettings({ presets: [300] }) } });
@@ -359,11 +411,11 @@ describe("an action's lifecycle", () => {
 		assert.equal(calls.setFeedback.length, drawn, "the render loop is still running after teardown");
 	});
 
-	it("replaces rather than leaks when a control appears twice over", async () => {
+	it("replaces rather than leaks when a control appears twice over", async (t) => {
 		// Stream Deck normally pairs appear with disappear. Nothing here can rely on that, and the
 		// cost of being wrong is not a stale object but a 4 Hz interval drawing for ever with its
 		// handle no longer reachable by anything — unstoppable for the life of the process.
-		const dial = driver();
+		const dial = driver(t);
 		const { action, calls } = fakeDial("twice-1");
 		const settings = normaliseSettings({ presets: [300] });
 
@@ -382,10 +434,10 @@ describe("an action's lifecycle", () => {
 		);
 	});
 
-	it("ignores events for a control it does not know about", () => {
+	it("ignores events for a control it does not know about", (t) => {
 		// Every handler looks its instance up and returns quietly when there is none. A disappearance
 		// for something that never appeared arrives in practice, and must not throw.
-		const dial = driver();
+		const dial = driver(t);
 		const { action } = fakeDial("unknown-1");
 
 		assert.doesNotThrow(() => dial.onWillDisappear({ action }));
@@ -400,11 +452,11 @@ describe("a control that leaves the screen and comes back", () => {
 		return { action, calls };
 	}
 
-	it("keeps a running countdown running, and keeps counting while it is away", async () => {
+	it("keeps a running countdown running, and keeps counting while it is away", async (t) => {
 		// A timer used to be destroyed the moment you flipped to another page. Flipping pages is a
 		// thing Stream Deck users do constantly, and losing the count because of it is the single
 		// worst thing a timer can do.
-		const dial = driver();
+		const dial = driver(t);
 		const { action } = show(dial, "revive-1", { presets: [3600] });
 
 		dial.gesture("revive-1", "toggle");
@@ -424,8 +476,8 @@ describe("a control that leaves the screen and comes back", () => {
 		assert.ok(spent >= 600, `only ${spent}ms was counted while the control was away`);
 	});
 
-	it("keeps a paused countdown paused, with the same time left", async () => {
-		const dial = driver();
+	it("keeps a paused countdown paused, with the same time left", async (t) => {
+		const dial = driver(t);
 		const { action } = show(dial, "revive-2", { presets: [3600] });
 
 		dial.gesture("revive-2", "toggle");
@@ -445,10 +497,10 @@ describe("a control that leaves the screen and comes back", () => {
 		assert.equal(back.timer.remainingMs, paused, "a paused clock must not lose time while off screen");
 	});
 
-	it("gives a control it has never seen a fresh countdown", () => {
+	it("gives a control it has never seen a fresh countdown", (t) => {
 		// The positive control for the three above: if revive handed *any* control the last countdown
 		// it stored, they would all pass while the feature was plainly broken.
-		const dial = driver();
+		const dial = driver(t);
 		const { action } = show(dial, "revive-3", { presets: [3600] });
 		dial.gesture("revive-3", "toggle");
 		dial.onWillDisappear({ action });
@@ -460,8 +512,8 @@ describe("a control that leaves the screen and comes back", () => {
 		assert.equal(fresh.timer.status, "idle", "a different control inherited someone else's clock");
 	});
 
-	it("takes settings edited while it was away, without restarting a clock that still fits", () => {
-		const dial = driver();
+	it("takes settings edited while it was away, without restarting a clock that still fits", (t) => {
+		const dial = driver(t);
 		const { action } = show(dial, "revive-5", { presets: [3600], volume: 100 });
 
 		dial.gesture("revive-5", "toggle");
@@ -477,11 +529,11 @@ describe("a control that leaves the screen and comes back", () => {
 		assert.equal(back.settings.volume, 40, "the edit made while it was away was not picked up");
 	});
 
-	it("does not sound the alarm for a timer that ran out while nobody was looking", async () => {
+	it("does not sound the alarm for a timer that ran out while nobody was looking", async (t) => {
 		// The alert says "the moment has arrived". By the time the control is back on screen the
 		// moment has been and gone, and sounding it now would be old news at full volume — possibly
 		// hours of it. The screen still says `done`, which is the part that is still true.
-		const dial = driver();
+		const dial = driver(t);
 		const { action, calls } = show(dial, "revive-7", { presets: [1], soundId: "/nowhere/nothing.wav", volume: 100 });
 
 		dial.gesture("revive-7", "toggle");
@@ -499,10 +551,10 @@ describe("a control that leaves the screen and comes back", () => {
 		assert.equal(calls.showAlert, 0, "a timer that finished unwatched announced itself on return");
 	});
 
-	it("still sounds the alarm for one that runs out while you are watching", async () => {
+	it("still sounds the alarm for one that runs out while you are watching", async (t) => {
 		// The positive control. The test above would pass just as well if coming back off a page
 		// switch had broken the alert altogether.
-		const dial = driver();
+		const dial = driver(t);
 		const { action, calls } = show(dial, "revive-8", { presets: [1], soundId: "/nowhere/nothing.wav", volume: 100 });
 
 		dial.onWillDisappear({ action });
@@ -525,12 +577,17 @@ describe("a control that leaves the screen and comes back", () => {
 	 * fast-forwarding a tally nobody watched would be inventing history — and reasoning with no test
 	 * under it is just a comment.
 	 */
-	it("brings a part-way multi-step countdown back on the step it left on", async () => {
-		const dial = driver();
+	it("brings a part-way multi-step countdown back on the step it left on", async (t) => {
+		const dial = driver(t);
 		const { action } = show(dial, "revive-9", { presets: [[1, 3600]], soundId: "none" });
 
 		dial.gesture("revive-9", "toggle");
-		await wait(1_200);
+
+		// The first step is 1 s, but the step boundary is only *noticed* on a render tick, and those
+		// are 250 ms apart and can only ever run late. 1,200 ms left 200 ms for a 250 ms tick, so the
+		// precondition below was one late tick from failing — and it did, on a loaded CI runner.
+		// Two ticks of headroom, not a fifth of one.
+		await wait(1_500);
 
 		const before = dial.countdownFor("revive-9");
 		assert.equal(before.stage, 2, "precondition: the first step ran out and the second is under way");
@@ -547,10 +604,10 @@ describe("a control that leaves the screen and comes back", () => {
 		assert.equal(back.timer.status, "running", "and still counting");
 	});
 
-	it("does not run the remaining steps of a sequence that finished while it was away", async () => {
+	it("does not run the remaining steps of a sequence that finished while it was away", async (t) => {
 		// The claim `resume` makes in so many words. A two-step preset that ran out unwatched comes
 		// back finished and silent — it does not quietly work through the steps nobody saw.
-		const dial = driver();
+		const dial = driver(t);
 		const { action, calls } = show(dial, "revive-10", {
 			presets: [[1, 1]],
 			soundId: "/nowhere/nothing.wav",
@@ -574,8 +631,8 @@ describe("a control that leaves the screen and comes back", () => {
 		assert.equal(calls.showAlert, 0, "and announce nothing for steps nobody was there for");
 	});
 
-	it("reloads the clock when the preset itself was rewritten while it was away", () => {
-		const dial = driver();
+	it("reloads the clock when the preset itself was rewritten while it was away", (t) => {
+		const dial = driver(t);
 		const { action } = show(dial, "revive-6", { presets: [3600] });
 
 		dial.gesture("revive-6", "toggle");
@@ -598,8 +655,8 @@ describe("the alert when a timer finishes", () => {
 	 * own `Countdown` on `Date.now`, so there is no clock to inject from out here. The dial's press
 	 * is used to start it rather than a tap, because a tap waits out the double-tap window first.
 	 */
-	async function finishOnce(sound: Record<string, unknown>): Promise<number> {
-		const dial = driver();
+	async function finishOnce(sound: Record<string, unknown>, t: TestContext): Promise<number> {
+		const dial = driver(t);
 		const id = `alert-${Math.random()}`;
 		const { action, calls } = fakeDial(id);
 		const settings = normaliseSettings({ presets: [1], presetIndex: 0, ...sound });
@@ -614,25 +671,25 @@ describe("the alert when a timer finishes", () => {
 		return calls.showAlert;
 	}
 
-	it("stays quiet when the user chose No sound", async () => {
+	it("stays quiet when the user chose No sound", async (t) => {
 		// The bug, end to end. `settle()` reports that an alert is due whenever sound is *enabled*,
 		// and the branch that follows knew about only one of the two ways to ask for silence — a
 		// volume of zero. So a countdown set to No sound finished correctly and then flashed Stream
 		// Deck's error triangle to say it had failed.
-		assert.equal(await finishOnce({ soundId: "none", volume: 100 }), 0, "No sound is not a failure to play");
+		assert.equal(await finishOnce({ soundId: "none", volume: 100 }, t), 0, "No sound is not a failure to play");
 	});
 
-	it("stays quiet at zero volume", async () => {
-		assert.equal(await finishOnce({ soundId: "/nowhere/at/all/nothing.wav", volume: 0 }), 0);
+	it("stays quiet at zero volume", async (t) => {
+		assert.equal(await finishOnce({ soundId: "/nowhere/at/all/nothing.wav", volume: 0 }, t), 0);
 	});
 
-	it("still raises the alert when a sound was wanted and could not be played", async () => {
+	it("still raises the alert when a sound was wanted and could not be played", async (t) => {
 		// The positive control, and the reason the two tests above mean anything: without it they
 		// would pass just as well if the alert had been removed altogether. A custom sound whose file
 		// has been moved or renamed is the case this exists for — a silent alarm is indistinguishable
 		// from one that has not gone off yet, which is the one thing an alarm must never be.
 		assert.equal(
-			await finishOnce({ soundId: "/nowhere/at/all/nothing.wav", volume: 100 }),
+			await finishOnce({ soundId: "/nowhere/at/all/nothing.wav", volume: 100 }, t),
 			1,
 			"a sound that was asked for and did not play must still be reported"
 		);
@@ -657,8 +714,17 @@ class WideWindowAction extends TestAction {
 }
 
 /** As {@link driver}, for the two controls above. Same reason for the loose typing. */
-const narrowDriver = (): Driver => new NarrowWindowAction();
-const wideDriver = (): Driver => new WideWindowAction();
+/** Both take the context for the same reason {@link driver} does — see its note. */
+const narrowDriver = (t: TestContext): Driver => {
+	const action = new NarrowWindowAction();
+	t.after(() => action.dispose());
+	return action;
+};
+const wideDriver = (t: TestContext): Driver => {
+	const action = new WideWindowAction();
+	t.after(() => action.dispose());
+	return action;
+};
 
 describe("the window a control waits for a second press", () => {
 	/** Two presses that gap apart, then long enough for anything still pending to have fired. */
@@ -682,8 +748,8 @@ describe("the window a control waits for a second press", () => {
 	// even number of toggles always lands back where it started.
 	const GAP_MS = 80;
 
-	it("reads a press pair as two toggles when the gap falls outside it", async () => {
-		const countdown = await doublePress(narrowDriver(), "narrow-1", GAP_MS);
+	it("reads a press pair as two toggles when the gap falls outside it", async (t) => {
+		const countdown = await doublePress(narrowDriver(t), "narrow-1", GAP_MS);
 
 		// Start, then pause, on a clock that had not begun to run: it ends up *paused at full*. The
 		// clock reads exactly what it read before, so nothing on screen says the presses landed — and
@@ -699,8 +765,8 @@ describe("the window a control waits for a second press", () => {
 		);
 	});
 
-	it("reads the same pair as one reset when the control waits long enough", async () => {
-		const countdown = await doublePress(wideDriver(), "wide-1", GAP_MS);
+	it("reads the same pair as one reset when the control waits long enough", async (t) => {
+		const countdown = await doublePress(wideDriver(t), "wide-1", GAP_MS);
 
 		assert.equal(countdown.timer.status, "idle", "a reset leaves the clock stopped and full");
 		assert.equal(countdown.toast, "reset", "and it must have got there by resetting, not by two toggles");
@@ -768,7 +834,7 @@ describe("an alert that is still sounding", () => {
 	 * the click cancels the timer instead of the sound.
 	 */
 	it("silences a step's alert with the press, and does not touch the step that just started", async (t) => {
-		const dial = driver();
+		const dial = driver(t);
 		appear(dial, "alert-1", normaliseSettings({ presets: [[1, 600]], soundRepeat: 20, soundId: CHIME }), t);
 
 		dial.countdownFor("alert-1").toggle();
@@ -789,7 +855,7 @@ describe("an alert that is still sounding", () => {
 	});
 
 	it("swallows the press at the end of the whole job too, rather than restarting the clock", async (t) => {
-		const dial = driver();
+		const dial = driver(t);
 		await finish(dial, "alert-2", alerting(), t);
 
 		const countdown = dial.countdownFor("alert-2");
@@ -803,7 +869,7 @@ describe("an alert that is still sounding", () => {
 	});
 
 	it("acts normally on the next press, once the sound has been silenced", async (t) => {
-		const dial = driver();
+		const dial = driver(t);
 		await finish(dial, "alert-3", alerting(), t);
 
 		dial.gesture("alert-3", "toggle");
@@ -815,7 +881,7 @@ describe("an alert that is still sounding", () => {
 	it("does not swallow a press when nothing is sounding", async (t) => {
 		// The positive control for every swallow above: without it they would all pass just as well
 		// if the press were swallowed unconditionally.
-		const dial = driver();
+		const dial = driver(t);
 		await finish(dial, "alert-4", alerting({ soundId: NO_SOUND }), t);
 
 		dial.gesture("alert-4", "toggle");
@@ -826,7 +892,7 @@ describe("an alert that is still sounding", () => {
 	it("lets a hold silence it and do its job in the one gesture", async (t) => {
 		// The exception, and the reason for it: the hold is the gesture that means *put this right*,
 		// so making it cost two presses would put the silencing in the way of the repair.
-		const dial = driver();
+		const dial = driver(t);
 		await finish(dial, "alert-5", alerting(), t);
 
 		dial.gesture("alert-5", "next");
@@ -841,7 +907,7 @@ describe("an alert that is still sounding", () => {
 		// An alert outlives the moment it announces, on purpose. A rule that silenced one because the
 		// clock was running is what made a step boundary inaudible: the next step starts immediately,
 		// so that rule was true one frame after every step's alert began.
-		const dial = driver();
+		const dial = driver(t);
 		appear(dial, "alert-6", normaliseSettings({ presets: [[1, 600]], soundRepeat: 20, soundId: CHIME }), t);
 
 		dial.countdownFor("alert-6").toggle();
@@ -855,7 +921,7 @@ describe("an alert that is still sounding", () => {
 	});
 
 	it("stops sounding when the plays run out on their own, so the next press is not swallowed", async (t) => {
-		const dial = driver();
+		const dial = driver(t);
 		await finish(dial, "alert-7", alerting(), t);
 
 		dial.sounding?.stop();
@@ -872,7 +938,7 @@ describe("an alert that is still sounding", () => {
 		// quarter-second before the render loop notices and clears it. The alert object is still
 		// there, so the check has to be on whether it was *actually sounding* rather than on whether
 		// one exists — a mutation run found this was the only claim in the file nothing tested.
-		const dial = driver();
+		const dial = driver(t);
 		await finish(dial, "alert-11", alerting(), t);
 
 		// Ended of its own accord, and deliberately no `tick` — this is the gap before the loop runs.
@@ -889,7 +955,7 @@ describe("an alert that is still sounding", () => {
 
 	it("stops the previous alert before starting the next, rather than layering them", async (t) => {
 		// Two runs playing at once sound exactly like the overlap bug this release fixes.
-		const dial = driver();
+		const dial = driver(t);
 		appear(dial, "alert-8", normaliseSettings({ presets: [[1, 1]], soundRepeat: 20, soundId: CHIME }), t);
 
 		dial.countdownFor("alert-8").toggle();
@@ -905,12 +971,12 @@ describe("an alert that is still sounding", () => {
 		assert.notEqual(dial.sounding, first, "and the second is the one now sounding");
 	});
 
-	it("takes the alert with it when the control leaves the screen", async () => {
+	it("takes the alert with it when the control leaves the screen", async (t) => {
 		// Not because a page flip means you heard it, but because the handle that stops a run lives on
 		// the instance being thrown away. One left running is one nothing can ever silence.
 		//
 		// The one test that tears down by hand, because the teardown *is* what is under test.
-		const dial = driver();
+		const dial = driver(t);
 		const { action } = fakeDial("alert-9");
 		dial.onWillAppear({ action, payload: { settings: alerting() } });
 		dial.countdownFor("alert-9").toggle();
@@ -923,7 +989,7 @@ describe("an alert that is still sounding", () => {
 	});
 
 	it("raises Stream Deck's alert when a sound was asked for and no player could be found", async (t) => {
-		const dial = driver();
+		const dial = driver(t);
 		const calls = await finish(dial, "alert-10", alerting({ soundId: "/nowhere/at/all/gone.wav" }), t);
 
 		assert.ok(calls.showAlert > 0, "a timer that finishes in silence when asked to make a noise must say so");
@@ -943,8 +1009,8 @@ describe("an alert that is still sounding", () => {
 		const preview = (dial: Driver, extra: Record<string, unknown> = {}): void =>
 			dial.onSendToPlugin({ payload: { event: "preview", soundId: CHIME, volume: 100, soundRepeat: 60, ...extra } });
 
-		it("stops when the property inspector closes", () => {
-			const dial = driver();
+		it("stops when the property inspector closes", (t) => {
+			const dial = driver(t);
 			preview(dial);
 
 			assert.equal(dial.sounding?.active, true, "precondition: the audition is running");
@@ -955,8 +1021,8 @@ describe("an alert that is still sounding", () => {
 			assert.equal(dial.sounding?.active, false);
 		});
 
-		it("is a toggle: a second click stops it rather than starting another underneath", () => {
-			const dial = driver();
+		it("is a toggle: a second click stops it rather than starting another underneath", (t) => {
+			const dial = driver(t);
 			preview(dial);
 			const first = dial.sounding;
 
@@ -966,8 +1032,8 @@ describe("an alert that is still sounding", () => {
 			assert.equal(dial.playbacks.length, 1, "and did not start a second one");
 		});
 
-		it("auditions the fade and the count it was given, so Test is what the timer will do", () => {
-			const dial = driver();
+		it("auditions the fade and the count it was given, so Test is what the timer will do", (t) => {
+			const dial = driver(t);
 			preview(dial, { volume: 40, soundRepeat: 7, fadeRepeats: true });
 			dial.onPropertyInspectorDidDisappear();
 

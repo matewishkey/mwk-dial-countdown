@@ -60,6 +60,24 @@ anybody only in 4.1.0.
   their names so the links in old issues still resolve. Closes
   [#19](https://github.com/matewishkey/mwk-dial-countdown/issues/19).
 
+- **A failing test no longer takes the whole suite down with it.** The render loop is a 4 Hz
+  `setInterval` that nothing unrefs, so an instance left running holds the event loop open and the
+  test *file* never finishes — `--test-timeout` does not catch it, because the test itself completed.
+  Teardown at the end of a test body cannot prevent that: a failing assertion throws before the line
+  is reached, so exactly when a test has something to report is when it hangs instead. The rule was
+  written in `CLAUDE.md` and in the file's own header, and followed by two tests out of thirty-seven.
+
+  It cost a real CI run: on 2026-09-21 a timing-sensitive precondition failed and the job sat silent
+  for fourteen minutes until its 15-minute ceiling killed it, taking the assertion detail with it.
+
+  `driver(t)` now registers the teardown itself, so the next test added is covered by having been
+  written at all. Breaking that assertion on purpose used to hang past a 90-second ceiling; it now
+  fails in 2.4 seconds with `actual: 2, expected: 99` on screen.
+
+- **The test that failed was one late tick from failing on any loaded machine.** It waited 1,200 ms
+  for a 1 s step, but a step boundary is only noticed on a render tick — those are 250 ms apart and
+  can only ever run late, so the margin was 200 ms against a 250 ms tick. It waits 1,500 ms now.
+
 ## [4.2.0] — 2026-09-21
 
 ### Added
