@@ -648,11 +648,13 @@ async function runDemo() {
 				);
 			}
 		],
-		// There is no long press on the dial any more. A push is a push however long you lean on it,
-		// which is what lets you hold it in for a long minute-stepped wind without a second meaning
-		// quietly accruing underneath.
+		// The knob has a hold, and it is the touchscreen's: put the clock right, then move on. The
+		// threshold is measured on RELEASE, never by a timer running while the finger is down —
+		// pushing the dial in is how you ask for minutes, so anything firing mid-press would go off
+		// in the pause before the wind started. The push-turn-release step above is the guard on
+		// that half, and it runs first.
 		[
-			"a long hold is just a press — the dial has no long-press gesture left",
+			"holding the knob puts the clock right — the touchscreen's hold, on the dial",
 			async () => {
 				await wait(1200);
 				gestures.dialDown();
@@ -661,20 +663,52 @@ async function runDemo() {
 				await wait(500);
 				console.log(`\n   held the dial 1.5s, then let go: it said "${screen.finish}"`);
 				console.log(
-					// Any of the three words a press can answer with. It used to demand "start", but the
-					// step before this one leaves the clock PAUSED, where a press correctly says
-					// "resume" — so this printed ✗ on every run of a plugin that was behaving. It went
-					// unnoticed for as long as the ✗ was decorative.
-					`   ${PRESS_WORDS.includes(screen.finish) ? "\u2713 the same as a quick press, with no third meaning to learn" : `\u2717 a long hold meant something else: "${screen.finish}"`}`
+					`   ${screen.finish.startsWith("preset") || screen.finish.startsWith("next") ? "\u2713 the hold restored the preset, as it does from the screen" : `\u2717 a hold of the knob did something else: "${screen.finish}"`}`
+				);
+			}
+		],
+
+		// ...and the short press still means what it always did. The positive control for the step
+		// above: without it, a threshold of zero would look exactly like a working hold.
+		[
+			"a quick press of the knob is still just start/pause",
+			async () => {
+				await wait(600);
+				gestures.dialDown();
+				await wait(80);
+				gestures.dialUp();
+				await wait(500);
+				console.log(`\n   pressed and released inside 100ms: it said "${screen.finish}"`);
+				console.log(
+					`   ${PRESS_WORDS.includes(screen.finish) ? "\u2713 below the threshold, so it is a press and nothing more" : `\u2717 a quick press was taken as something else: "${screen.finish}"`}`
 				);
 			}
 		],
 
 		// Turning never writes to the preset list. The label says so — "from 20m" — for as long as the
 		// two disagree, and a hold of the SCREEN is what closes the gap.
+		//
+		// **It sets up its own drift rather than inheriting it from an earlier step.** It used to
+		// inherit it, and when the knob gained a hold — which restores the preset, that being its
+		// whole job — the drift was gone by the time this ran and the step reported a failure that
+		// belonged to nothing. A step that depends on where the one before it happened to leave
+		// things fails for reasons with no connection to what it is checking.
+		//
+		// **The double tap comes first, and it is not decoration: only an *idle* clock can drift.**
+		// `Timer.adjust` moves the remaining time on a running or paused clock and leaves
+		// `durationMs` alone, and `drifted` compares `durationMs` against the preset — so winding a
+		// running clock produces no drift at all, and this step quietly tested nothing. A reset is
+		// used rather than a hold because a hold of a clock already sitting on its preset *advances*
+		// to the next one, which would make the set-up depend on the very state it is establishing.
 		[
 			"hold the screen → puts the dialled clock back on its preset, rather than moving on",
 			async () => {
+				gestures.touch(false);
+				await wait(80);
+				gestures.touch(false);
+				await wait(500);
+				gestures.rotate(3);
+				await wait(400);
 				const drifted = screen.label;
 				gestures.touch(true);
 				await wait(400);
