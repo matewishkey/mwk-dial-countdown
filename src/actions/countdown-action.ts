@@ -339,6 +339,20 @@ export abstract class CountdownAction<
 			.catch((err) => streamDeck.logger.error("Failed to send the log path", err));
 	}
 
+	/**
+	 * **The panel closing stops whatever it was auditioning.**
+	 *
+	 * The preview is reachable only through `sendToPlugin`, which is to say only through the panel —
+	 * so a run left going when the panel closes is a noise with nothing left to stop it. That was
+	 * survivable while the count stopped at ten and is not now it reaches {@link MAX_SOUND_REPEAT}:
+	 * close the inspector mid-audition and the machine chimes for the better part of a minute with no
+	 * button anywhere to press. The whole reason the cap could be raised is that no setting may
+	 * produce a sound there is no way to call off, and this was the hole in that claim.
+	 */
+	override onPropertyInspectorDidDisappear(): void {
+		this.#stopPreview();
+	}
+
 	/** Auditions a sound, and answers whether a chosen file actually resolves. */
 	override onSendToPlugin(ev: { payload: unknown }): void {
 		const payload = ev.payload as
@@ -365,7 +379,11 @@ export abstract class CountdownAction<
 			// do. It does not ring: the ringing state is a property of a control you can press, and
 			// there is nothing in the panel to press it with except the button that started it.
 			const path = resolveSound(payload);
-			this.#preview = playSound(path, payload.volume ?? 100, payload.soundRepeat ?? 1, payload.fadeRepeats === true);
+
+			// Through the same seam the timer's own alert uses. One place in this class reaches the
+			// operating system, which is what lets a test watch the panel's audition being called off
+			// as well as a timer's.
+			this.#preview = this.play(path, payload.volume ?? 100, payload.soundRepeat ?? 1, payload.fadeRepeats === true);
 			void this.#reportSound(path, this.#preview !== null);
 			void this.#reportPreview(this.#preview !== null);
 			this.#watchPreview();

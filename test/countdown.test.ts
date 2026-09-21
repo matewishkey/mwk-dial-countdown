@@ -338,6 +338,57 @@ describe("the stage counter", () => {
 		}
 	}
 
+	/**
+	 * What the *finish time* is built from, and it had nothing testing it at all.
+	 *
+	 * `ends 15:40` is drawn from the clock on screen plus this, and the docs record it having been
+	 * wrong for exactly the case this covers: before stages existed the two were the same number, and
+	 * when they stopped being the same the line quietly went on reporting the end of the *current
+	 * step* as the end of the job. A 40/10/10 said it would be done in forty minutes and then ran for
+	 * another twenty. A fixed bug with no test on it is a bug waiting to come back.
+	 */
+	describe("how much is left after the current stage", () => {
+		it("sums the stages still to come, and not the one on the clock", () => {
+			let now = 1_000_000;
+			const countdown = new Countdown(
+				normaliseSettings({ presets: [[2400, 600, 600]], presetIndex: 0, soundId: "none" }),
+				() => now
+			);
+
+			// On the first stage: the forty minutes in hand is the clock's business, the twenty after
+			// it is this.
+			assert.equal(countdown.remainingStagesSeconds, 1200, "10m + 10m are still to come");
+
+			countdown.toggle();
+			now += 2_400_000;
+			countdown.settle();
+			assert.equal(countdown.stage, 2, "precondition: on the second stage");
+			assert.equal(countdown.remainingStagesSeconds, 600, "one ten-minute stage left after this one");
+
+			now += 600_000;
+			countdown.settle();
+			assert.equal(countdown.stage, 3);
+			assert.equal(countdown.remainingStagesSeconds, 0, "the last stage has nothing after it");
+		});
+
+		it("is zero for a plain one-stage preset, which is what kept the old sum looking right", () => {
+			const { countdown } = fixture([300]);
+			assert.equal(countdown.remainingStagesSeconds, 0);
+		});
+
+		it("does not count the stages already run", () => {
+			// The sum is forward-looking. Counting the whole preset would put `ends` further away with
+			// every stage that completed, which is the opposite of what a countdown does.
+			const state = staged(4);
+			state.countdown.toggle();
+			state.advance(2_000);
+			state.countdown.settle();
+
+			assert.equal(state.countdown.stage, 2);
+			assert.equal(state.countdown.remainingStagesSeconds, 4, "two stages of two seconds ahead, not four");
+		});
+	});
+
 	it("runs each stage for its own length, in order", () => {
 		// The whole feature in one test: forty, then ten, then ten — three different lengths, taken in
 		// the order they were typed rather than one length taken three times.

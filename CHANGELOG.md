@@ -58,6 +58,11 @@ renamed, and rewriting it would make the history describe a repo that never exis
   start a second one underneath the first — bearable at three plays, and most of a minute of chime at
   sixty.
 
+- **Closing the property inspector stops whatever it was auditioning.** A preview is reachable only
+  through the panel, so closing it mid-audition left the sound running with the button that would
+  have stopped it gone from the screen. The reason the repeat count could be raised at all is that
+  no setting may produce a noise there is no way to call off; this was the hole in that.
+
 ## [4.0.0] - 2026-09-18
 
 ### Added

@@ -200,6 +200,8 @@ type Driver = {
 	press(id: string): void;
 	countdownFor(id: string): Countdown;
 	tick(id: string): void;
+	onSendToPlugin(ev: unknown): void;
+	onPropertyInspectorDidDisappear(): void;
 	readonly played: PlayCall[];
 	readonly playbacks: FakePlayback[];
 	readonly sounding: FakePlayback | undefined;
@@ -528,6 +530,62 @@ describe("a control that leaves the screen and comes back", () => {
 		assert.equal(calls.showAlert, 1, "a timer that ran out in plain sight must still report a failed alert");
 	});
 
+	/**
+	 * Every other test in this suite flips a **one-stage** preset away and back, so the part of
+	 * `Countdown.resume` that is specifically about stages had nothing on it. Its reasoning is
+	 * written out at length — a multi-step timer does not pick up steps it never ran, because
+	 * fast-forwarding a tally nobody watched would be inventing history — and reasoning with no test
+	 * under it is just a comment.
+	 */
+	it("brings a part-way multi-step countdown back on the step it left on", async () => {
+		const dial = driver();
+		const { action } = show(dial, "revive-9", { presets: [[1, 3600]], soundId: "none" });
+
+		dial.gesture("revive-9", "toggle");
+		await wait(1_200);
+
+		const before = dial.countdownFor("revive-9");
+		assert.equal(before.stage, 2, "precondition: the first step ran out and the second is under way");
+
+		dial.onWillDisappear({ action });
+		await wait(300);
+		dial.onWillAppear({ action, payload: { settings: normaliseSettings({ presets: [[1, 3600]], soundId: "none" }) } });
+
+		const back = dial.countdownFor("revive-9");
+		dial.onWillDisappear({ action });
+
+		assert.equal(back.stage, 2, "it came back on the step it left on, not restarted at the first");
+		assert.equal(back.stageCount, 2);
+		assert.equal(back.timer.status, "running", "and still counting");
+	});
+
+	it("does not run the remaining steps of a sequence that finished while it was away", async () => {
+		// The claim `resume` makes in so many words. A two-step preset that ran out unwatched comes
+		// back finished and silent — it does not quietly work through the steps nobody saw.
+		const dial = driver();
+		const { action, calls } = show(dial, "revive-10", {
+			presets: [[1, 1]],
+			soundId: "/nowhere/nothing.wav",
+			volume: 100
+		});
+
+		dial.gesture("revive-10", "toggle");
+		dial.onWillDisappear({ action });
+
+		await wait(2_400);
+
+		dial.onWillAppear({
+			action,
+			payload: { settings: normaliseSettings({ presets: [[1, 1]], soundId: "/nowhere/nothing.wav", volume: 100 }) }
+		});
+		const back = dial.countdownFor("revive-10");
+		await wait(400);
+		dial.onWillDisappear({ action });
+
+		assert.equal(back.timer.status, "elapsed", "it should know the job finished");
+		assert.equal(calls.showAlert, 0, "and announce nothing for steps nobody was there for");
+	});
+
 	it("reloads the clock when the preset itself was rewritten while it was away", () => {
 		const dial = driver();
 		const { action } = show(dial, "revive-6", { presets: [3600] });
@@ -843,6 +901,16 @@ describe("a ringing alarm", () => {
 		assert.equal(dial.playbacks.length, 2, "both steps sounded");
 		assert.equal(first?.stops, 1, "the first step's run must have been called off by the second");
 		assert.notEqual(dial.sounding, first, "and the second is the one now sounding");
+
+		// **And the last step is the one that rings**, which is the whole point of the mode on a
+		// multi-step preset: the steps in between are markers, the end of the list is the alarm.
+		const countdown = dial.countdownFor("ring-8");
+		assert.equal(countdown.finished, true, "the list has run out");
+		assert.equal(countdown.ringing, true, "so this one is a ring, unlike the step boundary before it");
+
+		dial.gesture("ring-8", "toggle");
+		assert.equal(dial.sounding?.stops, 1, "and the press silences it");
+		assert.equal(countdown.finished, true, "without starting the clock");
 	});
 
 	it("takes the alarm with it when the control leaves the screen", async () => {
@@ -873,6 +941,51 @@ describe("a ringing alarm", () => {
 
 		assert.equal(dial.sounding?.stops, 1, "a press still silences it — that part is not the mode");
 		assert.equal(dial.countdownFor("ring-10").timer.status, "running", "but it is not swallowed");
+	});
+
+	/**
+	 * The panel's *Test* button, and the one way its sound could be left with nothing to stop it.
+	 *
+	 * A preview is reachable only through `sendToPlugin`, which is to say only through the panel. So
+	 * closing the panel mid-audition used to leave the run going with the button that would have
+	 * stopped it gone from the screen — survivable at ten plays, and most of a minute of chime at
+	 * sixty. The claim that let the cap be raised is that no setting can produce a noise there is no
+	 * way to call off, and this was the hole in it.
+	 */
+	describe("the inspector's audition", () => {
+		const preview = (dial: Driver, extra: Record<string, unknown> = {}): void =>
+			dial.onSendToPlugin({ payload: { event: "preview", soundId: CHIME, volume: 100, soundRepeat: 60, ...extra } });
+
+		it("stops when the property inspector closes", () => {
+			const dial = driver();
+			preview(dial);
+
+			assert.equal(dial.sounding?.active, true, "precondition: the audition is running");
+
+			dial.onPropertyInspectorDidDisappear();
+
+			assert.equal(dial.sounding?.stops, 1, "closing the panel must call the audition off");
+			assert.equal(dial.sounding?.active, false);
+		});
+
+		it("is a toggle: a second click stops it rather than starting another underneath", () => {
+			const dial = driver();
+			preview(dial);
+			const first = dial.sounding;
+
+			preview(dial);
+
+			assert.equal(first?.stops, 1, "the second click stopped the first run");
+			assert.equal(dial.playbacks.length, 1, "and did not start a second one");
+		});
+
+		it("auditions the fade and the count it was given, so Test is what the timer will do", () => {
+			const dial = driver();
+			preview(dial, { volume: 40, soundRepeat: 7, fadeRepeats: true });
+			dial.onPropertyInspectorDidDisappear();
+
+			assert.deepEqual(dial.played.at(-1), { soundId: CHIME, volume: 40, repeat: 7, fade: true });
+		});
 	});
 
 	it("raises Stream Deck's alert when a sound was asked for and no player could be found", async (t) => {
