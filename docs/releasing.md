@@ -324,6 +324,26 @@ a shape that can be copied rather than retyped.
 - **Every step's whole output**, downloadable, and the release check's verdict.
 - **The packaged plugin, its content id and its sha256.**
 
+### The listing description is a different field, with a different limit
+
+**The notes and the description are not the same box.** The notes describe one version and are capped
+at 1500 characters; the **description** is the listing's standing prose — what the plugin is — and is
+capped at **4,000 characters**. Mate, 2026-09-21, from the dashboard in front of him; the 1500 in this
+doc had been applied to both by mistake once already.
+
+**It renders bold and lists, but not tables.** So a gesture table, which reads well in this repo's
+markdown, arrives as a row of pipes. Bold headers and plain lists are the format that survives.
+
+**Nothing in the repo generates it, and nothing keeps it honest.** The notes come from the changelog
+entry and cannot drift; the description is written once and then silently outlives the plugin — the
+copy live in September 2026 was still selling *auto-repeat*, which 4.0.0 had removed and replaced with
+the step list. **When a release removes or replaces something a user can see, the description is the
+second place to change.** The first is `manifest.json`'s own `Description`, which is packaged, so
+editing it is a release rather than a copy edit.
+
+The current text is on the share, with its character count and a copy box:
+`~/share/work/mat-mwk-dial-countdown/2026-09-21_listing-description/`.
+
 ### How the notes are cut to 1500 characters
 
 Never mid-word. Every entry starts in full; while the text is over budget the **longest** entry that

@@ -215,9 +215,10 @@ It also walks the gesture vocabulary and asserts the parts a person would otherw
    was 21:47, after push-turn-release 23:47, said "+2m"
    ✓ read as a turn, not as a press
 
-▸ …and STOPS at the limit, saying `done`, rather than looping for ever or going quiet
+▸ …and STOPS at the end of the list, saying `done`, rather than looping for ever or going quiet
 
    clock 2s apart: 0:00 then 0:00; label reads "2s · ×2/2 · done"
+   ✓ stopped
    ✓ and it says so — a finished job no longer looks like its own last step
    ✓ the ring shows the done glyph, not the brand mark
 
