@@ -21,6 +21,20 @@ anybody only in 4.1.0.
 
 ## [Unreleased]
 
+### Internal
+
+- **What each control puts on screen is now a value, in `src/frame.ts`, and is tested directly.**
+  Both `draw` methods built their payload inline, inside classes no test can import — the `@action`
+  decorator survives type stripping — so nothing about what the user actually *sees* was reachable.
+  The scripted demo covered part of it and could never cover this part: a Linux box has no audio
+  player, so no alert rings here and nothing downstream of one runs. That is how 4.1.0 shipped with
+  a ringing state that existed in the code and appeared nowhere on the screen, through a green suite
+  and a green demo.
+
+  `test/frame.test.ts` asserts the frame being sent rather than the flag behind it. Reintroducing
+  the 4.1.0 bug exactly — the flag set, nothing reading it — now fails four of its tests. No
+  behaviour changed, so this is not a release; it travels with the next one.
+
 ## [4.2.0] — 2026-09-21
 
 ### Added

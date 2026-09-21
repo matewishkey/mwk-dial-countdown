@@ -4,27 +4,16 @@ import streamDeck, {
 	type DialDownEvent,
 	type DialRotateEvent,
 	type DialUpEvent,
-	type FeedbackPayload,
 	type KeyAction,
 	type TouchTapEvent
 } from "@elgato/streamdeck";
 
-import type { Countdown } from "../countdown";
+import { BAR_LAYOUT, dialFeedback, RING_LAYOUT } from "../frame";
 import { dialPress } from "../gestures";
-import { dialLabel } from "../label";
-import { asDataUri, renderGlyph, renderRing, ringColour, themeFor } from "../render";
 import type { DialCountdownSettings } from "../settings";
-import { formatClockTime, formatDuration } from "../timer";
 import { CountdownAction, type Instance } from "./countdown-action";
 
 export type { DialCountdownSettings };
-
-/**
- * Font sizes for the big clock. `1:10:10` at the layout's default 30px overruns its 96px box, so the
- * size steps down with the length of the string rather than being fixed.
- */
-const VALUE_FONT_SIZES: Record<number, number> = { 4: 32, 5: 30, 6: 25, 7: 22, 8: 20 };
-const VALUE_FONT_MIN = 18;
 
 type Dial = DialAction<DialCountdownSettings>;
 
@@ -168,7 +157,7 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 	 * feedback in flight, which the periodic re-assert covers.
 	 */
 	#applyLayout(instance: DialInstance): void {
-		const layout = instance.countdown.settings.layout === "bar" ? "layouts/bar.json" : "layouts/ring.json";
+		const layout = instance.countdown.settings.layout === "bar" ? BAR_LAYOUT : RING_LAYOUT;
 		if (layout === instance.lastLayout) {
 			return;
 		}
@@ -180,57 +169,7 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 
 	/** Pushes the current state to the touchscreen, dropping identical frames. */
 	protected draw(instance: DialInstance, force: boolean): void {
-		const { countdown } = instance;
-		const { settings, timer } = countdown;
-		const status = timer.status;
-		const remainingMs = timer.remainingMs;
-
-		const value = formatDuration(remainingMs);
-		const dimmed = countdown.dimmed;
-		const flash = countdown.flashing;
-		const toast = countdown.toast;
-		const ringing = countdown.ringing;
-		const label = dialLabel(countdown, status);
-
-		// One spare line, two claimants. What you just did wins for a second; after that, the finish
-		// time, which is the useful thing on a running clock. The dial's step used to have a claim here
-		// too, back when it was a mode that could be left switched on — it is your finger now, so there
-		// is nothing left to remind you of.
-		const footer = toast || finishText(countdown, remainingMs, status);
-
-		const palette = themeFor(settings.theme);
-		const remainingFraction = remainingMs / Math.max(1, timer.durationMs);
-		const colour = ringColour({ remainingFraction, status, dimmed, palette });
-
-		// The same four facts either way — the state glyph, the clock, the progress, the two lines of
-		// text — laid out differently. Keeping them one expression apart is what stops the two views
-		// drifting into disagreeing about what the timer is doing.
-		const glyph = asDataUri(
-			renderGlyph({ remainingFraction, status, dimmed, ringing, palette, logo: settings.showLogo, size: 52 })
-		);
-
-		const feedback: FeedbackPayload =
-			instance.lastLayout === "layouts/bar.json"
-				? {
-						glyph,
-						value: { value, font: { size: valueFontSize(value) } },
-						indicator: {
-							value: Math.round((1 - remainingFraction) * 100),
-							bar_fill_c: colour,
-							bar_bg_c: palette.track
-						},
-						label,
-						finish: footer
-					}
-				: {
-						ring: asDataUri(
-							renderRing({ remainingFraction, status, dimmed, flash, ringing, palette, logo: settings.showLogo })
-						),
-						// The clock is sent as a full item definition so its size can shrink for `1:10:10`.
-						value: { value, font: { size: valueFontSize(value) } },
-						label,
-						finish: footer
-					};
+		const feedback = dialFeedback(instance.countdown, instance.lastLayout ?? RING_LAYOUT, Date.now());
 
 		// **The frame is its own signature.** This used to be a hand-written list of the things a
 		// frame depends on, and the trouble with such a list is that it goes stale silently: the
@@ -246,21 +185,4 @@ export class DialCountdown extends CountdownAction<Dial, DialInstance> {
 
 		instance.action.setFeedback(feedback).catch((err) => streamDeck.logger.error("Failed to set feedback", err));
 	}
-}
-
-/**
- * The wall-clock time this timer will finish at — the end of the whole job, stages included. Only
- * shown while running; on a stopped timer it would be a prediction that goes stale.
- */
-function finishText(countdown: Countdown, remainingMs: number, status: string): string {
-	if (!countdown.settings.showFinishTime || status !== "running") {
-		return "";
-	}
-	const aheadMs = remainingMs + countdown.remainingStagesSeconds * 1000;
-	return `ends ${formatClockTime(Date.now() + aheadMs)}`;
-}
-
-/** Shrinks the clock as it gets longer, so `1:10:10` fits the same box as `5:00`. */
-function valueFontSize(value: string): number {
-	return VALUE_FONT_SIZES[value.length] ?? VALUE_FONT_MIN;
 }

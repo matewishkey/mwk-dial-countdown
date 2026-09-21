@@ -24,7 +24,9 @@ subclasses end to end, so run it after touching anything in `src/actions/`.
 - `src/` — the plugin. Every module except `plugin.ts` and `src/actions/` imports no SDK and is
   tested directly; `ls src/` is the list, and `grep -l '@elgato/streamdeck' src/*.ts src/actions/*.ts`
   is the exception to it.
-- `src/actions/` — the SDK-facing half. `countdown-action.ts` is the shared base.
+- `src/actions/` — the SDK-facing half. `countdown-action.ts` is the shared base. They decide *when*
+  to draw and how to send it; `src/frame.ts` decides *what* each frame says, and is pure so a test
+  can read it.
 - `com.matewishkey.dial-countdown-v2.sdPlugin/` — what ships: manifest, `bin/`, `imgs/`, `layouts/`,
   `sounds/`, `ui/`. Everything else in the repo is not packaged.
 - `…sdPlugin/ui/dial-countdown.html` — the property inspector, a plain page with inline JS.
@@ -42,6 +44,13 @@ under *How it fits together*; the short version:
 - Frames are re-asserted every 2 s. Awaiting `setFeedbackLayout` does not help.
 - A test **cannot import** `dial-countdown.ts` or `key-countdown.ts` — `@action` decorators survive
   type stripping. Test the base class, or put the logic in a pure module.
+- **Nothing on this box can make a sound.** `playSound` finds no player on Linux and returns `null`,
+  so no alert ever rings — not in the suite and not in `npm run demo`. Everything downstream of a
+  ringing alert is therefore reachable only through `src/frame.ts` and `src/label.ts`. Say this out
+  loud when handing over anything to do with sound; a green suite is not evidence there.
+- **Whether the user can see something is a claim about the frame, not about a flag.** Assert it
+  against what `dialFeedback` / `keyFace` return. A flag that nothing renders is how 4.1.0 shipped
+  a ringing state with nothing on screen.
 - The property inspector holds its own copy of the settings shape and clamps. If you change one in
   `src/settings.ts`, change it there too — `test/inspector.test.ts` asserts they agree.
 - `src/sound.ts` resolves bundled sounds from `process.cwd()`.

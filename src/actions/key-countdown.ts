@@ -17,11 +17,10 @@ import streamDeck, {
 	type KeyUpEvent
 } from "@elgato/streamdeck";
 
+import { keyFace } from "../frame";
 import { DOUBLE_PRESS_MS, LONG_PRESS_MS } from "../gestures";
-import { keyCaption } from "../label";
-import { asDataUri, renderKey, themeFor } from "../render";
+import { asDataUri } from "../render";
 import type { DialCountdownSettings } from "../settings";
-import { formatDuration } from "../timer";
 import { CountdownAction, type Instance } from "./countdown-action";
 
 type Key = KeyAction<DialCountdownSettings>;
@@ -102,33 +101,7 @@ export class KeyCountdown extends CountdownAction<Key, KeyInstance> {
 
 	/** Draws the whole key face as one image, clock included. */
 	protected draw(instance: KeyInstance, force: boolean): void {
-		const { countdown } = instance;
-		const { settings, timer } = countdown;
-		const status = timer.status;
-		const remainingMs = timer.remainingMs;
-
-		const value = formatDuration(remainingMs);
-		const dimmed = countdown.dimmed;
-		const flash = countdown.flashing;
-		const toast = countdown.toast;
-
-		// One line, four jobs, in order of urgency: what you just did, that something is sounding,
-		// the fact that it is paused, then — when there is nothing to report — what this timer is.
-		// The sounding alert outranks the pause for the same reason the dial's bell outranks its
-		// state glyph: it is the thing a press is about to act on.
-		const caption = toast || (status === "paused" && !countdown.ringing ? "paused" : keyCaption(countdown, status));
-		const accent = toast !== "" || status === "paused" || countdown.ringing;
-
-		const svg = renderKey({
-			remainingFraction: remainingMs / Math.max(1, timer.durationMs),
-			status,
-			dimmed,
-			flash,
-			palette: themeFor(settings.theme),
-			value,
-			caption,
-			accent
-		});
+		const svg = keyFace(instance.countdown);
 
 		// **The frame is its own signature** — see the same comment in `dial-countdown.ts`. A list of
 		// the fields a frame depends on has to be extended every time a new one is added, and
