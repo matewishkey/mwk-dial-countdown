@@ -60,9 +60,13 @@ under *How it fits together*; the short version:
 ## Tests
 
 - **Every test in `test/actions.test.ts` and `test/actions-live.test.ts` must tear its instance
-  down**, and register that teardown with `t.after` rather than at the end of the body. The render
-  loop is a `setInterval`; one left running holds the event loop open and hangs the whole suite with
-  no output.
+  down.** The render loop is a `setInterval` nothing unrefs; one left running holds the event loop
+  open and the whole *file* hangs with no output, and `--test-timeout` does not catch it because the
+  test itself finished. **Take a `t` and build the action through the helper that takes it** —
+  `driver(t)` and `appear(…, t)` in `actions.test.ts`, `appearDial(t, …)` / `appearKey(t, …)` in
+  `actions-live.test.ts`. They register the teardown for you. Never tear down at the end of the body: a
+  failing assertion throws before that line, so the run hangs exactly when it had something to
+  report. That cost a 15-minute CI job and the assertion behind it on 2026-09-21.
 - A guard is not proven by a green test. Break the code and confirm the test goes red — several
   tests here have been found asserting nothing, and two were asserting the wrong behaviour outright.
 - Keep a **positive control** beside any test of an absence, or it passes just as well when the
